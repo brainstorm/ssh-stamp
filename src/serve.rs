@@ -1,12 +1,11 @@
 use core::writeln;
-use core::result::{ Result, Result::Ok };
+use core::result::Result;
 use core::option::Option::{ self, Some, None };
 use core::unreachable;
 
-use crate::io::AsyncTcpStream;
+use crate::io::{AsyncTcpStream, DebuggableTcpSocket};
 
 // Embassy
-use embassy_net::tcp::TcpSocket;
 use embassy_net::tcp::Error;
 
 // ESP specific
@@ -18,7 +17,7 @@ use esp_hal::rng::Trng;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use zssh::{AuthMethod, Behavior, PublicKey, Request, SecretKey, Transport, TransportError};
 
-struct ExampleBehavior<'a> {
+struct SshServer<'a> {
     stream: AsyncTcpStream<'a>,
     random: Trng<'a>,
     host_secret_key: SecretKey,
@@ -31,7 +30,7 @@ enum ExampleCommand {
     Invalid,
 }
 
-impl<'a> Behavior for ExampleBehavior<'a> {
+impl<'a> Behavior for SshServer<'a> {
     type Stream = AsyncTcpStream<'a>;
     type Command = ExampleCommand;
     type User = &'static str;
@@ -87,9 +86,9 @@ const USER_PUBLIC_KEY: [u8; 32] = [
     0x18, 0xfb, 0x9d, 0xeb, 0xe2, 0xd5, 0x36, 0x5e, 0x1b, 0xdb, 0xca, 0x32, 0xb5, 0xbd, 0x90, 0xb4,
 ];
 
-async fn handle_client(stream: TcpSocket<'_>) -> Result<(), TransportError<ExampleBehavior>> {
+async fn handle_client(stream: DebuggableTcpSocket<'_>) -> Result<(), TransportError<SshServer>> {
     let mut peripherals = Peripherals::take();
-    let behavior = ExampleBehavior {
+    let behavior = SshServer {
         stream: AsyncTcpStream(stream),
         random: esp_random(&mut peripherals),
         host_secret_key: SecretKey::Ed25519 {
@@ -145,9 +144,10 @@ async fn handle_client(stream: TcpSocket<'_>) -> Result<(), TransportError<Examp
     }
 }
 
-async fn serve() -> Result<(), Error> {
+pub async fn start() -> Result<(), Error> {
     //let listener = TcpListener::bind("127.0.0.1:2222").await?;
 
+    loop {};
     //ifup();
     // loop {
     //     let (stream, _) = listener.accept().await?;
@@ -156,5 +156,4 @@ async fn serve() -> Result<(), Error> {
     //         println!("Transport error: {:?}", error);
     //     }
     // }
-    Ok(())
 }

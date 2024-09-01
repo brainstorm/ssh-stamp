@@ -1,22 +1,16 @@
 #![no_std]
 #![no_main]
 
+use esp_hal;
 use esp_backtrace as _;
-use esp_hal::{
-    clock::ClockControl, delay::Delay, peripherals::Peripherals, prelude::*, system::SystemControl,
-};
 
-use serve::serve;
+use embassy_executor::Spawner;
+use esp_hosted_ssh::serve::start;
 
-#[entry]
-fn main() -> ! {
-    let peripherals = Peripherals::take();
-    let system = SystemControl::new(peripherals.SYSTEM);
-
-    let clocks = ClockControl::max(system.clock_control).freeze();
-    let delay = Delay::new(&clocks);
-
+#[esp_hal_embassy::main]
+async fn main(_spawner: Spawner) -> ! {
     esp_println::logger::init_logger_from_env();
 
-    serve()
+    let _res = start().await;
+    loop {}
 }
