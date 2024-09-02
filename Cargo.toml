@@ -6,9 +6,11 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+cfg-if = "1.0.0"
 ed25519-dalek = { version = "2.1.1", default-features = false }
-embassy-executor = "0.6.0"
+embassy-executor = { version = "0.6.0" }
 embassy-net = { version = "0.4.0", features = ["proto-ipv4", "tcp", "medium-ip"] }
+embassy-time = "0.3.2"
 embedded-io-async = "0.6.1"
 esp-backtrace = { version = "0.14", features = [
     "esp32s3",
@@ -19,8 +21,10 @@ esp-backtrace = { version = "0.14", features = [
 esp-hal = { version = "0.20", features = [ "esp32s3" ] }
 esp-hal-embassy = { version = "0.3", features = ["esp32s3"] }
 esp-println = { version = "0.11", features = ["esp32s3", "log"] }
+esp-wifi = { version = "0.8.0", features = ["esp32s3", "wifi"] }
 hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
+static_cell = { version = "2.1.0", features = ["nightly"] }
 zssh = "0.4"
 
 [profile.dev]
