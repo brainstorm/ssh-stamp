@@ -1,6 +1,8 @@
 // https://github.com/esp-rs/esp-hal/blob/main/examples/src/bin/wifi_embassy_access_point.rs
 // https://github.com/embassy-rs/embassy/blob/main/examples/nrf52840/src/bin/wifi_esp_hosted.rs
+#![feature(type_alias_impl_trait)]
 
+use static_cell::StaticCell;
 use embassy_executor::Spawner;
 use embassy_net::{
     tcp::TcpSocket,
@@ -14,6 +16,7 @@ use embassy_net::{
 };
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
+use esp_hal::timer::systimer::{SystemTimer, Target};
 use esp_hal::{
     clock::ClockControl,
     peripherals::Peripherals,
@@ -46,7 +49,7 @@ macro_rules! mk_static {
     }};
 }
 
-async fn ifup() {
+pub async fn ifup(spawner: Spawner) {
     esp_println::logger::init_logger_from_env();
 
     let peripherals = Peripherals::take();
@@ -66,7 +69,7 @@ async fn ifup() {
     .unwrap();
 
     let wifi = peripherals.WIFI;
-    let (wifi_interface, controller) =
+    let (mut wifi_interface, controller) =
         esp_wifi::wifi::new_with_mode(&init, wifi, WifiApDevice).unwrap();
 
     cfg_if::cfg_if! {
@@ -74,7 +77,6 @@ async fn ifup() {
             let timg1 = TimerGroup::new(peripherals.TIMG1, &clocks);
             esp_hal_embassy::init(&clocks, timg1.timer0);
         } else {
-            use esp_hal::timer::systimer::{SystemTimer, Target};
             let systimer = SystemTimer::new(peripherals.SYSTIMER).split::<Target>();
             esp_hal_embassy::init(&clocks, systimer.alarm0);
         }
@@ -89,6 +91,18 @@ async fn ifup() {
     let seed = 1234; // very random, very secure seed
 
     // Init network stack
+    // static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
+    // static STACK: StaticCell<Stack< = StaticCell::new();
+    // let stack = &*STACK.init(Stack::new(&wifi_interface, config, RESOURCES.init(StackResources::new()), seed));
+    // let stack = static_cell::make_static!(
+    //     Stack<WifiDevice<'_, WifiApDevice>>,
+    //     Stack::new(
+    //         wifi_interface,
+    //         config,
+    //         make_static!(StackResources<3>, StackResources::<3>::new()), // 3 for DHCP, DNS and user-level socket
+    //         seed
+    //     )
+    // );
     let stack = &*mk_static!(
         Stack<WifiDevice<'_, WifiApDevice>>,
         Stack::new(
@@ -99,8 +113,8 @@ async fn ifup() {
         )
     );
 
-    spawner.spawn(connection(controller)).ok();
-    spawner.spawn(net_task(&stack)).ok();
+    spawner.spawn(wifi_up(controller)).ok();
+    spawner.spawn(net(&stack)).ok();
 
     let mut rx_buffer = [0; 1536];
     let mut tx_buffer = [0; 1536];
@@ -131,7 +145,6 @@ async fn ifup() {
             continue;
         }
 
-        use embedded_io_async::Write;
 
         let mut buffer = [0u8; 1024];
         let mut pos = 0;
@@ -189,14 +202,14 @@ async fn ifup() {
 }
 
 #[embassy_executor::task]
-async fn connection(mut controller: WifiController<'static>) {
+async fn wifi_up(mut controller: WifiController<'static>) {
     println!("start connection task");
     println!("Device capabilities: {:?}", controller.get_capabilities());
     loop {
         match esp_wifi::wifi::get_wifi_state() {
             WifiState::ApStarted => {
                 // wait until we're no longer connected
-                controller.wait_for_event(WifiEvent::ApStop).await;
+                controller.(WifiEvent::ApStop).await;
                 Timer::after(Duration::from_millis(5000)).await
             }
             _ => {}
@@ -208,13 +221,13 @@ async fn connection(mut controller: WifiController<'static>) {
             });
             controller.set_configuration(&client_config).unwrap();
             println!("Starting wifi");
-            controller.start().await.unwrap();
+            controller.start().unwrap();
             println!("Wifi started!");
         }
     }
 }
 
 #[embassy_executor::task]
-async fn net_task(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) {
+async fn net(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) {
     stack.run().await
 }

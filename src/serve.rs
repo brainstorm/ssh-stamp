@@ -3,6 +3,7 @@ use core::result::Result;
 use core::option::Option::{ self, Some, None };
 use core::unreachable;
 
+use crate::esp_net::ifup;
 use crate::io::{AsyncTcpStream, DebuggableTcpSocket};
 
 // Embassy
@@ -147,7 +148,8 @@ async fn handle_client(stream: DebuggableTcpSocket<'_>) -> Result<(), TransportE
 pub async fn start() -> Result<(), Error> {
     //let listener = TcpListener::bind("127.0.0.1:2222").await?;
 
-    loop {};
+    ifup();
+    Ok(())
     //ifup();
     // loop {
     //     let (stream, _) = listener.accept().await?;
