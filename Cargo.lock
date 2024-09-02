@@ -423,6 +423,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "embassy-futures"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f878075b9794c1e4ac788c95b728f26aa6366d32eeb10c7051389f898f7d067"
+
+[[package]]
 name = "embassy-net"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -432,7 +438,7 @@ dependencies = [
  "atomic-pool",
  "document-features",
  "embassy-net-driver",
- "embassy-sync",
+ "embassy-sync 0.5.0",
  "embassy-time",
  "embedded-io-async",
  "embedded-nal-async",
@@ -455,6 +461,19 @@ name = "embassy-sync"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd938f25c0798db4280fcd8026bf4c2f48789aebf8f77b6e5cf8a7693ba114ec"
+dependencies = [
+ "cfg-if",
+ "critical-section",
+ "embedded-io-async",
+ "futures-util",
+ "heapless",
+]
+
+[[package]]
+name = "embassy-sync"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3e0c49ff02ebe324faf3a8653ba91582e2d0a7fdef5bc88f449d5aa1bfcc05c"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -495,6 +514,23 @@ name = "embassy-time-queue-driver"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1177859559ebf42cd24ae7ba8fe6ee707489b01d0bf471f8827b7b12dcb0bc0"
+
+[[package]]
+name = "embassy-usb-driver"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fc247028eae04174b6635104a35b1ed336aabef4654f5e87a8f32327d231970"
+
+[[package]]
+name = "embassy-usb-synopsys-otg"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d46be92e72bcf39e623ff74d739a8ab29b02f4909a9b05986ca81c2157ac254a"
+dependencies = [
+ "critical-section",
+ "embassy-sync 0.5.0",
+ "embassy-usb-driver",
+]
 
 [[package]]
 name = "embedded-can"
@@ -651,9 +687,16 @@ dependencies = [
  "critical-section",
  "delegate",
  "document-features",
+ "embassy-futures",
+ "embassy-sync 0.6.0",
+ "embassy-usb-driver",
+ "embassy-usb-synopsys-otg",
  "embedded-can",
  "embedded-hal 1.0.0",
+ "embedded-hal-async",
  "embedded-hal-nb",
+ "embedded-io",
+ "embedded-io-async",
  "enumset",
  "esp-build",
  "esp-hal-procmacros",
@@ -791,7 +834,11 @@ dependencies = [
  "atomic-waker",
  "cfg-if",
  "critical-section",
+ "embassy-futures",
+ "embassy-net-driver",
+ "embassy-sync 0.6.0",
  "embedded-io",
+ "embedded-io-async",
  "enumset",
  "esp-build",
  "esp-hal",
@@ -809,6 +856,7 @@ dependencies = [
  "num-traits",
  "portable-atomic",
  "portable_atomic_enum",
+ "smoltcp",
  "toml-cfg",
 ]
 
