@@ -1,8 +1,6 @@
 // https://github.com/esp-rs/esp-hal/blob/main/examples/src/bin/wifi_embassy_access_point.rs
 // https://github.com/embassy-rs/embassy/blob/main/examples/nrf52840/src/bin/wifi_esp_hosted.rs
-#![feature(type_alias_impl_trait)]
-
-use static_cell::StaticCell;
+use embedded_io_async::Write;
 use embassy_executor::Spawner;
 use embassy_net::{
     tcp::TcpSocket,
@@ -11,7 +9,6 @@ use embassy_net::{
     Ipv4Address,
     Ipv4Cidr,
     Stack,
-    StackResources,
     StaticConfigV4,
 };
 use embassy_time::{Duration, Timer};
@@ -33,21 +30,10 @@ use esp_wifi::{
         WifiApDevice,
         WifiController,
         WifiDevice,
-        WifiEvent,
-        WifiState,
     },
     EspWifiInitFor,
 };
-
-// When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
-macro_rules! mk_static {
-    ($t:ty,$val:expr) => {{
-        static STATIC_CELL: static_cell::StaticCell<$t> = static_cell::StaticCell::new();
-        #[deny(unused_attributes)]
-        let x = STATIC_CELL.uninit().write(($val));
-        x
-    }};
-}
+use static_cell::make_static;
 
 pub async fn ifup(spawner: Spawner) {
     esp_println::logger::init_logger_from_env();
@@ -69,18 +55,11 @@ pub async fn ifup(spawner: Spawner) {
     .unwrap();
 
     let wifi = peripherals.WIFI;
-    let (mut wifi_interface, controller) =
+    let (wifi_interface, controller) =
         esp_wifi::wifi::new_with_mode(&init, wifi, WifiApDevice).unwrap();
 
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "esp32")] {
-            let timg1 = TimerGroup::new(peripherals.TIMG1, &clocks);
-            esp_hal_embassy::init(&clocks, timg1.timer0);
-        } else {
-            let systimer = SystemTimer::new(peripherals.SYSTIMER).split::<Target>();
-            esp_hal_embassy::init(&clocks, systimer.alarm0);
-        }
-    }
+    let systimer = SystemTimer::new(peripherals.SYSTIMER).split::<Target>(); // TODO: Substitute by Alarm::new instead of .split()...
+    esp_hal_embassy::init(&clocks, systimer.alarm0);
 
     let config = Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(Ipv4Address::new(192, 168, 2, 1), 24),
@@ -91,30 +70,18 @@ pub async fn ifup(spawner: Spawner) {
     let seed = 1234; // very random, very secure seed
 
     // Init network stack
-    // static RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
-    // static STACK: StaticCell<Stack< = StaticCell::new();
-    // let stack = &*STACK.init(Stack::new(&wifi_interface, config, RESOURCES.init(StackResources::new()), seed));
-    // let stack = static_cell::make_static!(
-    //     Stack<WifiDevice<'_, WifiApDevice>>,
-    //     Stack::new(
-    //         wifi_interface,
-    //         config,
-    //         make_static!(StackResources<3>, StackResources::<3>::new()), // 3 for DHCP, DNS and user-level socket
-    //         seed
-    //     )
-    // );
-    let stack = &*mk_static!(
-        Stack<WifiDevice<'_, WifiApDevice>>,
+    let stack = make_static!(
+        //Stack<WifiDevice && WifiDevice<'_, WifiApDevice>>,
         Stack::new(
             wifi_interface,
             config,
-            mk_static!(StackResources<3>, StackResources::<3>::new()),
+            make_static!(StackResources<3>, StackResources::<3>::new()),
             seed
         )
     );
 
     spawner.spawn(wifi_up(controller)).ok();
-    spawner.spawn(net(&stack)).ok();
+    spawner.spawn(net(stack)).ok();
 
     let mut rx_buffer = [0; 1536];
     let mut tx_buffer = [0; 1536];
@@ -207,11 +174,12 @@ async fn wifi_up(mut controller: WifiController<'static>) {
     println!("Device capabilities: {:?}", controller.get_capabilities());
     loop {
         match esp_wifi::wifi::get_wifi_state() {
-            WifiState::ApStarted => {
-                // wait until we're no longer connected
-                controller.(WifiEvent::ApStop).await;
-                Timer::after(Duration::from_millis(5000)).await
-            }
+            // TODO: No need to wait here, right??
+            // WifiState::ApStarted => {
+            //     // wait until we're no longer connected
+            //     controller.wait_for(WifiEvent::ApStop).await;
+            //     Timer::after(Duration::from_millis(5000)).await
+            // }
             _ => {}
         }
         if !matches!(controller.is_started(), Ok(true)) {
@@ -221,7 +189,7 @@ async fn wifi_up(mut controller: WifiController<'static>) {
             });
             controller.set_configuration(&client_config).unwrap();
             println!("Starting wifi");
-            controller.start().unwrap();
+            controller.start().await.unwrap();
             println!("Wifi started!");
         }
     }

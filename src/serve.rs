@@ -6,6 +6,7 @@ use core::unreachable;
 use crate::esp_net::ifup;
 use crate::io::{AsyncTcpStream, DebuggableTcpSocket};
 
+use embassy_executor::Spawner;
 // Embassy
 use embassy_net::tcp::Error;
 
@@ -145,10 +146,10 @@ async fn handle_client(stream: DebuggableTcpSocket<'_>) -> Result<(), TransportE
     }
 }
 
-pub async fn start() -> Result<(), Error> {
+pub async fn start(spawner: Spawner) -> Result<(), Error> {
     //let listener = TcpListener::bind("127.0.0.1:2222").await?;
 
-    ifup();
+    ifup(spawner);
     Ok(())
     //ifup();
     // loop {

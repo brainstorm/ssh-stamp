@@ -5,9 +5,9 @@ use embassy_executor::Spawner;
 use esp_hosted_ssh::serve::start;
 
 #[esp_hal_embassy::main]
-async fn main(_spawner: Spawner) -> ! {
+async fn main(spawner: Spawner) -> ! {
     esp_println::logger::init_logger_from_env();
 
-    let _res = start().await;
+    let _res = start(&spawner).await;
     loop {}
 }
