@@ -10,6 +10,7 @@ use embassy_net::{
     Ipv4Cidr,
     Stack,
     StaticConfigV4,
+    StackResources
 };
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
@@ -69,13 +70,13 @@ pub async fn ifup(spawner: Spawner) {
 
     let seed = 1234; // very random, very secure seed
 
+    // TODO: Revisit/review this carefully and make sure I'm using make_static! the right way and init properly
     // Init network stack
     let stack = make_static!(
-        //Stack<WifiDevice && WifiDevice<'_, WifiApDevice>>,
         Stack::new(
             wifi_interface,
             config,
-            make_static!(StackResources<3>, StackResources::<3>::new()),
+            make_static!(StackResources::<3>::new()),
             seed
         )
     );

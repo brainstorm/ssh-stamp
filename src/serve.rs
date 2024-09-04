@@ -149,9 +149,8 @@ async fn handle_client(stream: DebuggableTcpSocket<'_>) -> Result<(), TransportE
 pub async fn start(spawner: Spawner) -> Result<(), Error> {
     //let listener = TcpListener::bind("127.0.0.1:2222").await?;
 
-    ifup(spawner);
+    ifup(spawner).await;
     Ok(())
-    //ifup();
     // loop {
     //     let (stream, _) = listener.accept().await?;
 
