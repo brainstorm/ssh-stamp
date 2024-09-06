@@ -36,6 +36,16 @@ use esp_wifi::{
 };
 use static_cell::make_static;
 
+// When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
+macro_rules! mk_static {
+    ($t:ty,$val:expr) => {{
+        static STATIC_CELL: static_cell::StaticCell<$t> = static_cell::StaticCell::new();
+        #[deny(unused_attributes)]
+        let x = STATIC_CELL.uninit().write(($val));
+        x
+    }};
+}
+
 pub async fn ifup(spawner: Spawner) {
     esp_println::logger::init_logger_from_env();
 
@@ -70,16 +80,28 @@ pub async fn ifup(spawner: Spawner) {
 
     let seed = 1234; // very random, very secure seed
 
-    // TODO: Revisit/review this carefully and make sure I'm using make_static! the right way and init properly
+    // TODO: Revisit/review this carefully and make sure I'm using make_static!
+    // The right way and init properly
     // Init network stack
-    let stack = make_static!(
+    let stack = &*mk_static!(
+        Stack<WifiDevice<'_, WifiApDevice>>,
         Stack::new(
             wifi_interface,
             config,
-            make_static!(StackResources::<3>::new()),
+            mk_static!(StackResources<3>, StackResources::<3>::new()),
             seed
         )
     );
+    
+    // let stack = make_static!(
+    //     Stack<WifiApDevice && WifiApDevice<'_', WifiDevice>>,
+    //     Stack::new(
+    //         wifi_interface,
+    //         config,
+    //         make_static!(StackResources<3>, StackResources::<3>::new()),
+    //         seed
+    //     )
+    // );
 
     spawner.spawn(wifi_up(controller)).ok();
     spawner.spawn(net(stack)).ok();
