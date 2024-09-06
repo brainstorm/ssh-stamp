@@ -1,3 +1,6 @@
+# TODO: Potentially switch to cargo_xtask for easy re-targetting, i.e:
+# https://github.com/card-io-ecg/card-io-fw/blob/main/Cargo.toml
+
 [package]
 name = "esp-hosted-ssh"
 version = "0.1.0"
@@ -9,19 +12,25 @@ license = "MIT OR Apache-2.0"
 cfg-if = "1.0.0"
 ed25519-dalek = { version = "2.1.1", default-features = false }
 embassy-executor = { version = "0.6.0", features = ["integrated-timers", "task-arena-size-8192"]}
-embassy-net = { version = "0.4.0", features = ["proto-ipv4", "tcp", "medium-ip"] }
+#embassy-net = { version = "0.4.0", features = ["proto-ipv4", "tcp", "medium-ip"] }
+embassy-net = { version = "0.4.0", features = ["tcp", "udp", "dhcpv4", "medium-ethernet"] }
 embassy-time = { version = "0.3.2" }
 embedded-io-async = "0.6.1"
 esp-backtrace = { version = "0.14", features = [
-    "esp32s3",
+#    "esp32s3",
+    "esp32c6",
     "exception-handler",
     "panic-handler",
     "println",
 ] }
-esp-hal = { version = "0.20", features = [ "esp32s3", "async" ] }
-esp-hal-embassy = { version = "0.3", features = ["esp32s3"] }
-esp-println = { version = "0.11", features = ["esp32s3", "log"] }
-esp-wifi = { version = "0.8.0", features = ["esp32s3", "wifi", "wifi-default", "utils", "smoltcp", "async", "embassy-net"] }
+# esp-hal = { version = "0.20", features = [ "esp32s3", "async" ] }
+# esp-hal-embassy = { version = "0.3", features = ["esp32s3"] }
+# esp-println = { version = "0.11", features = ["esp32s3", "log"] }
+# esp-wifi = { version = "0.8.0", features = ["esp32s3", "wifi", "wifi-default", "utils", "smoltcp", "async", "embassy-net"] }
+esp-hal = { version = "0.20", features = [ "esp32c6", "async" ] }
+esp-hal-embassy = { version = "0.3", features = ["esp32c6"] }
+esp-println = { version = "0.11", features = ["esp32c6", "log"] }
+esp-wifi = { version = "0.8.0", features = ["esp32c6", "wifi", "wifi-default", "utils", "smoltcp", "async", "embassy-net"] }
 hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { version = "2.1.0", features = ["nightly"] }
