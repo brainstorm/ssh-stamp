@@ -2,7 +2,7 @@
 # https://github.com/card-io-ecg/card-io-fw/blob/main/Cargo.toml
 
 [package]
-name = "esp-hosted-ssh"
+name = "esp-ssh-rs"
 version = "0.1.0"
 authors = ["Roman Valls Guimera <brainstorm@users.noreply.github.com>"]
 edition = "2021"

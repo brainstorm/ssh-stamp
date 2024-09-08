@@ -754,27 +754,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "esp-hosted-ssh"
-version = "0.1.0"
-dependencies = [
- "cfg-if",
- "ed25519-dalek",
- "embassy-executor",
- "embassy-net",
- "embassy-time",
- "embedded-io-async",
- "esp-backtrace",
- "esp-hal",
- "esp-hal-embassy",
- "esp-println",
- "esp-wifi",
- "hex",
- "log",
- "static_cell",
- "zssh",
-]
-
-[[package]]
 name = "esp-metadata"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -809,6 +788,27 @@ dependencies = [
  "document-features",
  "riscv",
  "riscv-rt-macros",
+]
+
+[[package]]
+name = "esp-ssh-rs"
+version = "0.1.0"
+dependencies = [
+ "cfg-if",
+ "ed25519-dalek",
+ "embassy-executor",
+ "embassy-net",
+ "embassy-time",
+ "embedded-io-async",
+ "esp-backtrace",
+ "esp-hal",
+ "esp-hal-embassy",
+ "esp-println",
+ "esp-wifi",
+ "hex",
+ "log",
+ "static_cell",
+ "zssh",
 ]
 
 [[package]]
