@@ -5,6 +5,7 @@ use core::unreachable;
 
 use crate::esp_net::{accept_requests, ifup};
 use crate::io::{AsyncTcpStream, DebuggableTcpSocket};
+use crate::keys::{HOST_SECRET_KEY, USER_PUBLIC_KEY};
 
 // Embassy
 use embassy_executor::Spawner;
@@ -68,7 +69,7 @@ impl<'a> Behavior for SshServer<'a> {
     }
     
     fn server_id(&self) -> &'static str {
-        "SSH-2.0-esp-hosted-ssh-0.1"
+        crate::common::SERVER_ID
     }
     
     fn allow_shell(&self) -> bool {
@@ -76,17 +77,6 @@ impl<'a> Behavior for SshServer<'a> {
     }
 }
 
-// Randomly created host identity.
-const HOST_SECRET_KEY: [u8; 32] = [
-    0xdf, 0x77, 0xbb, 0xf9, 0xf6, 0x42, 0x04, 0x40, 0x4c, 0x69, 0xe7, 0x1c, 0x7c, 0x6c, 0xda, 0x71,
-    0x6c, 0xdc, 0x20, 0xa3, 0xe1, 0x2f, 0x78, 0x4a, 0x6d, 0xaa, 0x96, 0x3a, 0x1a, 0x51, 0xea, 0x4f,
-];
-
-// Matches examples/zssh.priv key.
-const USER_PUBLIC_KEY: [u8; 32] = [
-    0xa5, 0x34, 0xb0, 0xa8, 0x36, 0x95, 0x45, 0x22, 0xd2, 0x75, 0x46, 0xba, 0x6b, 0x17, 0xdc, 0xc9,
-    0x18, 0xfb, 0x9d, 0xeb, 0xe2, 0xd5, 0x36, 0x5e, 0x1b, 0xdb, 0xca, 0x32, 0xb5, 0xbd, 0x90, 0xb4,
-];
 
 async fn handle_client(stream: DebuggableTcpSocket<'_>) -> Result<(), TransportError<SshServer>> {
     let mut peripherals = Peripherals::take();
@@ -147,7 +137,10 @@ async fn handle_client(stream: DebuggableTcpSocket<'_>) -> Result<(), TransportE
 }
 
 pub async fn start(spawner: Spawner) -> Result<(), EmbassyNetError> {
+    // Bring up the network interface and start accepting SSH connections.
     let socket = ifup(spawner).await.unwrap();
     accept_requests(socket).await;
+
+    // All is fine :)
     Ok(())
 }

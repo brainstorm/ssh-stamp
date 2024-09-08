@@ -2,7 +2,9 @@
 #![no_main]
 #![feature(type_alias_impl_trait)]
 
+pub mod common;
 pub mod io;
 pub mod serve;
 pub mod esp_rng;
 pub mod esp_net;
+pub mod keys;

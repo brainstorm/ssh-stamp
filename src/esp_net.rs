@@ -35,6 +35,8 @@ use esp_wifi::{
     },
     EspWifiInitFor,
 };
+
+use crate::common::MTU;
 //use static_cell::make_static;
 
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
@@ -107,8 +109,8 @@ pub async fn ifup(spawner: Spawner) -> Result<TcpSocket<'static>, Error>
     spawner.spawn(wifi_up(controller)).ok();
     spawner.spawn(net(stack)).ok();
 
-    let mut rx_buffer = [0; 1536];
-    let mut tx_buffer = [0; 1536];
+    let rx_buffer = mk_static!([u8; MTU], [0; MTU]);
+    let tx_buffer = mk_static!([u8; MTU], [0; MTU]);
 
     loop {
         if stack.is_link_up() {
@@ -122,10 +124,9 @@ pub async fn ifup(spawner: Spawner) -> Result<TcpSocket<'static>, Error>
     println!("Use a static IP in the range 192.168.2.2 .. 192.168.2.255, use gateway 192.168.2.1");
 
     // Up to this point equivalent to: socket(), bind(), listen()...
-    let mut socket = TcpSocket::new(&stack, &mut rx_buffer, &mut tx_buffer);
+    let mut socket = TcpSocket::new(&stack, rx_buffer, tx_buffer);
     socket.set_timeout(Some(embassy_time::Duration::from_secs(10)));
 
-    // FIXME: Shall I pin tx_buffer and rx_buffer to the stack?
     Ok(socket)
 }
 
@@ -185,7 +186,8 @@ async fn wifi_up(mut controller: WifiController<'static>) {
     println!("Device capabilities: {:?}", controller.get_capabilities());
     loop {
         match esp_wifi::wifi::get_wifi_state() {
-            // TODO: No need to wait here, right??
+            // FIXME: No need to wait here at all, right??
+            //
             // WifiState::ApStarted => {
             //     // wait until we're no longer connected
             //     controller.wait_for(WifiEvent::ApStop).await;
