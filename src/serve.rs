@@ -3,12 +3,12 @@ use core::result::Result;
 use core::option::Option::{ self, Some, None };
 use core::unreachable;
 
-use crate::esp_net::ifup;
+use crate::esp_net::{accept_requests, ifup};
 use crate::io::{AsyncTcpStream, DebuggableTcpSocket};
 
-use embassy_executor::Spawner;
 // Embassy
-use embassy_net::tcp::Error;
+use embassy_executor::Spawner;
+use embassy_net::tcp::Error as EmbassyNetError;
 
 // ESP specific
 use crate::esp_rng::esp_random;
@@ -146,16 +146,8 @@ async fn handle_client(stream: DebuggableTcpSocket<'_>) -> Result<(), TransportE
     }
 }
 
-pub async fn start(spawner: Spawner) -> Result<(), Error> {
-    //let listener = TcpListener::bind("127.0.0.1:2222").await?;
-
-    ifup(spawner).await;
+pub async fn start(spawner: Spawner) -> Result<(), EmbassyNetError> {
+    let socket = ifup(spawner).await.unwrap();
+    accept_requests(socket).await;
     Ok(())
-    // loop {
-    //     let (stream, _) = listener.accept().await?;
-
-    //     if let Err(error) = handle_client(stream).await {
-    //         println!("Transport error: {:?}", error);
-    //     }
-    // }
 }

@@ -1,6 +1,7 @@
 // https://github.com/esp-rs/esp-hal/blob/main/examples/src/bin/wifi_embassy_access_point.rs
 // https://github.com/embassy-rs/embassy/blob/main/examples/nrf52840/src/bin/wifi_esp_hosted.rs
-use embedded_io_async::Write;
+use core::fmt::Error;
+
 use embassy_executor::Spawner;
 use embassy_net::{
     tcp::TcpSocket,
@@ -22,7 +23,7 @@ use esp_hal::{
     system::SystemControl,
     timer::timg::TimerGroup,
 };
-use esp_println::{print, println};
+use esp_println::println;
 use esp_wifi::{
     initialize,
     wifi::{
@@ -46,7 +47,8 @@ macro_rules! mk_static {
     }};
 }
 
-pub async fn ifup(spawner: Spawner) {
+pub async fn ifup(spawner: Spawner) -> Result<TcpSocket<'static>, Error>
+{
     esp_println::logger::init_logger_from_env();
 
     let peripherals = Peripherals::take();
@@ -80,8 +82,7 @@ pub async fn ifup(spawner: Spawner) {
 
     let seed = 1234; // very random, very secure seed
 
-    // TODO: Revisit/review this carefully and make sure I'm using make_static!
-    // The right way and init properly
+    // TODO: Revisit/review this carefully, using make_static! instead of mk_static!... ?
     // Init network stack
     let stack = &*mk_static!(
         Stack<WifiDevice<'_, WifiApDevice>>,
@@ -115,46 +116,46 @@ pub async fn ifup(spawner: Spawner) {
         }
         Timer::after(Duration::from_millis(500)).await;
     }
-    println!("Connect to the AP `esp-wifi` and point your browser to http://192.168.2.1:8080/");
+
+    // TODO: Offer options for DHCP and static IP, WifiManager-like (minimal) functionality
+    println!("Connect to the AP `esp-ssh-rs` and point your browser to http://192.168.2.1:8080/");
     println!("Use a static IP in the range 192.168.2.2 .. 192.168.2.255, use gateway 192.168.2.1");
 
+    // Up to this point equivalent to: socket(), bind(), listen()...
     let mut socket = TcpSocket::new(&stack, &mut rx_buffer, &mut tx_buffer);
     socket.set_timeout(Some(embassy_time::Duration::from_secs(10)));
+
+    // FIXME: Shall I pin tx_buffer and rx_buffer to the stack?
+    Ok(socket)
+}
+
+pub async fn accept_requests(mut socket: TcpSocket<'_>) {
+    // And here we accept() connections and handle them...
     loop {
         println!("Wait for connection...");
         let r = socket
             .accept(IpListenEndpoint {
                 addr: None,
-                port: 8080,
+                port: 22,
             })
             .await;
-        println!("Connected...");
+        println!("Connected, port 22");
 
         if let Err(e) = r {
             println!("connect error: {:?}", e);
             continue;
         }
 
-
         let mut buffer = [0u8; 1024];
-        let mut pos = 0;
         loop {
             match socket.read(&mut buffer).await {
                 Ok(0) => {
                     println!("read EOF");
                     break;
                 }
-                Ok(len) => {
-                    let to_print =
-                        unsafe { core::str::from_utf8_unchecked(&buffer[..(pos + len)]) };
-
-                    if to_print.contains("\r\n\r\n") {
-                        print!("{}", to_print);
-                        println!();
-                        break;
-                    }
-
-                    pos += len;
+                Ok(_len) => {
+                    // FIXME: handle bytes from SSH client
+                    todo!()
                 }
                 Err(e) => {
                     println!("read error: {:?}", e);
@@ -163,25 +164,12 @@ pub async fn ifup(spawner: Spawner) {
             };
         }
 
-        let r = socket
-            .write_all(
-                b"HTTP/1.0 200 OK\r\n\r\n\
-            <html>\
-                <body>\
-                    <h1>Hello Rust! Hello esp-wifi!</h1>\
-                </body>\
-            </html>\r\n\
-            ",
-            )
-            .await;
-        if let Err(e) = r {
-            println!("write error: {:?}", e);
-        }
-
         let r = socket.flush().await;
         if let Err(e) = r {
             println!("flush error: {:?}", e);
         }
+
+        // FIXME: Check socket close() and abort() requirements for SSH server
         Timer::after(Duration::from_millis(1000)).await;
 
         socket.close();
@@ -207,7 +195,7 @@ async fn wifi_up(mut controller: WifiController<'static>) {
         }
         if !matches!(controller.is_started(), Ok(true)) {
             let client_config = Configuration::AccessPoint(AccessPointConfiguration {
-                ssid: "esp-wifi".try_into().unwrap(),
+                ssid: "esp-ssh-rs".try_into().unwrap(),
                 ..Default::default()
             });
             controller.set_configuration(&client_config).unwrap();
