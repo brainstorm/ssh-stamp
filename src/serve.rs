@@ -73,7 +73,7 @@ impl<'a> Behavior for SshServer<'a> {
     }
     
     fn allow_shell(&self) -> bool {
-        false
+        true
     }
 }
 

@@ -24,6 +24,7 @@ use esp_hal::{
     timer::timg::TimerGroup,
 };
 use esp_println::println;
+use esp_wifi::wifi::{WifiEvent, WifiState};
 use esp_wifi::{
     initialize,
     wifi::{
@@ -113,6 +114,7 @@ pub async fn ifup(spawner: Spawner) -> Result<TcpSocket<'static>, Error>
     let tx_buffer = mk_static!([u8; MTU], [0; MTU]);
 
     loop {
+        println!("Checking if link is up...\n");
         if stack.is_link_up() {
             break;
         }
@@ -120,7 +122,7 @@ pub async fn ifup(spawner: Spawner) -> Result<TcpSocket<'static>, Error>
     }
 
     // TODO: Offer options for DHCP and static IP, WifiManager-like (minimal) functionality
-    println!("Connect to the AP `esp-ssh-rs` and point your browser to http://192.168.2.1:8080/");
+    println!("Connect to the AP `esp-ssh-rs` and point your ssh client to 192.168.2.1");
     println!("Use a static IP in the range 192.168.2.2 .. 192.168.2.255, use gateway 192.168.2.1");
 
     // Up to this point equivalent to: socket(), bind(), listen()...
@@ -154,8 +156,8 @@ pub async fn accept_requests(mut socket: TcpSocket<'_>) {
                     println!("read EOF");
                     break;
                 }
-                Ok(_len) => {
-                    // FIXME: handle bytes from SSH client
+                Ok(len) => {
+                    println!("Command received with length: {:?}", len);
                     todo!()
                 }
                 Err(e) => {
@@ -182,17 +184,14 @@ pub async fn accept_requests(mut socket: TcpSocket<'_>) {
 
 #[embassy_executor::task]
 async fn wifi_up(mut controller: WifiController<'static>) {
-    println!("start connection task");
     println!("Device capabilities: {:?}", controller.get_capabilities());
     loop {
         match esp_wifi::wifi::get_wifi_state() {
-            // FIXME: No need to wait here at all, right??
-            //
-            // WifiState::ApStarted => {
-            //     // wait until we're no longer connected
-            //     controller.wait_for(WifiEvent::ApStop).await;
-            //     Timer::after(Duration::from_millis(5000)).await
-            // }
+            WifiState::ApStarted => {
+                // wait until we're no longer connected
+                controller.wait_for_event(WifiEvent::ApStop).await;
+                Timer::after(Duration::from_millis(5000)).await
+            }
             _ => {}
         }
         if !matches!(controller.is_started(), Ok(true)) {
@@ -210,5 +209,6 @@ async fn wifi_up(mut controller: WifiController<'static>) {
 
 #[embassy_executor::task]
 async fn net(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) {
+    println!("Bringing up network stack...\n");
     stack.run().await
 }

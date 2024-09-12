@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![forbid(unsafe_code)]
 #![feature(type_alias_impl_trait)]
 
 pub mod common;
