@@ -3,13 +3,13 @@ use core::result::Result;
 use core::option::Option::{ self, Some, None };
 use core::unreachable;
 
-use crate::esp_net::{accept_requests, ifup};
-use crate::io::{AsyncTcpStream, DebuggableTcpSocket};
+use crate::esp_net::{accept_requests, if_up};
+use crate::io::AsyncTcpStream;
 use crate::keys::{HOST_SECRET_KEY, USER_PUBLIC_KEY};
 
 // Embassy
 use embassy_executor::Spawner;
-use embassy_net::tcp::Error as EmbassyNetError;
+use embassy_net::tcp::{Error as EmbassyNetError, TcpSocket};
 
 // ESP specific
 use crate::esp_rng::esp_random;
@@ -69,7 +69,7 @@ impl<'a> Behavior for SshServer<'a> {
     }
     
     fn server_id(&self) -> &'static str {
-        crate::common::SERVER_ID
+        crate::settings::SERVER_ID
     }
     
     fn allow_shell(&self) -> bool {
@@ -78,7 +78,7 @@ impl<'a> Behavior for SshServer<'a> {
 }
 
 
-async fn handle_client(stream: DebuggableTcpSocket<'_>) -> Result<(), TransportError<SshServer>> {
+pub async fn handle_ssh_client(stream: TcpSocket<'static>) -> Result<(), TransportError<SshServer<'static>>> {
     let mut peripherals = Peripherals::take();
     let behavior = SshServer {
         stream: AsyncTcpStream(stream),
@@ -138,7 +138,7 @@ async fn handle_client(stream: DebuggableTcpSocket<'_>) -> Result<(), TransportE
 
 pub async fn start(spawner: Spawner) -> Result<(), EmbassyNetError> {
     // Bring up the network interface and start accepting SSH connections.
-    let socket = ifup(spawner).await.unwrap();
+    let socket = if_up(spawner).await.unwrap();
     accept_requests(socket).await;
 
     // All is fine :)

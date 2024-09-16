@@ -3,7 +3,7 @@
 #![forbid(unsafe_code)]
 #![feature(type_alias_impl_trait)]
 
-pub mod common;
+pub mod settings;
 pub mod io;
 pub mod serve;
 pub mod esp_rng;

@@ -37,7 +37,7 @@ use esp_wifi::{
     EspWifiInitFor,
 };
 
-use crate::common::MTU;
+use crate::settings::MTU;
 //use static_cell::make_static;
 
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
@@ -50,7 +50,7 @@ macro_rules! mk_static {
     }};
 }
 
-pub async fn ifup(spawner: Spawner) -> Result<TcpSocket<'static>, Error>
+pub async fn if_up(spawner: Spawner) -> Result<TcpSocket<'static>, Error>
 {
     esp_println::logger::init_logger_from_env();
 
@@ -108,7 +108,7 @@ pub async fn ifup(spawner: Spawner) -> Result<TcpSocket<'static>, Error>
     // );
 
     spawner.spawn(wifi_up(controller)).ok();
-    spawner.spawn(net(stack)).ok();
+    spawner.spawn(net_up(stack)).ok();
 
     let rx_buffer = mk_static!([u8; MTU], [0; MTU]);
     let tx_buffer = mk_static!([u8; MTU], [0; MTU]);
@@ -132,18 +132,19 @@ pub async fn ifup(spawner: Spawner) -> Result<TcpSocket<'static>, Error>
     Ok(socket)
 }
 
-pub async fn accept_requests(mut socket: TcpSocket<'_>) {
-    // And here we accept() connections and handle them...
-    loop {
-        println!("Wait for connection...");
-        let r = socket
-            .accept(IpListenEndpoint {
-                addr: None,
-                port: 22,
-            })
-            .await;
-        println!("Connected, port 22");
+pub async fn accept_requests(mut socket: TcpSocket<'static>) {
+    // accept() connections...
+    //let mut debug_socket = io::DebuggableTcpSocket::<'static>(socket);
+    let r = socket.
+        accept(IpListenEndpoint {
+            addr: None,
+            port: 22,
+        })
+        .await;
 
+    println!("Connected, port 22");
+    // ... and handle them
+    loop {
         if let Err(e) = r {
             println!("connect error: {:?}", e);
             continue;
@@ -158,7 +159,7 @@ pub async fn accept_requests(mut socket: TcpSocket<'_>) {
                 }
                 Ok(len) => {
                     println!("Command received with length: {:?}", len);
-                    todo!()
+                    crate::serve::handle_ssh_client(socket);
                 }
                 Err(e) => {
                     println!("read error: {:?}", e);
@@ -172,7 +173,7 @@ pub async fn accept_requests(mut socket: TcpSocket<'_>) {
             println!("flush error: {:?}", e);
         }
 
-        // FIXME: Check socket close() and abort() requirements for SSH server
+        // TODO: Check socket close() and abort() requirements for SSH server
         Timer::after(Duration::from_millis(1000)).await;
 
         socket.close();
@@ -208,7 +209,7 @@ async fn wifi_up(mut controller: WifiController<'static>) {
 }
 
 #[embassy_executor::task]
-async fn net(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) {
+async fn net_up(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) {
     println!("Bringing up network stack...\n");
     stack.run().await
 }
