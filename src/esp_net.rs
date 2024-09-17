@@ -50,7 +50,7 @@ macro_rules! mk_static {
     }};
 }
 
-pub async fn if_up(spawner: Spawner) -> Result<TcpSocket<'static>, Error>
+pub async fn if_up(spawner: Spawner) -> Result<Stack<WifiDevice<'static, WifiApDevice>>, Error>
 {
     esp_println::logger::init_logger_from_env();
 
@@ -88,7 +88,7 @@ pub async fn if_up(spawner: Spawner) -> Result<TcpSocket<'static>, Error>
     // TODO: Revisit/review this carefully, using make_static! instead of mk_static!... ?
     // Init network stack
     let stack = &*mk_static!(
-        Stack<WifiDevice<'_, WifiApDevice>>,
+        Stack<WifiDevice<'static, WifiApDevice>>,
         Stack::new(
             wifi_interface,
             config,
@@ -110,9 +110,6 @@ pub async fn if_up(spawner: Spawner) -> Result<TcpSocket<'static>, Error>
     spawner.spawn(wifi_up(controller)).ok();
     spawner.spawn(net_up(stack)).ok();
 
-    let rx_buffer = mk_static!([u8; MTU], [0; MTU]);
-    let tx_buffer = mk_static!([u8; MTU], [0; MTU]);
-
     loop {
         println!("Checking if link is up...\n");
         if stack.is_link_up() {
@@ -125,26 +122,21 @@ pub async fn if_up(spawner: Spawner) -> Result<TcpSocket<'static>, Error>
     println!("Connect to the AP `esp-ssh-rs` and point your ssh client to 192.168.2.1");
     println!("Use a static IP in the range 192.168.2.2 .. 192.168.2.255, use gateway 192.168.2.1");
 
-    // Up to this point equivalent to: socket(), bind(), listen()...
-    let mut socket = TcpSocket::new(&stack, rx_buffer, tx_buffer);
-    socket.set_timeout(Some(embassy_time::Duration::from_secs(10)));
-
-    Ok(socket)
+    Ok(stack)
 }
 
 pub async fn accept_requests(mut socket: TcpSocket<'static>) {
-    // accept() connections...
+    // accept() connections..
     //let mut debug_socket = io::DebuggableTcpSocket::<'static>(socket);
-    let r = socket.
+    loop {
+        let mut r = socket.
         accept(IpListenEndpoint {
             addr: None,
             port: 22,
-        })
-        .await;
+        }).await;
 
-    println!("Connected, port 22");
-    // ... and handle them
-    loop {
+        println!("Connected, port 22");
+
         if let Err(e) = r {
             println!("connect error: {:?}", e);
             continue;
