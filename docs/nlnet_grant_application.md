@@ -1,12 +1,13 @@
 # Motivation
 
-This project aims to have a secure SSH-to-UART bridge for embedded microcontrollers.
+This project aims to have a secure SSH-to-UART bridge (independent co-processor) for any device with a serial port. This will be implemented as an minimalistic, low maintenance and robust microcontroller firmware.
 
 The expected outcomes are:
 
 1. To have a WiFi AP/STA device that a user can SSH into and securely manage any other device with an UART.
 1. The device should be relatively effortless to deploy and provision with the required secret key material.
 1. Written in embedded Rust (ideally `no_std` and `no alloc` to reduce memory fragmentation and allow long runtimes without memory issues).
+1. Being a SSH server, be compatible with `ansible-serial-unix` to allow for easy automation (bootstrapping) of devices.
 1. To initially target Espressif's ESP32 microcontrollers, but extend it to other devices such as Sipeed Maix M0sense, BouffaloLab's BL6xx, Realtek Ameba IOT SoC series, etc... 
 1. Eventually generalise towards a reusable and multi-target embedded-ssh-rs (generic) Rust project.
 
@@ -39,6 +40,8 @@ The costs are mainly firmware writing labour and very specialised consultant con
 > What are significant technical challenges you expect to solve during the project, if any?)
 
 Rust embedded and especially [esp-rs/esp-hal][esp-hal], which is what this project relies upon to begin with, are in a relatively young state of maturity.
+
+Also the implementation of a suitable PTY/TTY layer that has the right amount of compatibility with off the shelf SSH clients can be non trivial.
 
 # Ecosystem
 
