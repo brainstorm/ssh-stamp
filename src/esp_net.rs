@@ -47,7 +47,7 @@ macro_rules! mk_static {
     }};
 }
 
-pub async fn if_up(spawner: Spawner) -> Result<Stack<WifiDevice<'static, WifiApDevice>>, Error>
+pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static, WifiApDevice>>, Error>
 {
     esp_println::logger::init_logger_from_env();
 
@@ -108,16 +108,17 @@ pub async fn if_up(spawner: Spawner) -> Result<Stack<WifiDevice<'static, WifiApD
     println!("Connect to the AP `esp-ssh-rs` and point your ssh client to 192.168.2.1");
     println!("Use a static IP in the range 192.168.2.2 .. 192.168.2.255, use gateway 192.168.2.1");
 
-    Ok(stack)
+    Ok(&stack)
 }
 
 pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) {
 
     let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
     let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
-    let mut socket = TcpSocket::new(stack, rx_buffer, tx_buffer);
 
     loop {
+        let mut socket = TcpSocket::new(stack, rx_buffer, tx_buffer);
+
         if let Err(e) = socket.accept(IpListenEndpoint {
             addr: None,
             port: 22,
@@ -127,29 +128,7 @@ pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDev
         }
 
         println!("Connected, port 22");
-
-        let mut buffer = [0u8; 1024];
-        loop {
-            match socket.read(&mut buffer).await {
-                Ok(0) => {
-                    println!("read EOF");
-                    break;
-                }
-                Ok(len) => {
-                    println!("Command received with length: {:?}", len);
-                    crate::serve::handle_ssh_client(socket).await;
-                }
-                Err(e) => {
-                    println!("read error: {:?}", e);
-                    break;
-                }
-            };
-        }
-
-        let r = socket.flush().await;
-        if let Err(e) = r {
-            println!("flush error: {:?}", e);
-        }
+        crate::serve::handle_ssh_client(socket).await;
     }
 }
 
