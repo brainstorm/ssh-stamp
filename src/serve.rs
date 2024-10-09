@@ -20,7 +20,7 @@ use esp_hal::rng::Trng;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use zssh::{AuthMethod, Behavior, PublicKey, Request, SecretKey, Transport, TransportError};
 
-struct SshServer<'a> {
+pub(crate) struct SshServer<'a> {
     stream: AsyncTcpStream<'a>,
     random: Trng<'a>,
     host_secret_key: SecretKey,
@@ -28,7 +28,7 @@ struct SshServer<'a> {
 }
 
 #[derive(Debug, Clone)]
-enum ExampleCommand {
+pub(crate) enum ExampleCommand {
     Echo,
     Invalid,
 }
@@ -77,8 +77,7 @@ impl<'a> Behavior for SshServer<'a> {
     }
 }
 
-
-pub async fn handle_ssh_client(stream: TcpSocket<'static>) -> Result<(), TransportError<SshServer<'static>>> {
+pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), TransportError<SshServer<'a>>> {
     let mut peripherals = Peripherals::take();
     let behavior = SshServer {
         stream: AsyncTcpStream(stream),
