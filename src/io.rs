@@ -18,12 +18,12 @@ impl<'a> ErrorType for AsyncTcpStream<'a> {
 }
 impl<'a> Read for AsyncTcpStream<'a> {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        self.0.read(buf).await.map_err(|e| e.into())
+        self.0.read(buf).await
     }
 }
 
 impl<'a> Write for AsyncTcpStream<'a> {
     async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        self.0.write(buf).await.map_err(|e| e.into())
+        self.0.write(buf).await
     }
 }

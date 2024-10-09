@@ -108,7 +108,7 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
     println!("Connect to the AP `esp-ssh-rs` and point your ssh client to 192.168.2.1");
     println!("Use a static IP in the range 192.168.2.2 .. 192.168.2.255, use gateway 192.168.2.1");
 
-    Ok(&stack)
+    Ok(stack)
 }
 
 pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) {
@@ -136,13 +136,10 @@ pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDev
 async fn wifi_up(mut controller: WifiController<'static>) {
     println!("Device capabilities: {:?}", controller.get_capabilities());
     loop {
-        match esp_wifi::wifi::get_wifi_state() {
-            WifiState::ApStarted => {
-                // wait until we're no longer connected
-                controller.wait_for_event(WifiEvent::ApStop).await;
-                Timer::after(Duration::from_millis(5000)).await
-            }
-            _ => {}
+        if esp_wifi::wifi::get_wifi_state() == WifiState::ApStarted {
+            // wait until we're no longer connected
+            controller.wait_for_event(WifiEvent::ApStop).await;
+            Timer::after(Duration::from_millis(5000)).await
         }
         if !matches!(controller.is_started(), Ok(true)) {
             let client_config = Configuration::AccessPoint(AccessPointConfiguration {

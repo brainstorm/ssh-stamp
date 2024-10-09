@@ -138,7 +138,7 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), T
 pub async fn start(spawner: Spawner) -> Result<(), EmbassyNetError> {
     // Bring up the network interface and start accepting SSH connections.
     let stack= if_up(spawner).await.unwrap();
-    accept_requests(&stack).await;
+    accept_requests(stack).await;
 
     // All is fine :)
     Ok(())
