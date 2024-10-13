@@ -3,13 +3,15 @@ use core::result::Result;
 use core::option::Option::{ self, Some, None };
 use core::unreachable;
 
+use crate::errors::EspSshError;
+
 use crate::esp_net::{accept_requests, if_up};
 use crate::io::AsyncTcpStream;
 use crate::keys::{HOST_SECRET_KEY, USER_PUBLIC_KEY};
 
 // Embassy
 use embassy_executor::Spawner;
-use embassy_net::tcp::{Error as EmbassyNetError, TcpSocket};
+use embassy_net::tcp::TcpSocket;
 use esp_hal::peripherals;
 use esp_hal::peripherals::Peripherals;
 
@@ -19,7 +21,7 @@ use esp_println::println;
 use esp_hal::rng::Trng;
 
 use ed25519_dalek::{SigningKey, VerifyingKey};
-use zssh::{AuthMethod, Behavior, PublicKey, Request, SecretKey, Transport, TransportError};
+use zssh::{AuthMethod, Behavior, PublicKey, Request, SecretKey, Transport};
 
 pub(crate) struct SshServer<'a> {
     stream: AsyncTcpStream<'a>,
@@ -78,7 +80,7 @@ impl<'a> Behavior for SshServer<'a> {
     }
 }
 
-pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), TransportError<SshServer<'a>>> {
+pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), EspSshError> {
 
     let mut peripherals: Peripherals = unsafe {
         peripherals::Peripherals::steal()
@@ -91,7 +93,7 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), T
             secret_key: SigningKey::from_bytes(&HOST_SECRET_KEY),
         },
         user_public_key: PublicKey::Ed25519 {
-            public_key: VerifyingKey::from_bytes(&USER_PUBLIC_KEY).unwrap(),
+            public_key: VerifyingKey::from_bytes(&USER_PUBLIC_KEY)?,
         },
     };
 
@@ -140,10 +142,10 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), T
     }
 }
 
-pub async fn start(spawner: Spawner) -> Result<(), EmbassyNetError> {
+pub async fn start(spawner: Spawner) -> Result<(), EspSshError> {
     // Bring up the network interface and start accepting SSH connections.
-    let stack= if_up(spawner).await.unwrap();
-    accept_requests(stack).await;
+    let stack= if_up(spawner).await?;
+    accept_requests(stack).await?;
 
     // All is fine :)
     Ok(())
