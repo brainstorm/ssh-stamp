@@ -9,6 +9,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+thiserror = { git = "https://github.com/quartiq/thiserror", branch = "no-std", default-features=false }
 cfg-if = "1.0.0"
 ed25519-dalek = { version = "2.1.1", default-features = false }
 embassy-executor = { version = "0.6.0", features = ["integrated-timers", "task-arena-size-8192"]}
