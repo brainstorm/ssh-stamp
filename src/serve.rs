@@ -3,13 +3,15 @@ use core::result::Result;
 use core::option::Option::{ self, Some, None };
 use core::unreachable;
 
+use crate::errors::EspSshError;
+
 use crate::esp_net::{accept_requests, if_up};
 use crate::io::AsyncTcpStream;
 use crate::keys::{HOST_SECRET_KEY, USER_PUBLIC_KEY};
 
 // Embassy
 use embassy_executor::Spawner;
-use embassy_net::tcp::{Error as EmbassyNetError, TcpSocket};
+use embassy_net::tcp::TcpSocket;
 
 // ESP specific
 use crate::esp_rng::esp_random;
@@ -135,10 +137,10 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), T
     }
 }
 
-pub async fn start(spawner: Spawner) -> Result<(), EmbassyNetError> {
+pub async fn start(spawner: Spawner) -> Result<(), EspSshError> {
     // Bring up the network interface and start accepting SSH connections.
     let stack= if_up(spawner).await.unwrap();
-    accept_requests(stack).await;
+    accept_requests(stack).await?;
 
     // All is fine :)
     Ok(())

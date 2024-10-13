@@ -11,7 +11,7 @@ use embassy_net::{
     Ipv4Cidr,
     Stack,
     StaticConfigV4,
-    StackResources
+    StackResources,
 };
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
@@ -111,7 +111,7 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
     Ok(stack)
 }
 
-pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) {
+pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) -> Result<(), zssh::Error<embassy_net::tcp::Error>> {
 
     let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
     let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
@@ -128,7 +128,7 @@ pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDev
         }
 
         println!("Connected, port 22");
-        crate::serve::handle_ssh_client(socket).await;
+        crate::serve::handle_ssh_client(socket).await?;
     }
 }
 
