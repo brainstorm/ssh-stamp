@@ -35,7 +35,11 @@ esp-wifi = { version = "0.8.0", features = ["esp32c6", "wifi", "wifi-default", "
 hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { version = "2.1.0", features = ["nightly"] }
-zssh = "0.4"
+zssh = { version = "0.4" }
+
+[patch.crates-io]
+zssh = { path = "../zssh" }
+embedded-io-async = { path = "../embedded-hal/embedded-io-async" }
 
 [profile.dev]
 # Rust debug is too slow.

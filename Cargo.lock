@@ -581,16 +581,18 @@ dependencies = [
 [[package]]
 name = "embedded-io"
 version = "0.6.1"
+
+[[package]]
+name = "embedded-io"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "embedded-io-async"
 version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ff09972d4073aa8c299395be75161d582e7629cd663171d62af73c8d50dba3f"
 dependencies = [
- "embedded-io",
+ "embedded-io 0.6.1",
 ]
 
 [[package]]
@@ -696,7 +698,7 @@ dependencies = [
  "embedded-hal 1.0.0",
  "embedded-hal-async",
  "embedded-hal-nb",
- "embedded-io",
+ "embedded-io 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "embedded-io-async",
  "enumset",
  "esp-build",
@@ -824,7 +826,7 @@ dependencies = [
  "embassy-futures",
  "embassy-net-driver",
  "embassy-sync 0.6.0",
- "embedded-io",
+ "embedded-io 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "embedded-io-async",
  "enumset",
  "esp-build",
@@ -1816,8 +1818,6 @@ dependencies = [
 [[package]]
 name = "zssh"
 version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19463c1944842efd88582d606f9ea1060a80a233b76b94924a48e0324f0d434c"
 dependencies = [
  "chacha20",
  "constant_time_eq",
