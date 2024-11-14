@@ -54,14 +54,13 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
     let system = SystemControl::new(peripherals.SYSTEM);
     let clocks = ClockControl::max(system.clock_control).freeze();
 
-    let timg0 = TimerGroup::new(peripherals.TIMG0, &clocks);
-
-    let init = initialize(
+    let timg0 = TimerGroup::new(peripherals.TIMG0);
+    
+    let init = init(
         EspWifiInitFor::Wifi,
         timg0.timer0,
         Rng::new(peripherals.RNG),
         peripherals.RADIO_CLK,
-        &clocks,
     )
     .unwrap();
 
@@ -70,7 +69,7 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
         esp_wifi::wifi::new_with_mode(&init, wifi, WifiApDevice).unwrap();
 
     let systimer = SystemTimer::new(peripherals.SYSTIMER).split::<Target>(); // TODO: Substitute by Alarm::new instead of .split()...
-    esp_hal_embassy::init(&clocks, systimer.alarm0);
+    esp_hal_embassy::init(timg0);
 
     let config = Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(Ipv4Address::new(192, 168, 2, 1), 24),

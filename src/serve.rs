@@ -78,7 +78,7 @@ impl<'a> Behavior for SshServer<'a> {
 }
 
 pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), TransportError<SshServer<'a>>> {
-    let mut peripherals = Peripherals::take();
+    let mut peripherals = Peripherals();
     let behavior = SshServer {
         stream: AsyncTcpStream(stream),
         random: esp_random(&mut peripherals),
