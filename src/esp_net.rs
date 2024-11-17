@@ -17,16 +17,13 @@ use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
 use esp_hal::timer::systimer::{SystemTimer, Target};
 use esp_hal::{
-    clock::ClockControl,
-    peripherals::Peripherals,
     rng::Rng,
-    system::SystemControl,
     timer::timg::TimerGroup,
 };
 use esp_println::println;
+use esp_wifi::init;
 use esp_wifi::wifi::{WifiEvent, WifiState};
 use esp_wifi::{
-    initialize,
     wifi::{
         AccessPointConfiguration,
         Configuration,
@@ -50,9 +47,6 @@ macro_rules! mk_static {
 pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static, WifiApDevice>>, Error>
 {
     let peripherals = esp_hal::init(esp_hal::Config::default());
-
-    let system = SystemControl::new(peripherals.SYSTEM);
-    let clocks = ClockControl::max(system.clock_control).freeze();
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     
