@@ -10,11 +10,11 @@ use crate::keys::{HOST_SECRET_KEY, USER_PUBLIC_KEY};
 // Embassy
 use embassy_executor::Spawner;
 use embassy_net::tcp::{Error as EmbassyNetError, TcpSocket};
+use esp_hal::peripherals::Peripherals;
 
 // ESP specific
 use crate::esp_rng::esp_random;
 use esp_println::println;
-use esp_hal::peripherals::Peripherals;
 use esp_hal::rng::Trng;
 
 use ed25519_dalek::{SigningKey, VerifyingKey};
@@ -78,10 +78,10 @@ impl<'a> Behavior for SshServer<'a> {
 }
 
 pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), TransportError<SshServer<'a>>> {
-    let mut peripherals = Peripherals();
+
     let behavior = SshServer {
         stream: AsyncTcpStream(stream),
-        random: esp_random(&mut peripherals),
+        random: esp_random(),
         host_secret_key: SecretKey::Ed25519 {
             secret_key: SigningKey::from_bytes(&HOST_SECRET_KEY),
         },

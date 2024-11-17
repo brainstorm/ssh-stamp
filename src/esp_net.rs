@@ -63,7 +63,7 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
         esp_wifi::wifi::new_with_mode(&init, wifi, WifiApDevice).unwrap();
 
     let systimer = SystemTimer::new(peripherals.SYSTIMER).split::<Target>(); // TODO: Substitute by Alarm::new instead of .split()...
-    esp_hal_embassy::init(timg0);
+    esp_hal_embassy::init(timg0.timer0);
 
     let config = Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(Ipv4Address::new(192, 168, 2, 1), 24),
@@ -99,7 +99,7 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
     println!("Connect to the AP `esp-ssh-rs` and point your ssh client to 192.168.2.1");
     println!("Use a static IP in the range 192.168.2.2 .. 192.168.2.255, use gateway 192.168.2.1");
 
-    Ok(stack)
+    Ok(&stack)
 }
 
 pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) {
