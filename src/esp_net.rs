@@ -46,7 +46,7 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     
-    let init: EspWifiController = init(
+    let init: EspWifiController<'static> = init(
         timg0.timer0,
         Rng::new(peripherals.RNG),
         peripherals.RADIO_CLK,
