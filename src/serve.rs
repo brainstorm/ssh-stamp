@@ -10,7 +10,6 @@ use crate::keys::{HOST_SECRET_KEY, USER_PUBLIC_KEY};
 // Embassy
 use embassy_executor::Spawner;
 use embassy_net::tcp::{Error as EmbassyNetError, TcpSocket};
-use esp_hal::peripherals::Peripherals;
 
 // ESP specific
 use crate::esp_rng::esp_random;

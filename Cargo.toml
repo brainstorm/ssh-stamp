@@ -27,10 +27,10 @@ esp-backtrace = { version = "0.14.2", features = [
 # esp-hal-embassy = { version = "0.3", features = ["esp32s3"] }
 # esp-println = { version = "0.11", features = ["esp32s3", "log"] }
 # esp-wifi = { version = "0.8.0", features = ["esp32s3", "wifi", "wifi-default", "utils", "smoltcp", "async", "embassy-net"] }
-esp-hal = { version = "0.21.1", features = [ "esp32c6" ] }
-esp-hal-embassy = { version = "0.4.0", features = ["esp32c6"] }
+esp-hal = { version = "0.22", features = [ "esp32c6" ] }
+esp-hal-embassy = { version = "0.5.0", features = ["esp32c6"] }
 esp-println = { version = "0.12.0", features = ["esp32c6", "log"] }
-esp-wifi = { version = "0.10.1", features = ["esp32c6", "wifi", "wifi-default", "utils", "smoltcp", "async"] }
+esp-wifi = { version = "0.11.0", features = ["esp32c6", "wifi", "utils", "smoltcp"] }
 hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { version = "2.1.0", features = ["nightly"] }
