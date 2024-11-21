@@ -14,11 +14,14 @@ use embassy_net::{
 };
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
+
 use esp_hal::{
     rng::Rng,
     timer::timg::TimerGroup,
+    timer::systimer::{SystemTimer, Target},
 };
 use esp_println::println;
+
 use esp_wifi::{init, EspWifiController};
 use esp_wifi::wifi::{WifiEvent, WifiState};
 use esp_wifi::
@@ -43,20 +46,23 @@ macro_rules! mk_static {
 pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static, WifiApDevice>>, Error>
 {
     let peripherals = esp_hal::init(esp_hal::Config::default());
-
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     
-    let init: EspWifiController<'static> = init(
-        timg0.timer0,
-        Rng::new(peripherals.RNG),
-        peripherals.RADIO_CLK,
-    ).unwrap();
+    let init = &*mk_static!(
+        EspWifiController<'static>,
+        init(
+            timg0.timer0,
+            Rng::new(peripherals.RNG),
+            peripherals.RADIO_CLK,
+        )
+        .unwrap()
+    );
 
     let wifi = peripherals.WIFI;
-    let (wifi_interface, controller) =
-        esp_wifi::wifi::new_with_mode(&init, wifi, WifiApDevice).unwrap();
+    let (wifi_ap_interface, _wifi_sta_interface, controller) = esp_wifi::wifi::new_ap_sta(&init, wifi).unwrap();
+    let systimer = SystemTimer::new(peripherals.SYSTIMER).split::<Target>();
 
-    esp_hal_embassy::init(timg0.timer0);
+    esp_hal_embassy::init(systimer.alarm0);
 
     let config = Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(Ipv4Address::new(192, 168, 2, 1), 24),
@@ -70,7 +76,7 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
     let stack = &*mk_static!(
         Stack<WifiDevice<'static, WifiApDevice>>,
         Stack::new(
-            wifi_interface,
+            wifi_ap_interface,
             config,
             mk_static!(StackResources<3>, StackResources::<3>::new()),
             seed
@@ -112,7 +118,7 @@ pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDev
         }
 
         println!("Connected, port 22");
-        crate::serve::handle_ssh_client(socket).await;
+        crate::serve::handle_ssh_client(socket).await.unwrap();
     }
 }
 
@@ -132,7 +138,7 @@ async fn wifi_up(mut controller: WifiController<'static>) {
             });
             controller.set_configuration(&client_config).unwrap();
             println!("Starting wifi");
-            controller.start();
+            controller.start().unwrap();
             println!("Wifi started!");
         }
     }
