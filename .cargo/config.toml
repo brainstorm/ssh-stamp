@@ -4,7 +4,7 @@ runner = "espflash flash --monitor"
 
 
 [env]
-ESP_LOGLEVEL="INFO"
+ESP_LOG="INFO"
 
 [build]
 rustflags = [
@@ -15,5 +15,5 @@ rustflags = [
 #target = "xtensa-esp32s3-none-elf"
 target = "riscv32imac-unknown-none-elf"
 
-[unstable]
-build-std = ["core"]
+#[unstable]
+#build-std = ["core"]

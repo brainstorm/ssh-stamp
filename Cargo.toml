@@ -11,12 +11,12 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 cfg-if = "1.0.0"
 ed25519-dalek = { version = "2.1.1", default-features = false }
-embassy-executor = { version = "0.6.0", features = ["integrated-timers", "task-arena-size-8192"]}
-#embassy-net = { version = "0.4.0", features = ["proto-ipv4", "tcp", "medium-ip"] }
+embassy-executor = { version = "0.6.3", features = ["integrated-timers", "task-arena-size-8192"]}
 embassy-net = { version = "0.4.0", features = ["tcp", "udp", "dhcpv4", "medium-ethernet", "dns"] }
 embassy-time = { version = "0.3.2" }
 embedded-io-async = "0.6.1"
-esp-backtrace = { version = "0.14", features = [
+#esp-alloc = "0.5.0"
+esp-backtrace = { version = "0.14.2", features = [
 #    "esp32s3",
     "esp32c6",
     "exception-handler",
@@ -27,10 +27,10 @@ esp-backtrace = { version = "0.14", features = [
 # esp-hal-embassy = { version = "0.3", features = ["esp32s3"] }
 # esp-println = { version = "0.11", features = ["esp32s3", "log"] }
 # esp-wifi = { version = "0.8.0", features = ["esp32s3", "wifi", "wifi-default", "utils", "smoltcp", "async", "embassy-net"] }
-esp-hal = { version = "0.20", features = [ "esp32c6", "async" ] }
-esp-hal-embassy = { version = "0.3", features = ["esp32c6"] }
-esp-println = { version = "0.11", features = ["esp32c6", "log"] }
-esp-wifi = { version = "0.8.0", features = ["esp32c6", "wifi", "wifi-default", "utils", "smoltcp", "async", "embassy-net"] }
+esp-hal = { version = "0.22", features = [ "esp32c6" ] }
+esp-hal-embassy = { version = "0.5.0", features = ["esp32c6"] }
+esp-println = { version = "0.12.0", features = ["esp32c6", "log"] }
+esp-wifi = { version = "0.11.0", features = ["esp32c6", "wifi", "utils", "smoltcp"] }
 hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { version = "2.1.0", features = ["nightly"] }
@@ -39,7 +39,10 @@ zssh = "0.4"
 [profile.dev]
 # Rust debug is too slow.
 # For debug builds always builds with some optimization
-opt-level = "s"
+opt-level = 3
+
+# [patch.crates-io]
+# esp-hal = { path = "../esp-hal/esp-hal" }
 
 [profile.release]
 codegen-units = 1 # LLVM can perform better optimizations using a single thread
@@ -47,5 +50,5 @@ debug = 2
 debug-assertions = false
 incremental = false
 lto = 'fat'
-opt-level = 's'
+opt-level = 3
 overflow-checks = false
