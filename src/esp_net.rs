@@ -1,6 +1,5 @@
 // https://github.com/esp-rs/esp-hal/blob/main/examples/src/bin/wifi_embassy_access_point.rs
 // https://github.com/embassy-rs/embassy/blob/main/examples/nrf52840/src/bin/wifi_esp_hosted.rs
-use core::fmt::Error;
 use embassy_executor::Spawner;
 use embassy_net::{
     tcp::TcpSocket,
@@ -10,7 +9,7 @@ use embassy_net::{
     Ipv4Cidr,
     Stack,
     StaticConfigV4,
-    StackResources
+    StackResources,
 };
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
@@ -33,6 +32,8 @@ use esp_wifi::
         WifiDevice,
     };
 
+use crate::errors::EspSshError;
+
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {
     ($t:ty,$val:expr) => {{
@@ -43,11 +44,11 @@ macro_rules! mk_static {
     }};
 }
 
-pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static, WifiApDevice>>, Error>
+pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static, WifiApDevice>>, EspSshError>
 {
     let peripherals = esp_hal::init(esp_hal::Config::default());
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-    
+
     let init = &*mk_static!(
         EspWifiController<'static>,
         init(
@@ -83,8 +84,8 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
         )
     );
 
-    spawner.spawn(wifi_up(controller)).ok();
-    spawner.spawn(net_up(stack)).ok();
+    spawner.spawn(wifi_up(controller)).unwrap();
+    spawner.spawn(net_up(stack)).unwrap();
 
     loop {
         println!("Checking if link is up...\n");
@@ -101,7 +102,7 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
     Ok(&stack)
 }
 
-pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) {
+pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) -> Result<(), EspSshError> {
 
     let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
     let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
@@ -118,7 +119,7 @@ pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDev
         }
 
         println!("Connected, port 22");
-        crate::serve::handle_ssh_client(socket).await.unwrap();
+        crate::serve::handle_ssh_client(socket).await?;
     }
 }
 
