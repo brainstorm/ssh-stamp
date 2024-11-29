@@ -725,6 +725,7 @@ dependencies = [
  "embassy-net",
  "embassy-time",
  "embedded-io-async",
+ "esp-alloc",
  "esp-backtrace",
  "esp-hal",
  "esp-hal-embassy",
