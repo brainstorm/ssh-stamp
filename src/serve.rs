@@ -82,6 +82,7 @@ impl<'a> Behavior for SshServer<'a> {
 
 pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), EspSshError> {
 
+
     let mut peripherals: Peripherals = unsafe {
         peripherals::Peripherals::steal()
     };
