@@ -14,11 +14,10 @@ use embassy_net::{
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
 
-use esp_hal::{
-    rng::Rng,
-    timer::timg::TimerGroup,
-    timer::systimer::{SystemTimer, Target},
-};
+use esp_hal::clock::CpuClock;
+use esp_hal::rng::Rng;
+
+use esp_hal::timer::timg::TimerGroup;
 use esp_println::println;
 
 use esp_wifi::{init, EspWifiController};
@@ -46,24 +45,38 @@ macro_rules! mk_static {
 
 pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static, WifiApDevice>>, EspSshError>
 {
-    let peripherals = esp_hal::init(esp_hal::Config::default());
+    let peripherals = esp_hal::init({
+        let mut config = esp_hal::Config::default();
+        config.cpu_clock = CpuClock::max();
+        config
+    });
+    let mut rng = Rng::new(peripherals.RNG);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
 
     let init = &*mk_static!(
         EspWifiController<'static>,
         init(
             timg0.timer0,
-            Rng::new(peripherals.RNG),
+            rng.clone(),
             peripherals.RADIO_CLK,
-        )
-        .unwrap()
+        ).unwrap()
     );
 
     let wifi = peripherals.WIFI;
     let (wifi_ap_interface, _wifi_sta_interface, controller) = esp_wifi::wifi::new_ap_sta(&init, wifi).unwrap();
-    let systimer = SystemTimer::new(peripherals.SYSTIMER).split::<Target>();
 
-    esp_hal_embassy::init(systimer.alarm0);
+    //let systimer = SystemTimer::new(peripherals.SYSTIMER).split_async::<Target>();
+    
+    //cfg_if::cfg_if! {
+    //    if #[cfg(feature = "esp32")] {
+            let timg1 = TimerGroup::new(peripherals.TIMG1);
+            esp_hal_embassy::init(timg1.timer0);
+    //    } else {
+    //        use esp_hal::timer::systimer::SystemTimer;
+    //        let systimer = SystemTimer::new(peripherals.SYSTIMER);
+    //        esp_hal_embassy::init(systimer.alarm0);
+    //    }
+    //}
 
     let config = Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(Ipv4Address::new(192, 168, 2, 1), 24),
@@ -74,7 +87,7 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
     let seed = 1234; // very random, very secure seed
 
     // Init network stack
-    let stack = &*mk_static!(
+    let ap_stack = &*mk_static!(
         Stack<WifiDevice<'static, WifiApDevice>>,
         Stack::new(
             wifi_ap_interface,
@@ -85,11 +98,11 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
     );
 
     spawner.spawn(wifi_up(controller)).unwrap();
-    spawner.spawn(net_up(stack)).unwrap();
+    spawner.spawn(net_up(ap_stack)).unwrap();
 
     loop {
         println!("Checking if link is up...\n");
-        if stack.is_link_up() {
+        if ap_stack.is_link_up() {
             break;
         }
         Timer::after(Duration::from_millis(500)).await;
@@ -99,7 +112,7 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
     println!("Connect to the AP `esp-ssh-rs` and point your ssh client to 192.168.2.1");
     println!("Use a static IP in the range 192.168.2.2 .. 192.168.2.255, use gateway 192.168.2.1");
 
-    Ok(&stack)
+    Ok(&ap_stack)
 }
 
 pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) -> Result<(), EspSshError> {
@@ -139,7 +152,7 @@ async fn wifi_up(mut controller: WifiController<'static>) {
             });
             controller.set_configuration(&client_config).unwrap();
             println!("Starting wifi");
-            controller.start().unwrap();
+            controller.start_async().await.unwrap();
             println!("Wifi started!");
         }
     }
