@@ -7,21 +7,18 @@
             "name": "Launch",
             "cwd": "${workspaceFolder}",
             "chip": "esp32c6",
-            // probe field only needed if multiple probes connected. <Serial> is the MAC address of your esp in case of usb-jtag       
-            //"probe": "VID:PID:<Serial>", //!MODIFY (or remove) | optional field
+            "probe": "10c4:ea60",
             "flashingConfig": {
                 "flashingEnabled": true,
                 "haltAfterReset": true,
                 "formatOptions": {
-                    "binaryFormat": "idf"
+                    "binaryFormat": "elf"
                 }
             },
             "coreConfigs": [
                 {
                     "coreIndex": 0,
-                    "programBinary": "target/riscv32imc-unknown-none-elf/debug/esp-ssh-rs", //!MODIFY
-                    // svdFiles describe the hardware register names off the esp peripherals, such as the LEDC peripheral. 
-                    // They can be downloaded seperatly @ https://github.com/espressif/svd/tree/main/svd
+                    "programBinary": "target/riscv32imac-unknown-none-elf/debug/esp-ssh-rs",
                     "svdFile": "${workspaceFolder}/esp32c6.svd"
                 }
             ]
@@ -31,12 +28,12 @@
             "request": "attach",
             "name": "Attach",
             "cwd": "${workspaceFolder}",
-            "chip": "esp32c6", //!MODIFY       
-            //"probe": "VID:PID:<Serial>", //!MODIFY (or remove) | optional field
+            "chip": "esp32c6",
+            "probe": "10c4:ea60",
             "coreConfigs": [
                 {
                     "coreIndex": 0,
-                    "programBinary": "target/riscv32imc-unknown-none-elf/debug/esp-ssh-rs", //!MODIFY
+                    "programBinary": "target/riscv32imac-unknown-none-elf/debug/esp-ssh-rs",
                     "svdFile": "${workspaceFolder}/esp32c6.svd"
                 }
             ]
