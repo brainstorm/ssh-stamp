@@ -7,7 +7,7 @@
             "name": "Launch",
             "cwd": "${workspaceFolder}",
             "chip": "esp32c6",
-            "probe": "10c4:ea60",
+            "probe": "10c4:ea60:6255f9f7004c",
             "flashingConfig": {
                 "flashingEnabled": true,
                 "haltAfterReset": true,
@@ -29,7 +29,7 @@
             "name": "Attach",
             "cwd": "${workspaceFolder}",
             "chip": "esp32c6",
-            "probe": "10c4:ea60",
+            "probe": "10c4:ea60:6255f9f7004c",
             "coreConfigs": [
                 {
                     "coreIndex": 0,
