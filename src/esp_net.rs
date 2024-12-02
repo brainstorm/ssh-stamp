@@ -17,6 +17,7 @@ use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
 use esp_hal::rng::Rng;
 
+use esp_hal::timer::systimer::Target;
 use esp_hal::timer::timg::TimerGroup;
 use esp_println::println;
 
@@ -67,16 +68,16 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
 
     //let systimer = SystemTimer::new(peripherals.SYSTIMER).split_async::<Target>();
     
-    //cfg_if::cfg_if! {
-    //    if #[cfg(feature = "esp32")] {
+    cfg_if::cfg_if! {
+       if #[cfg(feature = "esp32")] {
             let timg1 = TimerGroup::new(peripherals.TIMG1);
             esp_hal_embassy::init(timg1.timer0);
-    //    } else {
-    //        use esp_hal::timer::systimer::SystemTimer;
-    //        let systimer = SystemTimer::new(peripherals.SYSTIMER);
-    //        esp_hal_embassy::init(systimer.alarm0);
-    //    }
-    //}
+       } else {
+           use esp_hal::timer::systimer::SystemTimer;
+           let systimer = SystemTimer::new(peripherals.SYSTIMER).split::<Target>();
+           esp_hal_embassy::init(systimer.alarm0);
+       }
+    }
 
     let config = Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(Ipv4Address::new(192, 168, 2, 1), 24),
@@ -139,7 +140,7 @@ pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDev
 #[embassy_executor::task]
 async fn wifi_up(mut controller: WifiController<'static>) {
     println!("Device capabilities: {:?}", controller.capabilities());
-    loop {
+    //loop {
         if esp_wifi::wifi::wifi_state() == WifiState::ApStarted {
             // wait until we're no longer connected
             controller.wait_for_event(WifiEvent::ApStop).await;
@@ -155,7 +156,8 @@ async fn wifi_up(mut controller: WifiController<'static>) {
             controller.start_async().await.unwrap();
             println!("Wifi started!");
         }
-    }
+        Timer::after(Duration::from_millis(10)).await;
+    //}
 }
 
 #[embassy_executor::task]
