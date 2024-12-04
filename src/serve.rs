@@ -81,11 +81,13 @@ impl<'a> Behavior for SshServer<'a> {
 }
 
 pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), EspSshError> {
-
-
+    // SAFETY: No further (nor concurrent) peripheral operations are happening
+    // This will be removed once Trng is cloneable: https://github.com/esp-rs/esp-hal/issues/2372
     let mut peripherals: Peripherals = unsafe {
         peripherals::Peripherals::steal()
     };
+
+    println!("Peripherals stolen at handle_ssh_client()...");
 
     let behavior = SshServer {
         stream: AsyncTcpStream(stream),
@@ -100,6 +102,8 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), E
 
     let mut packet_buffer = [0u8; 4096]; // the borrowed byte buffer
     let mut transport = Transport::new(&mut packet_buffer, behavior);
+
+    println!("Looping in channel.request() match");
 
     loop {
         let mut channel = transport.accept().await?;
