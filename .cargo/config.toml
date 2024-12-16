@@ -1,6 +1,6 @@
 #[target.xtensa-esp32s3-none-elf]
 [target.riscv32imac-unknown-none-elf]
-runner = "espflash flash --monitor"
+runner = "espflash flash --baud=921600 --monitor"
 
 
 [env]
