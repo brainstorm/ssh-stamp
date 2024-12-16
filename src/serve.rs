@@ -106,11 +106,22 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), E
     println!("Looping in channel.request() match");
 
     loop {
-        let mut channel = transport.accept().await?;
+        println!("Before accept()-ing request...");
+        let channel = transport.accept().await;
+        let mut channel = match channel {
+            Err(e) => {
+                println!("Error accepting request: {:?}", e);
+                return Ok(()); // TODO: Handy for quick iteration, not ideal for production.
+                               // in any case, it shouldn't panic when client disconnects and 
+                               // there's a unexpected EOF.
+            }
+            Ok(channel) => channel,
+        };
+        println!("After accept()-ing request...");
 
         println!(
             "Request {:?} by user {:?} from client {:?}",
-            channel.request(),
+            channel.request(), 
             channel.user(),
             channel.client_ssh_id_string()
         );
