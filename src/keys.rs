@@ -8,6 +8,7 @@ pub(crate) const HOST_SECRET_KEY: [u8; 32] = [
 ];
 
 // const USER_FULL_PUBLIC_KEY: [u8; 103] = include_data!("/home/rvalls/.ssh/id_ed25519.pub");
+// TODO: Handle errors in key parsing, i.e: changing a single character in the key results in esp-rs's "Overflow"
 pub(crate) fn get_user_public_key() -> Ed25519PublicKey {
     *PublicKey::from_openssh("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICWwC2CWtve93K0BubV0gf74kvzDG9WM5SfXAAcr+5dy rvalls@Romans-MBP.lan")
         .unwrap()
