@@ -1,5 +1,3 @@
-$ ssh -vvvvv 192.168.2.1\
-> 
 OpenSSH_9.6p1 Ubuntu-3ubuntu13.5, OpenSSL 3.0.13 30 Jan 2024
 debug1: Reading configuration data /home/rvalls/.ssh/config
 debug1: Reading configuration data /etc/ssh/ssh_config
@@ -13,25 +11,13 @@ debug3: ssh_connect_direct: entering
 debug1: Connecting to 192.168.2.1 [192.168.2.1] port 22.
 debug3: set_sock_tos: set socket 3 IP_TOS 0x10
 debug1: Connection established.
-debug1: identity file /home/rvalls/.ssh/id_rsa type 0
-debug1: identity file /home/rvalls/.ssh/id_rsa-cert type -1
-debug1: identity file /home/rvalls/.ssh/id_ecdsa type -1
-debug1: identity file /home/rvalls/.ssh/id_ecdsa-cert type -1
-debug1: identity file /home/rvalls/.ssh/id_ecdsa_sk type -1
-debug1: identity file /home/rvalls/.ssh/id_ecdsa_sk-cert type -1
 debug1: identity file /home/rvalls/.ssh/id_ed25519 type 3
 debug1: identity file /home/rvalls/.ssh/id_ed25519-cert type -1
-debug1: identity file /home/rvalls/.ssh/id_ed25519_sk type -1
-debug1: identity file /home/rvalls/.ssh/id_ed25519_sk-cert type -1
-debug1: identity file /home/rvalls/.ssh/id_xmss type -1
-debug1: identity file /home/rvalls/.ssh/id_xmss-cert type -1
-debug1: identity file /home/rvalls/.ssh/id_dsa type -1
-debug1: identity file /home/rvalls/.ssh/id_dsa-cert type -1
 debug1: Local version string SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.5
 debug1: Remote protocol version 2.0, remote software version esp-ssh-rs-0.1
 debug1: compat_banner: no match: esp-ssh-rs-0.1
 debug2: fd 3 setting O_NONBLOCK
-debug1: Authenticating to 192.168.2.1:22 as 'rvalls'
+debug1: Authenticating to 192.168.2.1:22 as 'zssh'
 debug3: record_hostkey: found key type ED25519 in file /home/rvalls/.ssh/known_hosts:125
 debug3: load_hostkeys_file: loaded 1 keys from 192.168.2.1
 debug1: load_hostkeys: fopen /home/rvalls/.ssh/known_hosts2: No such file or directory
@@ -112,32 +98,129 @@ debug1: Next authentication method: publickey
 debug3: ssh_get_authentication_socket_path: path '/run/user/1000/keyring/ssh'
 debug1: get_agent_identities: bound agent to hostkey
 debug1: get_agent_identities: agent returned 2 keys
-debug1: Will attempt key: /home/rvalls/.ssh/id_ed25519 ED25519 SHA256:9OQiM+YGtGhuxTQGIykizJ2t9q3BrGsDtpNZsZitn00 agent
-debug1: Will attempt key: /home/rvalls/.ssh/id_rsa RSA SHA256:ZwuMnYg64tbhPSMmOL2PhcU7wRJPS/4uaX79hMz+1v0 agent
-debug1: Will attempt key: /home/rvalls/.ssh/id_ecdsa 
-debug1: Will attempt key: /home/rvalls/.ssh/id_ecdsa_sk 
-debug1: Will attempt key: /home/rvalls/.ssh/id_ed25519_sk 
-debug1: Will attempt key: /home/rvalls/.ssh/id_xmss 
-debug1: Will attempt key: /home/rvalls/.ssh/id_dsa 
+debug1: Will attempt key: /home/rvalls/.ssh/id_ed25519 ED25519 SHA256:9OQiM+YGtGhuxTQGIykizJ2t9q3BrGsDtpNZsZitn00 explicit agent
+debug1: Will attempt key: rvalls@Romans-MBP.lan RSA SHA256:ZwuMnYg64tbhPSMmOL2PhcU7wRJPS/4uaX79hMz+1v0 agent
 debug2: pubkey_prepare: done
-debug1: Offering public key: /home/rvalls/.ssh/id_ed25519 ED25519 SHA256:9OQiM+YGtGhuxTQGIykizJ2t9q3BrGsDtpNZsZitn00 agent
+debug1: Offering public key: /home/rvalls/.ssh/id_ed25519 ED25519 SHA256:9OQiM+YGtGhuxTQGIykizJ2t9q3BrGsDtpNZsZitn00 explicit agent
 debug3: send packet: type 50
 debug2: we sent a publickey packet, wait for reply
-debug3: receive packet: type 51
-debug1: Authentications that can continue: publickey
-debug1: Offering public key: /home/rvalls/.ssh/id_rsa RSA SHA256:ZwuMnYg64tbhPSMmOL2PhcU7wRJPS/4uaX79hMz+1v0 agent
-debug1: send_pubkey_test: no mutual signature algorithm
-debug1: Trying private key: /home/rvalls/.ssh/id_ecdsa
-debug3: no such identity: /home/rvalls/.ssh/id_ecdsa: No such file or directory
-debug1: Trying private key: /home/rvalls/.ssh/id_ecdsa_sk
-debug3: no such identity: /home/rvalls/.ssh/id_ecdsa_sk: No such file or directory
-debug1: Trying private key: /home/rvalls/.ssh/id_ed25519_sk
-debug3: no such identity: /home/rvalls/.ssh/id_ed25519_sk: No such file or directory
-debug1: Trying private key: /home/rvalls/.ssh/id_xmss
-debug3: no such identity: /home/rvalls/.ssh/id_xmss: No such file or directory
-debug1: Trying private key: /home/rvalls/.ssh/id_dsa
-debug3: no such identity: /home/rvalls/.ssh/id_dsa: No such file or directory
-debug2: we did not send a packet, disable method
-debug1: No more authentication methods to try.
-rvalls@192.168.2.1: Permission denied (publickey).
+debug3: receive packet: type 60
+debug1: Server accepts key: /home/rvalls/.ssh/id_ed25519 ED25519 SHA256:9OQiM+YGtGhuxTQGIykizJ2t9q3BrGsDtpNZsZitn00 explicit agent
+debug3: sign_and_send_pubkey: using publickey with ED25519 SHA256:9OQiM+YGtGhuxTQGIykizJ2t9q3BrGsDtpNZsZitn00
+debug3: sign_and_send_pubkey: signing using ssh-ed25519 SHA256:9OQiM+YGtGhuxTQGIykizJ2t9q3BrGsDtpNZsZitn00
+debug3: send packet: type 50
+debug3: receive packet: type 52
+Authenticated to 192.168.2.1 ([192.168.2.1]:22) using "publickey".
+debug2: fd 5 setting O_NONBLOCK
+debug1: channel 0: new session [client-session] (inactive timeout: 0)
+debug3: ssh_session2_open: channel_new: 0
+debug2: channel 0: send open
+debug3: send packet: type 90
+debug1: Entering interactive session.
+debug1: pledge: filesystem
+debug3: client_repledge: enter
+debug3: receive packet: type 91
+debug2: channel_input_open_confirmation: channel 0: callback start
+debug2: fd 3 setting TCP_NODELAY
+debug3: set_sock_tos: set socket 3 IP_TOS 0x10
+debug2: client_session2_setup: id 0
+debug2: channel 0: request pty-req confirm 1
+debug3: send packet: type 98
+debug1: Sending environment.
+debug3: Ignored env SHELL
+debug3: Ignored env SESSION_MANAGER
+debug3: Ignored env QT_ACCESSIBILITY
+debug3: Ignored env COLORTERM
+debug3: Ignored env XDG_CONFIG_DIRS
+debug3: Ignored env XDG_MENU_PREFIX
+debug3: Ignored env TERM_PROGRAM_VERSION
+debug3: Ignored env XDG_CONFIG_DIRS_VSCODE_SNAP_ORIG
+debug3: Ignored env GNOME_DESKTOP_SESSION_ID
+debug3: Ignored env GDK_BACKEND_VSCODE_SNAP_ORIG
+debug3: Ignored env JAVA_HOME
+debug3: Ignored env GIO_MODULE_DIR_VSCODE_SNAP_ORIG
+debug3: Ignored env GNOME_SHELL_SESSION_MODE
+debug3: Ignored env SSH_AUTH_SOCK
+debug3: Ignored env XDG_DATA_HOME
+debug3: Ignored env MEMORY_PRESSURE_WRITE
+debug3: Ignored env XMODIFIERS
+debug3: Ignored env DESKTOP_SESSION
+debug3: Ignored env BAMF_DESKTOP_FILE_HINT
+debug3: Ignored env EDITOR
+debug3: Ignored env GTK_MODULES
+debug3: Ignored env PWD
+debug3: Ignored env GSETTINGS_SCHEMA_DIR
+debug3: Ignored env XDG_SESSION_DESKTOP
+debug3: Ignored env LOGNAME
+debug3: Ignored env GTK_EXE_PREFIX
+debug3: Ignored env XDG_SESSION_TYPE
+debug3: Ignored env SYSTEMD_EXEC_PID
+debug3: Ignored env XAUTHORITY
+debug3: Ignored env VSCODE_GIT_ASKPASS_NODE
+debug3: Ignored env GJS_DEBUG_TOPICS
+debug3: Ignored env HOME
+debug3: Ignored env USERNAME
+debug3: Ignored env IM_CONFIG_PHASE
+debug1: channel 0: setting env LANG = "en_US.UTF-8"
+debug2: channel 0: request env confirm 0
+debug3: send packet: type 98
+debug3: Ignored env LS_COLORS
+debug3: Ignored env XDG_CURRENT_DESKTOP
+debug3: Ignored env MEMORY_PRESSURE_WATCH
+debug3: Ignored env WAYLAND_DISPLAY
+debug3: Ignored env GIT_ASKPASS
+debug3: Ignored env INVOCATION_ID
+debug3: Ignored env MANAGERPID
+debug3: Ignored env CHROME_DESKTOP
+debug3: Ignored env GJS_DEBUG_OUTPUT
+debug3: Ignored env VSCODE_GIT_ASKPASS_EXTRA_ARGS
+debug3: Ignored env GNOME_SETUP_DISPLAY
+debug3: Ignored env GSETTINGS_SCHEMA_DIR_VSCODE_SNAP_ORIG
+debug3: Ignored env GTK_IM_MODULE_FILE_VSCODE_SNAP_ORIG
+debug3: Ignored env LESSCLOSE
+debug3: Ignored env XDG_SESSION_CLASS
+debug3: Ignored env TERM
+debug3: Ignored env GTK_PATH
+debug3: Ignored env LESSOPEN
+debug3: Ignored env USER
+debug3: Ignored env GTK_PATH_VSCODE_SNAP_ORIG
+debug3: Ignored env VSCODE_GIT_IPC_HANDLE
+debug3: Ignored env DISPLAY
+debug3: Ignored env SHLVL
+debug3: Ignored env LOCPATH
+debug3: Ignored env GSM_SKIP_SSH_AGENT_WORKAROUND
+debug3: Ignored env QT_IM_MODULE
+debug3: Ignored env GTK_EXE_PREFIX_VSCODE_SNAP_ORIG
+debug3: Ignored env XDG_RUNTIME_DIR
+debug3: Ignored env XDG_DATA_DIRS_VSCODE_SNAP_ORIG
+debug3: Ignored env DEBUGINFOD_URLS
+debug3: Ignored env VSCODE_GIT_ASKPASS_MAIN
+debug3: Ignored env JOURNAL_STREAM
+debug3: Ignored env XDG_DATA_DIRS
+debug3: Ignored env GDK_BACKEND
+debug3: Ignored env PATH
+debug3: Ignored env GDMSESSION
+debug3: Ignored env ORIGINAL_XDG_CURRENT_DESKTOP
+debug3: Ignored env DBUS_SESSION_BUS_ADDRESS
+debug3: Ignored env GTK_IM_MODULE_FILE
+debug3: Ignored env LOCPATH_VSCODE_SNAP_ORIG
+debug3: Ignored env GIO_MODULE_DIR
+debug3: Ignored env GIO_LAUNCHED_DESKTOP_FILE_PID
+debug3: Ignored env GIO_LAUNCHED_DESKTOP_FILE
+debug3: Ignored env TERM_PROGRAM
+debug3: Ignored env _
+debug3: Ignored env OLDPWD
+debug2: channel 0: request shell confirm 1
+debug3: send packet: type 98
+debug3: client_repledge: enter
+debug2: channel_input_open_confirmation: channel 0: callback done
+debug2: channel 0: open confirm rwindow 0 rmax 3811
+debug2: client_check_window_change: changed
+debug2: channel 0: request window-change confirm 0
+debug3: send packet: type 98
+debug3: send packet: type 1
+debug1: channel 0: free: client-session, nchannels 1
+debug3: channel 0: status: The following connections are open:
+  #0 client-session (t4 [session] r0 i0/0 o0/0 e[write]/0 fd 4/5/6 sock -1 cc -1 io 0x00/0x00)
 
+Killed by signal 15.
