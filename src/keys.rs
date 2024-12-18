@@ -1,3 +1,4 @@
+use ssh_key::{public::Ed25519PublicKey, PublicKey};
 // FIXME: For demo purposes, there should be a key handler/generator on first connection.
 
 // Randomly created host identity.
@@ -6,8 +7,12 @@ pub(crate) const HOST_SECRET_KEY: [u8; 32] = [
     0x6c, 0xdc, 0x20, 0xa3, 0xe1, 0x2f, 0x78, 0x4a, 0x6d, 0xaa, 0x96, 0x3a, 0x1a, 0x51, 0xea, 0x4f,
 ];
 
-// Matches examples/zssh.priv key.
-pub(crate) const USER_PUBLIC_KEY: [u8; 32] = [
-    0xa5, 0x34, 0xb0, 0xa8, 0x36, 0x95, 0x45, 0x22, 0xd2, 0x75, 0x46, 0xba, 0x6b, 0x17, 0xdc, 0xc9,
-    0x18, 0xfb, 0x9d, 0xeb, 0xe2, 0xd5, 0x36, 0x5e, 0x1b, 0xdb, 0xca, 0x32, 0xb5, 0xbd, 0x90, 0xb4,
-];
+// const USER_FULL_PUBLIC_KEY: [u8; 103] = include_data!("/home/rvalls/.ssh/id_ed25519.pub");
+pub(crate) fn get_user_public_key() -> Ed25519PublicKey {
+    *PublicKey::from_openssh("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICWwC2CWtve93K0BubV0gf74kvzDG9WM5SfXAAcr+5dy rvalls@Romans-MBP.lan")
+        .unwrap()
+        .key_data()
+        .ed25519()
+        .unwrap()
+}
+

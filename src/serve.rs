@@ -7,7 +7,7 @@ use crate::errors::EspSshError;
 
 use crate::esp_net::{accept_requests, if_up};
 use crate::io::AsyncTcpStream;
-use crate::keys::{HOST_SECRET_KEY, USER_PUBLIC_KEY};
+use crate::keys::{HOST_SECRET_KEY, get_user_public_key};
 
 // Embassy
 use embassy_executor::Spawner;
@@ -96,7 +96,7 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), E
             secret_key: SigningKey::from_bytes(&HOST_SECRET_KEY),
         },
         user_public_key: PublicKey::Ed25519 {
-            public_key: VerifyingKey::from_bytes(&USER_PUBLIC_KEY)?,
+            public_key: VerifyingKey::from_bytes(&get_user_public_key().0)?,
         },
     };
 
