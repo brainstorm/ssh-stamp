@@ -19,7 +19,9 @@ use esp_hal::peripherals::Peripherals;
 use crate::esp_rng::esp_random;
 use esp_println::println;
 use esp_hal::rng::Trng;
+use crate::esp_serial::open_uart;
 
+// Crypto and SSH
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use zssh::{AuthMethod, Behavior, PublicKey, Request, SecretKey, Transport};
 
@@ -159,6 +161,13 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), E
 }
 
 pub async fn start(spawner: Spawner) -> Result<(), EspSshError> {
+    let serial_rx_ring_buf = &mut [];
+    let serial_tx_ring_buf = &mut [];
+
+    // Connect to the serial port
+    let uart_task = open_uart(spawner, serial_rx_ring_buf, serial_tx_ring_buf);
+    //spawner.spawn(uart_task)?;
+
     // Bring up the network interface and start accepting SSH connections.
     let stack= if_up(spawner).await?;
     accept_requests(stack).await?;
