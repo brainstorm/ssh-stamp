@@ -11,14 +11,15 @@ use crate::keys::{HOST_SECRET_KEY, get_user_public_key};
 // Embassy
 use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
-use esp_hal::peripherals;
+use esp_hal::uart::Uart;
+use esp_hal::{peripherals, Async};
 use esp_hal::peripherals::Peripherals;
 
 // ESP specific
 use crate::esp_rng::esp_random;
 use esp_println::println;
 use esp_hal::rng::Trng;
-use crate::esp_serial::open_uart;
+use crate::esp_serial::uart_up;
 
 // Crypto and SSH
 use ed25519_dalek::{SigningKey, VerifyingKey};
@@ -81,7 +82,7 @@ impl<'a> Behavior for SshServer<'a> {
     }
 }
 
-pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), EspSshError> {
+pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>, uart: Uart<'static, Async>) -> Result<(), EspSshError> {
     // SAFETY: No further (nor concurrent) peripheral operations are happening
     // This will be removed once Trng is cloneable: https://github.com/esp-rs/esp-hal/issues/2372
     let mut peripherals: Peripherals = unsafe {
@@ -103,6 +104,7 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), E
 
     let mut packet_buffer = [0u8; 4096]; // the borrowed byte buffer
     let mut transport = Transport::new(&mut packet_buffer, behavior);
+    let (mut uart_tx, mut uart_rx) = uart.split();
 
     loop {
         let channel = transport.accept().await;
@@ -151,29 +153,30 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), E
             }
 
             Request::Shell => {
-                unimplemented!("Need to marry the SSH channel with the UART buffers :)")
-                //channel.reader(len)
-                //unreachable!("shell requests not allowed"),
+                let mut uart_tx_buffer = [0u8; 4096];
+                let mut uart_rx_buffer = [0u8; 4096];
+
+                uart_tx.read_async(&mut uart_tx_buffer).await.unwrap();
+                uart_rx.write_async(&mut uart_rx_buffer).await.unwrap();
+
+                channel.write_all_stdout(&uart_tx_buffer).await?;
             }
         }
     }
 }
 
 pub async fn start(spawner: Spawner) -> Result<(), EspSshError> {
-    let serial_rx_ring_buf = &mut [];
-    let serial_tx_ring_buf = &mut [];
-
     // Connect to the serial port
     // TODO: Revisit Result/error.rs wrapping here...
     // TODO: Detection and/or resonable defaults for UART settings... or:
     //       - Make it configurable via settings.rs for now, but ideally...
     //       - ... do what https://keypub.sh does via alternative commands
     //
-    spawner.spawn(open_uart(spawner, serial_rx_ring_buf, serial_tx_ring_buf)).unwrap();
+    let uart = uart_up().await?; 
 
     // Bring up the network interface and start accepting SSH connections.
-    let stack= if_up(spawner).await?;
-    accept_requests(stack).await?;
+    let tcp_stack= if_up(spawner).await?;
+    accept_requests(tcp_stack, uart).await?;
 
     // All is fine :)
     Ok(())

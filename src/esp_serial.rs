@@ -1,10 +1,11 @@
-use embassy_executor::Spawner;
 use esp_backtrace as _;
 use esp_hal::{
     timer::timg::TimerGroup,
     uart::{Config, Uart, UartRx, UartTx},
     Async,
 };
+
+use crate::errors::EspSshError;
 
 #[embassy_executor::task]
 async fn writer(mut tx: UartTx<'static, Async>, serial_tx_ring_buf: &'static mut [u8]) {
@@ -31,9 +32,7 @@ async fn reader(mut rx: UartRx<'static, Async>, serial_rx_ring_buf: &'static mut
     }
 }
 
-#[embassy_executor::task]
-pub(crate) async fn open_uart(spawner: Spawner, serial_rx_ring_buf: &'static mut [u8], 
-                                                serial_tx_ring_buf: &'static mut [u8]) {
+pub(crate) async fn uart_up() -> Result<Uart<'static, Async>, EspSshError> {
 
     // rx_fifo_full_threshold
     const READ_BUF_SIZE: usize = 63;
@@ -50,8 +49,5 @@ pub(crate) async fn open_uart(spawner: Spawner, serial_rx_ring_buf: &'static mut
         .unwrap()
         .into_async();
 
-    let (rx, tx) = uart0.split();
-
-    spawner.spawn(reader(rx, serial_rx_ring_buf)).ok();
-    spawner.spawn(writer(tx, serial_tx_ring_buf)).ok();
+    Ok(uart0)
 }
