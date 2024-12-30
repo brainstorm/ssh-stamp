@@ -1,7 +1,6 @@
 use core::writeln;
 use core::result::Result;
 use core::option::Option::{ self, Some, None };
-use core::unreachable;
 
 use crate::errors::EspSshError;
 
@@ -105,10 +104,7 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), E
     let mut packet_buffer = [0u8; 4096]; // the borrowed byte buffer
     let mut transport = Transport::new(&mut packet_buffer, behavior);
 
-    println!("Looping in channel.request() match");
-
     loop {
-        println!("Before accept()-ing request...");
         let channel = transport.accept().await;
         let mut channel = match channel {
             Err(e) => {
@@ -119,7 +115,6 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), E
             }
             Ok(channel) => channel,
         };
-        println!("After accept()-ing request...");
 
         println!(
             "Request {:?} by user {:?} from client {:?}",
@@ -155,7 +150,11 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), E
                 channel.exit(1).await?;
             }
 
-            Request::Shell => unreachable!("shell requests not allowed"),
+            Request::Shell => {
+                unimplemented!("Need to marry the SSH channel with the UART buffers :)")
+                //channel.reader(len)
+                //unreachable!("shell requests not allowed"),
+            }
         }
     }
 }
@@ -165,8 +164,12 @@ pub async fn start(spawner: Spawner) -> Result<(), EspSshError> {
     let serial_tx_ring_buf = &mut [];
 
     // Connect to the serial port
-    let uart_task = open_uart(spawner, serial_rx_ring_buf, serial_tx_ring_buf);
-    //spawner.spawn(uart_task)?;
+    // TODO: Revisit Result/error.rs wrapping here...
+    // TODO: Detection and/or resonable defaults for UART settings... or:
+    //       - Make it configurable via settings.rs for now, but ideally...
+    //       - ... do what https://keypub.sh does via alternative commands
+    //
+    spawner.spawn(open_uart(spawner, serial_rx_ring_buf, serial_tx_ring_buf)).unwrap();
 
     // Bring up the network interface and start accepting SSH connections.
     let stack= if_up(spawner).await?;

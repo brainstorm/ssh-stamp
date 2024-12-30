@@ -6,32 +6,23 @@ use esp_hal::{
     Async,
 };
 
-// rx_fifo_full_threshold
-const READ_BUF_SIZE: usize = 64;
-
 #[embassy_executor::task]
 async fn writer(mut tx: UartTx<'static, Async>, serial_tx_ring_buf: &'static mut [u8]) {
-    //use core::fmt::Write;
-    embedded_io_async::Write::write(
-        &mut tx,
-        serial_tx_ring_buf,
-    )
-    .await
-    .unwrap();
+    let tx_writer = tx.write_async(serial_tx_ring_buf).await;
 
-    loop {
-        embedded_io_async::Write::flush(&mut tx).await.unwrap();
+    match tx_writer {
+        Ok(len) => {
+            esp_println::println!("Wrote: {len}, data: {:?}", serial_tx_ring_buf);
+        }
+        Err(e) => esp_println::println!("TX Error: {:?}", e),
     }
-
-    // write!(&mut tx, "\r\n-- received {} bytes --\r\n", bytes_read).unwrap();
-    // embedded_io_async::Write::flush(&mut tx).await.unwrap();
 }
 
 #[embassy_executor::task]
 async fn reader(mut rx: UartRx<'static, Async>, serial_rx_ring_buf: &'static mut [u8]) {
     loop {
-        let r = embedded_io_async::Read::read(&mut rx, serial_rx_ring_buf).await;
-        match r {
+        let rx_reader = rx.read_async(serial_rx_ring_buf).await;
+        match rx_reader {
             Ok(len) => {
                 esp_println::println!("Read: {len}, data: {:?}", serial_rx_ring_buf);
             }
@@ -43,6 +34,10 @@ async fn reader(mut rx: UartRx<'static, Async>, serial_rx_ring_buf: &'static mut
 #[embassy_executor::task]
 pub(crate) async fn open_uart(spawner: Spawner, serial_rx_ring_buf: &'static mut [u8], 
                                                 serial_tx_ring_buf: &'static mut [u8]) {
+
+    // rx_fifo_full_threshold
+    const READ_BUF_SIZE: usize = 63;
+
     esp_println::println!("UART init!");
     let peripherals = esp_hal::init(esp_hal::Config::default());
 
