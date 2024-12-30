@@ -43,7 +43,7 @@ pub(crate) async fn uart_up() -> Result<Uart<'static, Async>, EspSshError> {
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     esp_hal_embassy::init(timg0.timer0);
 
-    let (tx_pin, rx_pin) = (peripherals.GPIO16, peripherals.GPIO17);
+    let (tx_pin, rx_pin) = (peripherals.GPIO10, peripherals.GPIO11);
     let config = Config::default().rx_fifo_full_threshold(READ_BUF_SIZE as u16);
     let uart0 = Uart::new_with_config(peripherals.UART0, config, rx_pin, tx_pin)
         .unwrap()
