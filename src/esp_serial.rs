@@ -1,6 +1,6 @@
 use esp_backtrace as _;
 use esp_hal::{
-    peripherals::{self, Peripherals}, uart::{Config, Uart, UartRx, UartTx}, Async
+    peripherals::{self, Peripherals}, uart::{Uart, UartRx, UartTx}, Async
 };
 use esp_println::println;
 
