@@ -160,6 +160,7 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>, uart: Uart<'sta
                 uart_rx.write_async(&mut uart_rx_buffer).await.unwrap();
 
                 channel.write_all_stdout(&uart_tx_buffer).await?;
+                uart_rx.flush_async().await.unwrap();
             }
         }
     }

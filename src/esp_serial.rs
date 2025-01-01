@@ -1,9 +1,8 @@
 use esp_backtrace as _;
 use esp_hal::{
-    timer::timg::TimerGroup,
-    uart::{Config, Uart, UartRx, UartTx},
-    Async,
+    peripherals::{self, Peripherals}, uart::{Config, Uart, UartRx, UartTx}, Async
 };
+use esp_println::println;
 
 use crate::errors::EspSshError;
 
@@ -33,19 +32,18 @@ async fn reader(mut rx: UartRx<'static, Async>, serial_rx_ring_buf: &'static mut
 }
 
 pub(crate) async fn uart_up() -> Result<Uart<'static, Async>, EspSshError> {
-
-    // rx_fifo_full_threshold
-    const READ_BUF_SIZE: usize = 63;
-
     esp_println::println!("UART init!");
-    let peripherals = esp_hal::init(esp_hal::Config::default());
 
-    let timg0 = TimerGroup::new(peripherals.TIMG0);
-    esp_hal_embassy::init(timg0.timer0);
+    // SAFETY: No concurrent peripheral operations are happening at this point???
+    // FIXME: Concerning since we steal it in handle_ssh_client() as well
+    let peripherals: Peripherals = unsafe {
+        peripherals::Peripherals::steal()
+    };
+
+    println!("Peripherals stolen at uart_up()...");
 
     let (tx_pin, rx_pin) = (peripherals.GPIO10, peripherals.GPIO11);
-    let config = Config::default().rx_fifo_full_threshold(READ_BUF_SIZE as u16);
-    let uart0 = Uart::new_with_config(peripherals.UART0, config, rx_pin, tx_pin)
+    let uart0 = Uart::new(peripherals.UART0, rx_pin, tx_pin)
         .unwrap()
         .into_async();
 
