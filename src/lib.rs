@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 //#![forbid(unsafe_code)]
-#![feature(type_alias_impl_trait)]
+//#![feature(type_alias_impl_trait)]
 
 pub mod settings;
 pub mod io;

@@ -17,17 +17,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.84.1 # will be stable in just 3 days: 9th January 2025
+          toolchain: 1.83.0
       - name: Install RISCV toolchain (ESP32-C6)
         run: |
-          rustup toolchain install nightly --component rust-src
+          rustup toolchain install stable --component rust-src
           rustup target add riscv32imac-unknown-none-elf
-#      - name: Export ESP environment variables
-#        run: |
-#          echo "export PATH=$HOME/.espressif/tools/xtensa-esp32-elf/bin:$PATH" >> $GITHUB_ENV
-#          echo "export PATH=$HOME/.espressif/tools/riscv32-esp-elf/bin:$PATH" >> $GITHUB_ENV
-#          echo "export PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
       - name: Build project
         run: cargo build --release
