@@ -19,7 +19,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: 1.84.0 # will be stable in just 3 days: 9th January 2025
+          toolchain: 1.84.1 # will be stable in just 3 days: 9th January 2025
       - name: Install RISCV toolchain (ESP32-C6)
         run: |
           rustup toolchain install nightly --component rust-src
