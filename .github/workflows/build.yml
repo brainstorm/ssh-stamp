@@ -1,0 +1,33 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cache
+        uses: mozilla-actions/sccache-action@v0.0.7
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: 1.84.0 # will be stable in just 3 days: 9th January 2025
+      - name: Install RISCV toolchain (ESP32-C6)
+        run: |
+          rustup toolchain install nightly --component rust-src
+          rustup target add riscv32imac-unknown-none-elf
+#      - name: Export ESP environment variables
+#        run: |
+#          echo "export PATH=$HOME/.espressif/tools/xtensa-esp32-elf/bin:$PATH" >> $GITHUB_ENV
+#          echo "export PATH=$HOME/.espressif/tools/riscv32-esp-elf/bin:$PATH" >> $GITHUB_ENV
+#          echo "export PATH=$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
+      - name: Build project
+        run: cargo build --release
