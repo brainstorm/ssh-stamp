@@ -167,6 +167,9 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>, uart: Uart<'sta
 }
 
 pub async fn start(spawner: Spawner) -> Result<(), EspSshError> {
+    // Bring up the network interface and start accepting SSH connections.
+    let tcp_stack = if_up(spawner).await?;
+
     // Connect to the serial port
     // TODO: Revisit Result/error.rs wrapping here...
     // TODO: Detection and/or resonable defaults for UART settings... or:
@@ -175,10 +178,7 @@ pub async fn start(spawner: Spawner) -> Result<(), EspSshError> {
     //
     let uart = uart_up().await?; 
 
-    // Bring up the network interface and start accepting SSH connections.
-    let tcp_stack= if_up(spawner).await?;
     accept_requests(tcp_stack, uart).await?;
-
     // All is fine :)
     Ok(())
 }
