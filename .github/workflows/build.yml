@@ -19,7 +19,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.83.0
+          toolchain: 1.84.0
       - name: Install RISCV toolchain (ESP32-C6)
         run: |
           rustup toolchain install stable --component rust-src
