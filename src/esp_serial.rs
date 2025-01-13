@@ -43,7 +43,7 @@ pub(crate) async fn uart_up() -> Result<Uart<'static, Async>, EspSshError> {
     println!("Peripherals stolen at uart_up()...");
 
     let (tx_pin, rx_pin) = (peripherals.GPIO10, peripherals.GPIO11);
-    let uart0 = Uart::new(peripherals.UART0, rx_pin, tx_pin)
+    let uart0 = Uart::new(peripherals.UART1, rx_pin, tx_pin)
         .unwrap()
         .into_async();
 

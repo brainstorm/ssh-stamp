@@ -11,8 +11,10 @@ use crate::keys::{HOST_SECRET_KEY, get_user_public_key};
 // Embassy
 use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
+use embassy_time::{Duration, Timer};
+use esp_hal::rtc_cntl::sleep;
 use esp_hal::uart::Uart;
-use esp_hal::{peripherals, Async};
+use esp_hal::{peripherals, time, Async};
 use esp_hal::peripherals::Peripherals;
 
 // ESP specific
@@ -166,8 +168,9 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>, uart: Uart<'sta
                     // channel.write_all_stdout(&ssh_buffer[..read_len]).await?;
                     // channel.write_all_stdout(&uart_tx_buffer).await?;
                     //uart_tx.read_async(buffer).await;
-                    let bytes_written = uart_rx.write_async(&[0x41]).await.unwrap();
+                    let bytes_written = uart_rx.write_async(&[0x41, 0x41, 0x41, 0x41]).await.unwrap();
                     dbg!(bytes_written);
+                    //Timer::after(Duration::from_millis(60000)).await;
                 }
             }
         }
