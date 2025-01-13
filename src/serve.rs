@@ -17,7 +17,7 @@ use esp_hal::peripherals::Peripherals;
 
 // ESP specific
 use crate::esp_rng::esp_random;
-use esp_println::println;
+use esp_println::{dbg, println};
 use esp_hal::rng::Trng;
 use crate::esp_serial::uart_up;
 
@@ -153,14 +153,22 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>, uart: Uart<'sta
             }
 
             Request::Shell => {
-                let mut uart_tx_buffer = [0u8; 4096];
-                let mut uart_rx_buffer = [0u8; 4096];
+                // let mut ssh_buffer = [0u8; 4096];
+                // let mut uart_tx_buffer = [0u8; 4096];
 
-                uart_tx.read_async(&mut uart_tx_buffer).await.unwrap();
-                uart_rx.write_async(&mut uart_rx_buffer).await.unwrap();
+                loop {
+                    // let read_len = channel.read_exact_stdin(&mut ssh_buffer).await?;
 
-                channel.write_all_stdout(&uart_tx_buffer).await?;
-                uart_rx.flush_async().await.unwrap();
+                    // if read_len == 0 {
+                    //     break;
+                    // }
+
+                    // channel.write_all_stdout(&ssh_buffer[..read_len]).await?;
+                    // channel.write_all_stdout(&uart_tx_buffer).await?;
+                    //uart_tx.read_async(buffer).await;
+                    let bytes_written = uart_rx.write_async(&[0x41]).await.unwrap();
+                    dbg!(bytes_written);
+                }
             }
         }
     }
