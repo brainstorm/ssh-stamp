@@ -25,7 +25,7 @@ use crate::esp_serial::uart_up;
 
 // Crypto and SSH
 use ed25519_dalek::{SigningKey, VerifyingKey};
-use zssh::{AuthMethod, Behavior, PublicKey, Request, SecretKey, Transport};
+use zssh::{AuthMethod, Behavior, Pipe, PublicKey, Request, SecretKey, Transport};
 
 pub(crate) struct SshServer<'a> {
     stream: AsyncTcpStream<'a>,
@@ -158,19 +158,23 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>, uart: Uart<'sta
                 // let mut ssh_buffer = [0u8; 4096];
                 // let mut uart_tx_buffer = [0u8; 4096];
 
-                loop {
-                    // let read_len = channel.read_exact_stdin(&mut ssh_buffer).await?;
+                // GOAL: Put SSH stdin into UART TX
+                let mut ssh_reader = channel.reader(Some(4000)).await?;
+                // TODO: Pipe to buffer(s)
+                //let mut ssh_writer = channel.writer(pipe);
 
-                    // if read_len == 0 {
-                    //     break;
+
+                loop {
+                    let ssh_data = ssh_reader.read().await?;
+
+                    // match ssh_data {  
+                    //     Ok(None) => dbg!("EOF"), // EOF
+                    //     Err(e) => panic!(),
                     // }
 
-                    // channel.write_all_stdout(&ssh_buffer[..read_len]).await?;
-                    // channel.write_all_stdout(&uart_tx_buffer).await?;
-                    //uart_tx.read_async(buffer).await;
-                    let bytes_written = uart_rx.write_async(&[0x41, 0x41, 0x41, 0x41]).await.unwrap();
+                    let bytes_written = uart_rx.write_async(&ssh_data.unwrap()).await.unwrap();
                     dbg!(bytes_written);
-                    //Timer::after(Duration::from_millis(60000)).await;
+                    //let bytes_read = uart_tx.read_async(ssh_stderr_buf).await.unwrap();
                 }
             }
         }
