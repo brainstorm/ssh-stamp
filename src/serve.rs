@@ -1,7 +1,6 @@
 use core::writeln;
 use core::result::Result;
 use core::option::Option::{ self, Some, None };
-use core::unreachable;
 
 use crate::errors::EspSshError;
 
@@ -12,16 +11,21 @@ use crate::keys::{HOST_SECRET_KEY, get_user_public_key};
 // Embassy
 use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
-use esp_hal::peripherals;
+use embassy_time::{Duration, Timer};
+use esp_hal::rtc_cntl::sleep;
+use esp_hal::uart::Uart;
+use esp_hal::{peripherals, time, Async};
 use esp_hal::peripherals::Peripherals;
 
 // ESP specific
 use crate::esp_rng::esp_random;
-use esp_println::println;
+use esp_println::{dbg, println};
 use esp_hal::rng::Trng;
+use crate::esp_serial::uart_up;
 
+// Crypto and SSH
 use ed25519_dalek::{SigningKey, VerifyingKey};
-use zssh::{AuthMethod, Behavior, PublicKey, Request, SecretKey, Transport};
+use zssh::{AuthMethod, Behavior, Pipe, PublicKey, Request, SecretKey, Transport};
 
 pub(crate) struct SshServer<'a> {
     stream: AsyncTcpStream<'a>,
@@ -80,7 +84,7 @@ impl<'a> Behavior for SshServer<'a> {
     }
 }
 
-pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), EspSshError> {
+pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>, uart: Uart<'static, Async>) -> Result<(), EspSshError> {
     // SAFETY: No further (nor concurrent) peripheral operations are happening
     // This will be removed once Trng is cloneable: https://github.com/esp-rs/esp-hal/issues/2372
     let mut peripherals: Peripherals = unsafe {
@@ -102,11 +106,9 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), E
 
     let mut packet_buffer = [0u8; 4096]; // the borrowed byte buffer
     let mut transport = Transport::new(&mut packet_buffer, behavior);
-
-    println!("Looping in channel.request() match");
+    let (mut uart_tx, mut uart_rx) = uart.split();
 
     loop {
-        println!("Before accept()-ing request...");
         let channel = transport.accept().await;
         let mut channel = match channel {
             Err(e) => {
@@ -117,7 +119,6 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), E
             }
             Ok(channel) => channel,
         };
-        println!("After accept()-ing request...");
 
         println!(
             "Request {:?} by user {:?} from client {:?}",
@@ -153,16 +154,38 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>) -> Result<(), E
                 channel.exit(1).await?;
             }
 
-            Request::Shell => unreachable!("shell requests not allowed"),
+            Request::Shell => {
+                let mut ssh_reader = channel.reader(Some(4000)).await?;
+                // TODO: Pipe to buffer(s)
+                //let mut ssh_writer = channel.writer(pipe);
+
+
+                loop {
+                    let ssh_data = ssh_reader.read().await?;
+                    dbg!(ssh_data);
+
+                    let bytes_written = uart_rx.write_async(&ssh_data.unwrap()).await.unwrap();
+                    dbg!(bytes_written);
+                    //let bytes_read = uart_tx.read_async(ssh_stderr_buf).await.unwrap();
+                }
+            }
         }
     }
 }
 
 pub async fn start(spawner: Spawner) -> Result<(), EspSshError> {
     // Bring up the network interface and start accepting SSH connections.
-    let stack= if_up(spawner).await?;
-    accept_requests(stack).await?;
+    let tcp_stack = if_up(spawner).await?;
 
+    // Connect to the serial port
+    // TODO: Revisit Result/error.rs wrapping here...
+    // TODO: Detection and/or resonable defaults for UART settings... or:
+    //       - Make it configurable via settings.rs for now, but ideally...
+    //       - ... do what https://keypub.sh does via alternative commands
+    //
+    let uart = uart_up().await?; 
+
+    accept_requests(tcp_stack, uart).await?;
     // All is fine :)
     Ok(())
 }

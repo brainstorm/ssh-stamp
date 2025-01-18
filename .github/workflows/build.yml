@@ -1,0 +1,28 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cache
+        uses: mozilla-actions/sccache-action@v0.0.7
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.84.0
+      - name: Install RISCV toolchain (ESP32-C6)
+        run: |
+          rustup toolchain install stable --component rust-src
+          rustup target add riscv32imac-unknown-none-elf
+      - name: Build project
+        run: cargo build --release

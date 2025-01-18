@@ -19,6 +19,8 @@ use esp_hal::rng::Rng;
 
 use esp_hal::timer::systimer::Target;
 use esp_hal::timer::timg::TimerGroup;
+use esp_hal::uart::Uart;
+use esp_hal::Async;
 use esp_println::println;
 
 use esp_wifi::{init, EspWifiController};
@@ -116,12 +118,12 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
     Ok(&ap_stack)
 }
 
-pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) -> Result<(), EspSshError> {
+pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>, uart: Uart<'static, Async>) -> Result<(), EspSshError> {
 
     let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
     let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
 
-    loop {
+    //loop {
         let mut socket = TcpSocket::new(stack, rx_buffer, tx_buffer);
 
         if let Err(e) = socket.accept(IpListenEndpoint {
@@ -129,12 +131,14 @@ pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDev
             port: 22,
         }).await {
             println!("connect error: {:?}", e);
-            continue;
+            //continue;
         }
 
         println!("Connected, port 22");
-        crate::serve::handle_ssh_client(socket).await?;
-    }
+        crate::serve::handle_ssh_client(socket, uart).await?;
+    //}
+    Ok(()) // FIXME: All is fine but not really if we lose connection only once... removed loop to deal with uart copy issues later
+           // Probably best handled by some kind of supervisor task and signals instead of a loop anyway?
 }
 
 #[embassy_executor::task]
