@@ -155,10 +155,6 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>, uart: Uart<'sta
             }
 
             Request::Shell => {
-                // let mut ssh_buffer = [0u8; 4096];
-                // let mut uart_tx_buffer = [0u8; 4096];
-
-                // GOAL: Put SSH stdin into UART TX
                 let mut ssh_reader = channel.reader(Some(4000)).await?;
                 // TODO: Pipe to buffer(s)
                 //let mut ssh_writer = channel.writer(pipe);
@@ -166,11 +162,7 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>, uart: Uart<'sta
 
                 loop {
                     let ssh_data = ssh_reader.read().await?;
-
-                    // match ssh_data {  
-                    //     Ok(None) => dbg!("EOF"), // EOF
-                    //     Err(e) => panic!(),
-                    // }
+                    dbg!(ssh_data);
 
                     let bytes_written = uart_rx.write_async(&ssh_data.unwrap()).await.unwrap();
                     dbg!(bytes_written);
