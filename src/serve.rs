@@ -155,18 +155,21 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>, uart: Uart<'sta
             }
 
             Request::Shell => {
-                let mut ssh_reader = channel.reader(Some(4000)).await?;
-                // TODO: Pipe to buffer(s)
-                //let mut ssh_writer = channel.writer(pipe);
-
+                // TODO: Adjust arbitrary buffer length to a more reasoned value?
+                let mut ssh_reader = channel.reader(Some(4096)).await?;
+                // TODO: How to borrow the channel on r/w *and* mutable?
+                let mut ssh_writer = channel.writer(Pipe::Stdout);
 
                 loop {
-                    let ssh_data = ssh_reader.read().await?;
+                    let ssh_data = ssh_reader.read().await?.unwrap();
+                    let ssh_data_w = ssh_writer.buffer();
                     dbg!(ssh_data);
 
-                    let bytes_written = uart_rx.write_async(&ssh_data.unwrap()).await.unwrap();
-                    dbg!(bytes_written);
-                    //let bytes_read = uart_tx.read_async(ssh_stderr_buf).await.unwrap();
+                    let bytes_written_rx = uart_rx.write_async(&ssh_data).await.unwrap();
+                    dbg!(bytes_written_rx);
+
+                    let bytes_read_tx = uart_tx.read_async(ssh_data_w).await.unwrap();
+                    dbg!(bytes_read_tx);
                 }
             }
         }
