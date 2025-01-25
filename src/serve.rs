@@ -2,8 +2,6 @@ use core::writeln;
 use core::result::Result;
 use core::option::Option::{ self, Some, None };
 
-use crate::errors::EspSshError;
-
 use crate::esp_net::{accept_requests, if_up};
 use crate::io::AsyncTcpStream;
 use crate::keys::{HOST_SECRET_KEY, get_user_public_key};
@@ -25,7 +23,7 @@ use crate::esp_serial::uart_up;
 
 // Crypto and SSH
 
-pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>, uart: Uart<'static, Async>) -> Result<(), EspSshError> {
+pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>, uart: Uart<'static, Async>) -> Result<(), sunset::Error> {
     // SAFETY: No further (nor concurrent) peripheral operations are happening
     // This will be removed once Trng is cloneable: https://github.com/esp-rs/esp-hal/issues/2372
     let mut peripherals: Peripherals = unsafe {
@@ -33,9 +31,10 @@ pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>, uart: Uart<'sta
     };
 
     println!("Peripherals stolen at handle_ssh_client()...");
+    Ok(())
 }
 
-pub async fn start(spawner: Spawner) -> Result<(), EspSshError> {
+pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
     // Bring up the network interface and start accepting SSH connections.
     let tcp_stack = if_up(spawner).await?;
 

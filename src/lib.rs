@@ -10,4 +10,3 @@ pub mod esp_rng;
 pub mod esp_net;
 pub mod esp_serial;
 pub mod keys;
-pub mod errors;

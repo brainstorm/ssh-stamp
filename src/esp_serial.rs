@@ -4,8 +4,6 @@ use esp_hal::{
 };
 use esp_println::println;
 
-use crate::errors::EspSshError;
-
 #[embassy_executor::task]
 async fn writer(mut tx: UartTx<'static, Async>, serial_tx_ring_buf: &'static mut [u8]) {
     let tx_writer = tx.write_async(serial_tx_ring_buf).await;
@@ -31,7 +29,7 @@ async fn reader(mut rx: UartRx<'static, Async>, serial_rx_ring_buf: &'static mut
     }
 }
 
-pub(crate) async fn uart_up() -> Result<Uart<'static, Async>, EspSshError> {
+pub(crate) async fn uart_up() -> Result<Uart<'static, Async>, sunset::Error> {
     esp_println::println!("UART init!");
 
     // SAFETY: No concurrent peripheral operations are happening at this point???

@@ -1,3 +1,5 @@
+use core::error::Error;
+
 // https://github.com/esp-rs/esp-hal/blob/main/examples/src/bin/wifi_embassy_access_point.rs
 // https://github.com/embassy-rs/embassy/blob/main/examples/nrf52840/src/bin/wifi_esp_hosted.rs
 use embassy_executor::Spawner;
@@ -34,8 +36,6 @@ use esp_wifi::
         WifiDevice,
     };
 
-use crate::errors::EspSshError;
-
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {
     ($t:ty,$val:expr) => {{
@@ -46,7 +46,7 @@ macro_rules! mk_static {
     }};
 }
 
-pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static, WifiApDevice>>, EspSshError>
+pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static, WifiApDevice>>, sunset::Error>
 {
     let peripherals = esp_hal::init({
         let mut config = esp_hal::Config::default();
@@ -118,7 +118,7 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
     Ok(&ap_stack)
 }
 
-pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>, uart: Uart<'static, Async>) -> Result<(), EspSshError> {
+pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>, uart: Uart<'static, Async>) -> Result<(), sunset::Error> {
 
     let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
     let tx_buffer = mk_static!([u8; 1536], [0; 1536]);

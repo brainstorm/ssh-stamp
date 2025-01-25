@@ -764,6 +764,7 @@ dependencies = [
  "esp-hal-embassy",
  "esp-println",
  "esp-wifi",
+ "getrandom",
  "hex",
  "log",
  "smoltcp",
