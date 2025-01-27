@@ -10,7 +10,6 @@ use crate::keys::{HOST_SECRET_KEY, get_user_public_key};
 use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
 use embassy_time::{Duration, Timer};
-use esp_hal::rtc_cntl::sleep;
 use esp_hal::uart::Uart;
 use esp_hal::{peripherals, time, Async};
 use esp_hal::peripherals::Peripherals;
@@ -20,8 +19,6 @@ use crate::esp_rng::esp_random;
 use esp_println::{dbg, println};
 use esp_hal::rng::Trng;
 use crate::esp_serial::uart_up;
-
-// Crypto and SSH
 
 pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>, uart: Uart<'static, Async>) -> Result<(), sunset::Error> {
     // Spawn network tasks to handle incoming connections with demo_common::session()
@@ -40,6 +37,7 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
     let uart = uart_up().await?; 
 
     accept_requests(tcp_stack, uart).await?;
+
     // All is fine :)
     Ok(())
 }

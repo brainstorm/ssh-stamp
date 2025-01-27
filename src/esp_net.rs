@@ -137,6 +137,16 @@ pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDev
         println!("Connected, port 22");
         crate::serve::handle_ssh_client(socket, uart).await?;
     //}
+
+    let mut inbuf = [0u8; 4096];
+    let mut outbuf= [0u8; 4096];
+
+    let ssh_server = SSHServer::new(&mut inbuf, &mut outbuf)?;
+    // Unclear docs: "rsock and wsock are the SSH network channel (TCP port 22 or equivalent)." .... Huh ????
+    // Ahhh: rsock == (async) reader_socket, wsock == (async) writer_socket.
+    //let rsock = tcp_stack.
+    ssh_server.run(rsock, wsock);
+    
     Ok(()) // FIXME: All is fine but not really if we lose connection only once... removed loop to deal with uart copy issues later
            // Probably best handled by some kind of supervisor task and signals instead of a loop anyway?
 }

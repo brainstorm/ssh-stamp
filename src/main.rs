@@ -11,7 +11,6 @@ use esp_ssh_rs::{esp_rng, serve::start};
 
 use getrandom::register_custom_getrandom;
 
-use sunset_embassy::SSHServer;
 
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) -> ! {
@@ -19,17 +18,10 @@ async fn main(spawner: Spawner) -> ! {
     esp_println::logger::init_logger_from_env();
 
     register_custom_getrandom!(esp_rng::esp_getrandom_custom_func);
-    let mut inbuf = [0u8; 4096];
-    let mut outbuf= [0u8; 4096];
 
-    let ssh_server = SSHServer::new(&mut inbuf, &mut outbuf).unwrap();
-
-    //ssh_server.run(rsock, wsock);
-
-    todo!()
-    // let res = start(spawner).await;
-    // if let Err(e) = res {
-    //     println!("Giving up: {:?}", e);
-    // }
-    // todo!(); // try again somehow
+    let res = start(spawner).await;
+    if let Err(e) = res {
+        println!("Giving up: {:?}", e);
+    }
+    todo!(); // try again somehow
 }
