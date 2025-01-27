@@ -771,6 +771,7 @@ dependencies = [
  "ssh-key",
  "static_cell",
  "sunset",
+ "sunset-embassy",
 ]
 
 [[package]]
@@ -1542,6 +1543,20 @@ dependencies = [
  "sunset-sshwire-derive",
  "x25519-dalek",
  "zeroize",
+]
+
+[[package]]
+name = "sunset-embassy"
+version = "0.2.0"
+source = "git+https://github.com/mkj/sunset#b1d2c836f1893a7b880937a3fbe1313fb7978f5c"
+dependencies = [
+ "atomic-polyfill",
+ "embassy-futures",
+ "embassy-sync 0.5.0",
+ "embedded-io-async",
+ "log",
+ "pin-utils",
+ "sunset",
 ]
 
 [[package]]

@@ -144,7 +144,7 @@ pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDev
 #[embassy_executor::task]
 async fn wifi_up(mut controller: WifiController<'static>) {
     println!("Device capabilities: {:?}", controller.capabilities());
-    //loop {
+    loop {
         if esp_wifi::wifi::wifi_state() == WifiState::ApStarted {
             // wait until we're no longer connected
             controller.wait_for_event(WifiEvent::ApStop).await;
@@ -161,7 +161,7 @@ async fn wifi_up(mut controller: WifiController<'static>) {
             println!("Wifi started!");
         }
         Timer::after(Duration::from_millis(10)).await;
-    //}
+    }
 }
 
 #[embassy_executor::task]

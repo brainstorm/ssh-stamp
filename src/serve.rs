@@ -24,14 +24,8 @@ use crate::esp_serial::uart_up;
 // Crypto and SSH
 
 pub(crate) async fn handle_ssh_client<'a>(stream: TcpSocket<'a>, uart: Uart<'static, Async>) -> Result<(), sunset::Error> {
-    // SAFETY: No further (nor concurrent) peripheral operations are happening
-    // This will be removed once Trng is cloneable: https://github.com/esp-rs/esp-hal/issues/2372
-    let mut peripherals: Peripherals = unsafe {
-        peripherals::Peripherals::steal()
-    };
-
-    println!("Peripherals stolen at handle_ssh_client()...");
-    Ok(())
+    // Spawn network tasks to handle incoming connections with demo_common::session()
+    unimplemented!()
 }
 
 pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
@@ -39,7 +33,6 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
     let tcp_stack = if_up(spawner).await?;
 
     // Connect to the serial port
-    // TODO: Revisit Result/error.rs wrapping here...
     // TODO: Detection and/or resonable defaults for UART settings... or:
     //       - Make it configurable via settings.rs for now, but ideally...
     //       - ... do what https://keypub.sh does via alternative commands
