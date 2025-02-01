@@ -1,5 +1,3 @@
-use core::error::Error;
-
 // https://github.com/esp-rs/esp-hal/blob/main/examples/src/bin/wifi_embassy_access_point.rs
 // https://github.com/embassy-rs/embassy/blob/main/examples/nrf52840/src/bin/wifi_esp_hosted.rs
 use embassy_executor::Spawner;
@@ -135,17 +133,8 @@ pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDev
         }
 
         println!("Connected, port 22");
-        crate::serve::handle_ssh_client(socket, uart).await?;
+        crate::serve::handle_ssh_client(&mut socket, uart).await?;
     //}
-
-    let mut inbuf = [0u8; 4096];
-    let mut outbuf= [0u8; 4096];
-
-    let ssh_server = SSHServer::new(&mut inbuf, &mut outbuf)?;
-    // Unclear docs: "rsock and wsock are the SSH network channel (TCP port 22 or equivalent)." .... Huh ????
-    // Ahhh: rsock == (async) reader_socket, wsock == (async) writer_socket.
-    //let rsock = tcp_stack.
-    ssh_server.run(rsock, wsock);
     
     Ok(()) // FIXME: All is fine but not really if we lose connection only once... removed loop to deal with uart copy issues later
            // Probably best handled by some kind of supervisor task and signals instead of a loop anyway?
