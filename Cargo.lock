@@ -328,7 +328,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5794414bc20e0d750f145bc0e82366b19dd078e9e075e8331fb8dd069a1cb6a2"
 dependencies = [
  "embassy-futures",
- "embassy-sync 0.6.1",
+ "embassy-sync 0.6.2",
  "embassy-time",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
@@ -412,9 +412,9 @@ dependencies = [
 
 [[package]]
 name = "embassy-sync"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3899a6e39fa3f54bf8aaf00979f9f9c0145a522f7244810533abbb748be6ce82"
+checksum = "8d2c8cdff05a7a51ba0087489ea44b0b1d97a296ca6b1d6d1a33ea7423d34049"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -649,7 +649,7 @@ dependencies = [
  "document-features",
  "embassy-embedded-hal",
  "embassy-futures",
- "embassy-sync 0.6.1",
+ "embassy-sync 0.6.2",
  "embedded-can",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
@@ -756,6 +756,7 @@ dependencies = [
  "ed25519-dalek",
  "embassy-executor",
  "embassy-net",
+ "embassy-sync 0.6.2",
  "embassy-time",
  "embedded-io-async",
  "esp-alloc",
@@ -765,6 +766,7 @@ dependencies = [
  "esp-println",
  "esp-wifi",
  "getrandom",
+ "heapless",
  "hex",
  "log",
  "smoltcp",
@@ -784,7 +786,7 @@ dependencies = [
  "critical-section",
  "document-features",
  "embassy-net-driver",
- "embassy-sync 0.6.1",
+ "embassy-sync 0.6.2",
  "embedded-io",
  "embedded-io-async",
  "enumset",

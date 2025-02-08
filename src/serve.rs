@@ -3,34 +3,36 @@ use core::result::Result;
 use core::option::Option::{ self, Some, None };
 
 use crate::esp_net::{accept_requests, if_up};
-use crate::io::AsyncTcpStream;
-use crate::keys::{HOST_SECRET_KEY, get_user_public_key};
+use crate::keys::{self};
 
 // Embassy
 use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
-use embassy_time::{Duration, Timer};
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::mutex::Mutex;
+use embassy_sync::channel::Channel;
 use esp_hal::uart::Uart;
-use esp_hal::{peripherals, time, Async};
-use esp_hal::peripherals::Peripherals;
-use sunset_embassy::SSHServer;
+use esp_hal::Async;
+use heapless::String;
+use sunset::{error, ChanHandle, Error, ServEvent, SignKey};
+use sunset_embassy::{ProgressHolder, SSHServer};
 
-// ESP specific
-use crate::esp_rng::esp_random;
-use esp_println::{dbg, println};
-use esp_hal::rng::Trng;
+use esp_println::println;
 use crate::esp_serial::uart_up;
 
-async fn connection_loop(ssh_server: SSHServer<'_>, uart: Uart<'static, Async>) {
+async fn connection_loop(serv: SSHServer<'_>, _uart: Uart<'static, Async>) {
+    let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
+    let chan_pipe = Channel::<NoopRawMutex, ChanHandle, 1>::new();
+    let mut session: Option::<ChanHandle> = None;
+    
     let prog_loop = async {
         loop {
             let mut ph = ProgressHolder::new();
             let ev = serv.progress(&mut ph).await?;
-            trace!("ev {ev:?}");
             match ev {
                 ServEvent::SessionShell(a) => 
                 {
-                    if let Some(ch) = common.sess.take() {
+                    if let Some(ch) = session.take() {
                         debug_assert!(ch.num() == a.channel()?);
                         a.succeed()?;
                         let _ = chan_pipe.try_send(ch);
@@ -41,12 +43,43 @@ async fn connection_loop(ssh_server: SSHServer<'_>, uart: Uart<'static, Async>) 
                 ServEvent::FirstAuth(ref a) => {
                     // record the username
                     if username.lock().await.push_str(a.username()?).is_err() {
-                        warn!("Too long username")
-                    }
-                    // handle the rest
-                    common.handle_event(ev)?;
+                        println!("Too long username")
+                    }                   
                 }
-                _ => common.handle_event(ev)?,
+                ServEvent::Hostkeys(h) => {
+                    // FIXME: Is this the right key to pass here?
+                    let signkey = SignKey::from_openssh(keys::HOST_SECRET_KEY)?;
+                    h.hostkeys(&[&signkey])?;
+                }
+                ServEvent::PasswordAuth(_a) => {
+                   // TODO: disallow password auth
+                }
+                | ServEvent::PubkeyAuth(_a) => {
+                    // TODO: handle!
+                }
+                ServEvent::OpenSession(a) => {
+                    match session {
+                        Some(_) => {
+                            todo!("Can't have two sessions");
+                        }
+                        None => {
+                            // Track the session
+                            session = Some(a.accept()?);
+                        }
+                    }
+                }
+                ServEvent::SessionPty(a) => {
+                    a.succeed()?;
+                }
+                ServEvent::SessionExec(a) => {
+                    a.fail()?;
+                }
+                | ServEvent::Defunct
+                | ServEvent::SessionShell(_) => {
+                    println!("Expected caller to handle event");
+                    //error!("Expected caller to handle {event:?}");
+                    error::BadUsage.fail()?
+                }
             };
         };
         #[allow(unreachable_code)]
@@ -54,7 +87,7 @@ async fn connection_loop(ssh_server: SSHServer<'_>, uart: Uart<'static, Async>) 
     };
 }
 
-pub(crate) async fn handle_ssh_client<'a>(stream: &mut TcpSocket<'a>, uart: Uart<'static, Async>) -> Result<(), sunset::Error> {
+pub(crate) async fn handle_ssh_client<'a>(stream: &mut TcpSocket<'a>, _uart: Uart<'static, Async>) -> Result<(), sunset::Error> {
     // Spawn network tasks to handle incoming connections with demo_common::session()
     let mut inbuf = [0u8; 4096];
     let mut outbuf= [0u8; 4096];
@@ -65,6 +98,7 @@ pub(crate) async fn handle_ssh_client<'a>(stream: &mut TcpSocket<'a>, uart: Uart
     //let rsock = tcp_stack.
     let (mut rsock, mut wsock) = stream.split();
 
+    // TODO: This needs a select() which awaits both run() and connection_loop()
     ssh_server.run(&mut rsock, &mut wsock).await
 }
 

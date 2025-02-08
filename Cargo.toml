@@ -39,6 +39,8 @@ ssh-key = { version = "0.6.7", default-features = false, features = ["ed25519"] 
 sunset = { version = "0.2.0", git="https://github.com/mkj/sunset", default-features = false, features = ["openssh-key", "embedded-io"]}
 sunset-embassy = { version = "0.2.0", git = "https://github.com/mkj/sunset", default-features = false}
 getrandom = { version="0.2.15", features = ["custom"] }
+embassy-sync = "0.6.2"
+heapless = "0.8.0"
 
 [profile.dev]
 # Rust debug is too slow.
