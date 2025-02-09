@@ -25,6 +25,8 @@ async fn connection_loop(serv: SSHServer<'_>, _uart: Uart<'static, Async>) {
     let chan_pipe = Channel::<NoopRawMutex, ChanHandle, 1>::new();
     let mut session: Option::<ChanHandle> = None;
     
+    println!("Entering connection_loop and prog_loop is next...");
+
     let prog_loop = async {
         loop {
             let mut ph = ProgressHolder::new();
@@ -47,7 +49,7 @@ async fn connection_loop(serv: SSHServer<'_>, _uart: Uart<'static, Async>) {
                     }                   
                 }
                 ServEvent::Hostkeys(h) => {
-                    // FIXME: Is this the right key to pass here?
+                    // FIXME: Is this the right key to pass here? Perhaps get_user_public_key() should be here?
                     let signkey = SignKey::from_openssh(keys::HOST_SECRET_KEY)?;
                     h.hostkeys(&[&signkey])?;
                 }
@@ -85,21 +87,24 @@ async fn connection_loop(serv: SSHServer<'_>, _uart: Uart<'static, Async>) {
         #[allow(unreachable_code)]
         Ok::<_, Error>(())
     };
+    println!("We shouldn't exit connection_loop ever?");
 }
 
-pub(crate) async fn handle_ssh_client<'a>(stream: &mut TcpSocket<'a>, _uart: Uart<'static, Async>) -> Result<(), sunset::Error> {
+pub(crate) async fn handle_ssh_client<'a>(stream: &mut TcpSocket<'a>, uart: Uart<'static, Async>) -> Result<(), sunset::Error> {
     // Spawn network tasks to handle incoming connections with demo_common::session()
     let mut inbuf = [0u8; 4096];
     let mut outbuf= [0u8; 4096];
 
     let ssh_server = SSHServer::new(&mut inbuf, &mut outbuf)?;
-    // Unclear docs: "rsock and wsock are the SSH network channel (TCP port 22 or equivalent)." .... Huh ????
-    // Ahhh: rsock == (async) reader_socket, wsock == (async) writer_socket.
-    //let rsock = tcp_stack.
     let (mut rsock, mut wsock) = stream.split();
 
+    println!("Calling connection_loop from handle_ssh_client");
+    // FIXME: This should be a spawned, never-ending task.
+    connection_loop(ssh_server, uart).await;
+
     // TODO: This needs a select() which awaits both run() and connection_loop()
-    ssh_server.run(&mut rsock, &mut wsock).await
+    //ssh_server.run(&mut rsock, &mut wsock).await
+    Ok(())
 }
 
 pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
