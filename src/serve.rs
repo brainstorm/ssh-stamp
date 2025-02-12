@@ -14,7 +14,7 @@ use embassy_sync::channel::Channel;
 use esp_hal::uart::Uart;
 use esp_hal::Async;
 use heapless::String;
-use sunset::{error, ChanHandle, Error, ServEvent, SignKey};
+use sunset::{error, ChanHandle, ServEvent, SignKey};
 use sunset_embassy::{ProgressHolder, SSHServer};
 
 use esp_println::{dbg, println};
