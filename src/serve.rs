@@ -3,6 +3,7 @@ use core::result::Result;
 use core::option::Option::{ self, Some, None };
 
 use crate::esp_net::{accept_requests, if_up};
+use crate::esp_rng;
 use crate::keys::{self};
 
 // Embassy
@@ -11,6 +12,10 @@ use embassy_net::tcp::TcpSocket;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_sync::channel::Channel;
+use esp_hal::clock::CpuClock;
+use esp_hal::rng::Rng;
+use esp_hal::timer::systimer::Target;
+use esp_hal::timer::timg::TimerGroup;
 use esp_hal::uart::Uart;
 use esp_hal::Async;
 use heapless::String;
@@ -105,8 +110,36 @@ pub(crate) async fn handle_ssh_client<'a>(stream: &mut TcpSocket<'a>, uart: Uart
 }
 
 pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
+    // System init
+    let peripherals = esp_hal::init({
+        let mut config = esp_hal::Config::default();
+        config.cpu_clock = CpuClock::max();
+        config
+    });
+    let rng = Rng::new(peripherals.RNG);
+    let timg0 = TimerGroup::new(peripherals.TIMG0);
+
+    esp_rng::register_custom_rng(rng.clone());
+
+    cfg_if::cfg_if! {
+       if #[cfg(feature = "esp32")] {
+            let timg1 = TimerGroup::new(peripherals.TIMG1);
+            esp_hal_embassy::init(timg1.timer0);
+       } else {
+           use esp_hal::timer::systimer::SystemTimer;
+           let systimer = SystemTimer::new(peripherals.SYSTIMER).split::<Target>();
+           esp_hal_embassy::init(systimer.alarm0);
+       }
+    }
+
+    let wifi_controller = esp_wifi::init(
+            timg0.timer0,
+            rng.clone(),
+            peripherals.RADIO_CLK,
+        ).unwrap();
+
     // Bring up the network interface and start accepting SSH connections.
-    let tcp_stack = if_up(spawner).await?;
+    let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI).await?;
 
     // Connect to the serial port
     // TODO: Detection and/or resonable defaults for UART settings... or:

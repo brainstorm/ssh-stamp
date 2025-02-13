@@ -1,29 +1,24 @@
 // https://github.com/esp-rs/esp-hal/blob/main/examples/src/bin/wifi_embassy_access_point.rs
 // https://github.com/embassy-rs/embassy/blob/main/examples/nrf52840/src/bin/wifi_esp_hosted.rs
 use embassy_executor::Spawner;
+use embassy_net::{IpListenEndpoint, Ipv4Address, Ipv4Cidr};
 use embassy_net::{
     tcp::TcpSocket,
     Config,
-    IpListenEndpoint,
-    Ipv4Address,
-    Ipv4Cidr,
     Stack,
     StaticConfigV4,
     StackResources,
 };
 use embassy_time::{Duration, Timer};
-use esp_backtrace as _;
 
-use esp_hal::clock::CpuClock;
-use esp_hal::rng::Rng;
+use esp_hal::peripheral::Peripheral;
+use esp_hal::peripherals::WIFI;
 
-use esp_hal::timer::systimer::Target;
-use esp_hal::timer::timg::TimerGroup;
 use esp_hal::uart::Uart;
 use esp_hal::Async;
 use esp_println::println;
 
-use esp_wifi::{init, EspWifiController};
+use esp_wifi::EspWifiController;
 use esp_wifi::wifi::{WifiEvent, WifiState};
 use esp_wifi::
     wifi::{
@@ -34,7 +29,6 @@ use esp_wifi::
         WifiDevice,
     };
 
-use crate::esp_rng;
 
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {
@@ -46,42 +40,12 @@ macro_rules! mk_static {
     }};
 }
 
-pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static, WifiApDevice>>, sunset::Error>
+pub async fn if_up(spawner: Spawner, wifi_controller: EspWifiController<'static>, wifi: impl Peripheral<P = WIFI> + 'static) -> Result<&'static Stack<WifiDevice<'static, WifiApDevice>>, sunset::Error>
 {
-    let peripherals = esp_hal::init({
-        let mut config = esp_hal::Config::default();
-        config.cpu_clock = CpuClock::max();
-        config
-    });
-    let rng = Rng::new(peripherals.RNG);
-    let timg0 = TimerGroup::new(peripherals.TIMG0);
-
-    esp_rng::register_custom_rng(rng.clone());
-
-    let init = &*mk_static!(
+    let wifi_init = &*mk_static!(
         EspWifiController<'static>,
-        init(
-            timg0.timer0,
-            rng.clone(),
-            peripherals.RADIO_CLK,
-        ).unwrap()
-    );
-
-    let wifi = peripherals.WIFI;
-    let (wifi_ap_interface, _wifi_sta_interface, controller) = esp_wifi::wifi::new_ap_sta(&init, wifi).unwrap();
-
-    //let systimer = SystemTimer::new(peripherals.SYSTIMER).split_async::<Target>();
-    
-    cfg_if::cfg_if! {
-       if #[cfg(feature = "esp32")] {
-            let timg1 = TimerGroup::new(peripherals.TIMG1);
-            esp_hal_embassy::init(timg1.timer0);
-       } else {
-           use esp_hal::timer::systimer::SystemTimer;
-           let systimer = SystemTimer::new(peripherals.SYSTIMER).split::<Target>();
-           esp_hal_embassy::init(systimer.alarm0);
-       }
-    }
+        wifi_controller);
+    let (wifi_ap_interface, _wifi_sta_interface, controller) = esp_wifi::wifi::new_ap_sta(&wifi_init, wifi).unwrap();
 
     let config = Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(Ipv4Address::new(192, 168, 2, 1), 24),
