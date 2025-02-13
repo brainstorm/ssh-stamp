@@ -34,6 +34,8 @@ use esp_wifi::
         WifiDevice,
     };
 
+use crate::esp_rng;
+
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {
     ($t:ty,$val:expr) => {{
@@ -53,6 +55,8 @@ pub async fn if_up(spawner: Spawner) -> Result<&'static Stack<WifiDevice<'static
     });
     let rng = Rng::new(peripherals.RNG);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
+
+    esp_rng::register_custom_rng(rng.clone());
 
     let init = &*mk_static!(
         EspWifiController<'static>,
