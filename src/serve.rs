@@ -23,7 +23,6 @@ use sunset::{error, ChanHandle, ServEvent, SignKey};
 use sunset_embassy::{ProgressHolder, SSHServer};
 
 use esp_println::{dbg, println};
-use crate::esp_serial::uart_up;
 
 async fn connection_loop(serv: SSHServer<'_>, _uart: Uart<'static, Async>) -> Result<(), sunset::Error> {
     let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
@@ -115,11 +114,11 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
         let mut config = esp_hal::Config::default();
         config.cpu_clock = CpuClock::max();
         config
-    });
+        });
     let rng = Rng::new(peripherals.RNG);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
 
-    esp_rng::register_custom_rng(rng.clone());
+    esp_rng::register_custom_rng(rng);
 
     cfg_if::cfg_if! {
        if #[cfg(feature = "esp32")] {
@@ -134,7 +133,7 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
 
     let wifi_controller = esp_wifi::init(
             timg0.timer0,
-            rng.clone(),
+            rng,
             peripherals.RADIO_CLK,
         ).unwrap();
 
@@ -146,7 +145,10 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
     //       - Make it configurable via settings.rs for now, but ideally...
     //       - ... do what https://keypub.sh does via alternative commands
     //
-    let uart = uart_up().await?; 
+    let (tx_pin, rx_pin) = (peripherals.GPIO10, peripherals.GPIO11);
+    let uart = Uart::new(peripherals.UART1, rx_pin, tx_pin)
+        .unwrap()
+        .into_async();
 
     accept_requests(tcp_stack, uart).await?;
 

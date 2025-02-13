@@ -1,8 +1,7 @@
 use esp_backtrace as _;
 use esp_hal::{
-    peripherals::{self, Peripherals}, uart::{Uart, UartRx, UartTx}, Async
+    uart::{UartRx, UartTx}, Async
 };
-use esp_println::println;
 
 #[embassy_executor::task]
 async fn writer(mut tx: UartTx<'static, Async>, serial_tx_ring_buf: &'static mut [u8]) {
@@ -27,23 +26,4 @@ async fn reader(mut rx: UartRx<'static, Async>, serial_rx_ring_buf: &'static mut
             Err(e) => esp_println::println!("RX Error: {:?}", e),
         }
     }
-}
-
-pub(crate) async fn uart_up() -> Result<Uart<'static, Async>, sunset::Error> {
-    esp_println::println!("UART init!");
-
-    // SAFETY: No concurrent peripheral operations are happening at this point???
-    // FIXME: Concerning since we steal it in handle_ssh_client() as well
-    let peripherals: Peripherals = unsafe {
-        peripherals::Peripherals::steal()
-    };
-
-    println!("Peripherals stolen at uart_up()...");
-
-    let (tx_pin, rx_pin) = (peripherals.GPIO10, peripherals.GPIO11);
-    let uart0 = Uart::new(peripherals.UART1, rx_pin, tx_pin)
-        .unwrap()
-        .into_async();
-
-    Ok(uart0)
 }
