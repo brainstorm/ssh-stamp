@@ -41,6 +41,7 @@ sunset-embassy = { version = "0.2.0", git = "https://github.com/mkj/sunset", def
 getrandom = { version="0.2.15", features = ["custom"] }
 embassy-sync = "0.6.2"
 heapless = "0.8.0"
+embassy-futures = "0.1.1"
 
 [profile.dev]
 # Rust debug is too slow.

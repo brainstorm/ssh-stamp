@@ -4,7 +4,7 @@ use core::option::Option::{ self, Some, None };
 
 use crate::esp_net::{accept_requests, if_up};
 use crate::esp_rng;
-use crate::keys::{self};
+use crate::keys::{self, get_user_public_key};
 
 // Embassy
 use embassy_executor::Spawner;
@@ -12,6 +12,8 @@ use embassy_net::tcp::TcpSocket;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_sync::channel::Channel;
+use embassy_futures::select::{select, Either};
+
 use esp_hal::clock::CpuClock;
 use esp_hal::rng::Rng;
 use esp_hal::timer::systimer::Target;
@@ -24,7 +26,7 @@ use sunset_embassy::{ProgressHolder, SSHServer};
 
 use esp_println::{dbg, println};
 
-async fn connection_loop(serv: SSHServer<'_>, _uart: Uart<'static, Async>) -> Result<(), sunset::Error> {
+async fn connection_loop(serv: &SSHServer<'_>, _uart: Uart<'static, Async>) -> Result<(), sunset::Error> {
     let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
     let chan_pipe = Channel::<NoopRawMutex, ChanHandle, 1>::new();
     let mut session: Option::<ChanHandle> = None;
@@ -101,10 +103,16 @@ pub(crate) async fn handle_ssh_client<'a>(stream: &mut TcpSocket<'a>, uart: Uart
 
     println!("Calling connection_loop from handle_ssh_client");
     // FIXME: This should be a spawned, never-ending task.
-    connection_loop(ssh_server, uart).await?;
+    let conn_loop = connection_loop(&ssh_server, uart);
 
     // TODO: This needs a select() which awaits both run() and connection_loop()
-    //ssh_server.run(&mut rsock, &mut wsock).await
+    let server = ssh_server.run(&mut rsock, &mut wsock);
+
+    match select(conn_loop, server).await {
+        Either::First(r) => r,
+        Either::Second(r) => r,
+    }?;
+
     Ok(())
 }
 

@@ -755,6 +755,7 @@ dependencies = [
  "cfg-if",
  "ed25519-dalek",
  "embassy-executor",
+ "embassy-futures",
  "embassy-net",
  "embassy-sync 0.6.2",
  "embassy-time",
