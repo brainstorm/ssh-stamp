@@ -55,15 +55,14 @@ async fn connection_loop(serv: &SSHServer<'_>, _uart: Uart<'static, Async>) -> R
                     }                   
                 }
                 ServEvent::Hostkeys(h) => {
-                    // FIXME: Is this the right key to pass here? Perhaps get_user_public_key() should be here?
                     let signkey = SignKey::from_openssh(keys::HOST_SECRET_KEY)?;
                     h.hostkeys(&[&signkey])?;
                 }
-                ServEvent::PasswordAuth(_a) => {
-                   // TODO: disallow password auth
+                ServEvent::PasswordAuth(a) => {
+                    a.allow();
                 }
-                | ServEvent::PubkeyAuth(_a) => {
-                    // TODO: handle!
+                | ServEvent::PubkeyAuth(a) => {
+                    a.allow()?;
                 }
                 ServEvent::OpenSession(a) => {
                     match session {
