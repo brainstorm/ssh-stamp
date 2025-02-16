@@ -3,8 +3,9 @@ use core::result::Result;
 use core::option::Option::{ self, Some, None };
 
 use crate::esp_net::{accept_requests, if_up};
-use crate::esp_rng;
-use crate::keys::{self, get_user_public_key};
+use crate::takepipe::{TakePipe, TakePipeStorage};
+use crate::{esp_rng, serial::serial};
+use crate::{esp_serial, keys};
 
 // Embassy
 use embassy_executor::Spawner;
@@ -43,6 +44,7 @@ async fn connection_loop(serv: &SSHServer<'_>, _uart: Uart<'static, Async>) -> R
                     if let Some(ch) = session.take() {
                         debug_assert!(ch.num() == a.channel()?);
                         a.succeed()?;
+                        dbg!("We got shell");
                         let _ = chan_pipe.try_send(ch);
                     } else {
                         a.fail()?;
@@ -101,11 +103,18 @@ pub(crate) async fn handle_ssh_client<'a>(stream: &mut TcpSocket<'a>, uart: Uart
     let (mut rsock, mut wsock) = stream.split();
 
     println!("Calling connection_loop from handle_ssh_client");
-    // FIXME: This should be a spawned, never-ending task.
     let conn_loop = connection_loop(&ssh_server, uart);
-
-    // TODO: This needs a select() which awaits both run() and connection_loop()
     let server = ssh_server.run(&mut rsock, &mut wsock);
+
+    // TODO: Attempt to link "TakePipe" types with concrete UART rx/tx reader/writer...
+    let mut t = TakePipeStorage::new().build();
+    let (mut r1, mut w1) = t.split();
+    let (mut ra, mut wa) = t.take().await;
+
+    let (rx_uart, tx_uart) = uart.split();
+
+    // And call tcp <-> serial bridge
+    serial(&mut rsock, &mut wsock, uart).await?;
 
     match select(conn_loop, server).await {
         Either::First(r) => r,
