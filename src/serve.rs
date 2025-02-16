@@ -3,9 +3,8 @@ use core::result::Result;
 use core::option::Option::{ self, Some, None };
 
 use crate::esp_net::{accept_requests, if_up};
-use crate::takepipe::{TakePipe, TakePipeStorage};
-use crate::{esp_rng, serial::serial};
-use crate::{esp_serial, keys};
+use crate::{esp_rng, serial::serial_bridge};
+use crate::keys;
 
 // Embassy
 use embassy_executor::Spawner;
@@ -27,7 +26,7 @@ use sunset_embassy::{ProgressHolder, SSHServer};
 
 use esp_println::{dbg, println};
 
-async fn connection_loop(serv: &SSHServer<'_>, _uart: Uart<'static, Async>) -> Result<(), sunset::Error> {
+async fn connection_loop(serv: &SSHServer<'_>) -> Result<(), sunset::Error> {
     let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
     let chan_pipe = Channel::<NoopRawMutex, ChanHandle, 1>::new();
     let mut session: Option::<ChanHandle> = None;
@@ -38,6 +37,7 @@ async fn connection_loop(serv: &SSHServer<'_>, _uart: Uart<'static, Async>) -> R
             let mut ph = ProgressHolder::new();
             let ev = serv.progress(&mut ph).await?;
             dbg!(&ev);
+            #[allow(unreachable_patterns)]
             match ev {
                 ServEvent::SessionShell(a) => 
                 {
@@ -103,18 +103,11 @@ pub(crate) async fn handle_ssh_client<'a>(stream: &mut TcpSocket<'a>, uart: Uart
     let (mut rsock, mut wsock) = stream.split();
 
     println!("Calling connection_loop from handle_ssh_client");
-    let conn_loop = connection_loop(&ssh_server, uart);
+    let conn_loop = connection_loop(&ssh_server);
     let server = ssh_server.run(&mut rsock, &mut wsock);
 
-    // TODO: Attempt to link "TakePipe" types with concrete UART rx/tx reader/writer...
-    let mut t = TakePipeStorage::new().build();
-    let (mut r1, mut w1) = t.split();
-    let (mut ra, mut wa) = t.take().await;
-
-    let (rx_uart, tx_uart) = uart.split();
-
-    // And call tcp <-> serial bridge
-    serial(&mut rsock, &mut wsock, uart).await?;
+    // FIXME: Borrow issue on ssh_server and serial_bridge
+    serial_bridge(&mut rsock, &mut wsock, uart).await?;
 
     match select(conn_loop, server).await {
         Either::First(r) => r,

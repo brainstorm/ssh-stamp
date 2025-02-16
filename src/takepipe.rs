@@ -1,5 +1,3 @@
-#[allow(unused_imports)]
-use log::{debug, error, info, log, trace, warn};
 use sunset_embassy::SunsetMutex;
 
 use core::ops::DerefMut;
