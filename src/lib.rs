@@ -8,7 +8,6 @@ pub mod io;
 pub mod keys;
 pub mod serve;
 pub mod serial;
-pub mod takepipe;
 pub mod esp_rng;
 pub mod esp_net;
 pub mod esp_serial;
