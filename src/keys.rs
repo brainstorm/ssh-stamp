@@ -17,8 +17,7 @@ pub(crate) fn _get_user_public_key() -> Ed25519PublicKey {
         .unwrap()
 }
 
-pub(crate) const HOST_SECRET_KEY: &[u8; 400] = 
-b"
+pub(crate) const HOST_SECRET_KEY: &[u8; 400] = b"
 -----BEGIN OPENSSH PRIVATE KEY-----
 b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
 QyNTUxOQAAACD/HyNyMDvZkVWgMRzpbK6VgVk+/b627AamAjoO8T4uSAAAAJCzAcYdswHG
