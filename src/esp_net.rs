@@ -1,5 +1,7 @@
+use core::net::Ipv4Addr;
+
 use embassy_executor::Spawner;
-use embassy_net::{IpListenEndpoint, Runner};
+use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, StaticConfigV4};
 use embassy_net::{
     tcp::TcpSocket,
     Stack,
@@ -44,7 +46,14 @@ pub async fn if_up(spawner: Spawner, wifi_controller: EspWifiController<'static>
         wifi_controller);
     let (wifi_ap_interface, _wifi_sta_interface, controller) = esp_wifi::wifi::new_ap_sta(&wifi_init, wifi).unwrap();
 
-    let config = embassy_net::Config::dhcpv4(Default::default());
+    let gw_ip_addr = Ipv4Addr::new(192, 168, 2, 1);
+
+    let config = embassy_net::Config::ipv4_static(StaticConfigV4 {
+        address: Ipv4Cidr::new(gw_ip_addr, 24),
+        gateway: Some(gw_ip_addr),
+        dns_servers: Default::default(),
+    });
+
     let seed = (rng.random() as u64) << 32 | rng.random() as u64;
 
     // Init network stack
