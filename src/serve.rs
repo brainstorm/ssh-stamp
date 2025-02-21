@@ -8,6 +8,7 @@ use crate::espressif::net::{accept_requests, if_up};
 use crate::keys;
 use crate::serial::serial_bridge;
 
+
 // Embassy
 use embassy_executor::Spawner;
 use embassy_futures::select::{select3, Either3};
@@ -16,11 +17,12 @@ use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 
+use esp_hal::uart::{Config, Uart};
 use esp_hal::clock::CpuClock;
 use esp_hal::rng::Rng;
 use esp_hal::timer::timg::TimerGroup;
-use esp_hal::uart::{Config, Uart};
 use esp_hal::Async;
+
 use heapless::String;
 use sunset::{error, ChanHandle, ServEvent, SignKey};
 use sunset_embassy::{ProgressHolder, SSHServer};
@@ -157,20 +159,17 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
 
     // Bring up the network interface and start accepting SSH connections.
     let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng).await?;
+    
+    // Espressif-specific UART setup
+    let uart_config = Config::default().with_rx_timeout(1);
 
-    // Connect to the serial port
-    // TODO: Detection and/or resonable defaults for UART settings... or:
-    //       - Make it configurable via settings.rs for now, but ideally...
-    //       - ... do what https://keypub.sh does via alternative commands
-    //
-    let config = Config::default().with_rx_timeout(1);
-
-    let uart = Uart::new(peripherals.UART1, config)
+    let uart = Uart::new(peripherals.UART1, uart_config)
         .unwrap()
         .with_rx(peripherals.GPIO11)
         .with_tx(peripherals.GPIO10)
         .into_async();
 
+    // Start accepting SSH connections and redirect them to the UART later on
     accept_requests(tcp_stack, uart).await?;
 
     // All is fine :)
