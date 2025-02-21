@@ -2,9 +2,11 @@ use core::option::Option::{self, None, Some};
 use core::result::Result;
 use core::writeln;
 
-use crate::esp_net::{accept_requests, if_up};
+use crate::espressif::rng;
+use crate::espressif::net::{accept_requests, if_up};
+
 use crate::keys;
-use crate::{esp_rng, serial::serial_bridge};
+use crate::serial::serial_bridge;
 
 // Embassy
 use embassy_executor::Spawner;
@@ -138,7 +140,7 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
     let mut rng = Rng::new(peripherals.RNG);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
 
-    esp_rng::register_custom_rng(rng);
+    rng::register_custom_rng(rng);
 
     cfg_if::cfg_if! {
        if #[cfg(feature = "esp32")] {

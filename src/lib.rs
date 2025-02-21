@@ -2,9 +2,7 @@
 #![no_main]
 #![forbid(unsafe_code)]
 
-pub mod esp_net;
-pub mod esp_rng;
-pub mod esp_serial;
+pub mod espressif;
 pub mod io;
 pub mod keys;
 pub mod serial;
