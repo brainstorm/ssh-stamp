@@ -2,12 +2,8 @@ use core::net::Ipv4Addr;
 use core::str::FromStr;
 
 use embassy_executor::Spawner;
+use embassy_net::{tcp::TcpSocket, Stack, StackResources};
 use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, StaticConfigV4};
-use embassy_net::{
-    tcp::TcpSocket,
-    Stack,
-    StackResources,
-};
 use embassy_time::{Duration, Timer};
 
 use esp_hal::peripheral::Peripheral;
@@ -24,8 +20,8 @@ use esp_wifi::wifi::{
 use esp_wifi::wifi::{WifiEvent, WifiState};
 use esp_wifi::EspWifiController;
 
-use edge_dhcp;
 use core::net::SocketAddrV4;
+use edge_dhcp;
 
 use edge_dhcp::{
     io::{self, DEFAULT_SERVER_PORT},
@@ -88,7 +84,10 @@ pub async fn if_up(
     }
 
     // TODO: Use wifi_manager instead?
-    println!("Connect to the AP `esp-ssh-rs` as a DHCP client with IP: {}", gw_ip_addr_str);
+    println!(
+        "Connect to the AP `esp-ssh-rs` as a DHCP client with IP: {}",
+        gw_ip_addr_str
+    );
 
     Ok(ap_stack)
 }
@@ -152,7 +151,7 @@ async fn net_up(mut runner: Runner<'static, WifiDevice<'static, WifiApDevice>>) 
 }
 
 #[embassy_executor::task]
-async fn dhcp_server(stack: Stack<'static>, ip: Ipv4Addr ) {
+async fn dhcp_server(stack: Stack<'static>, ip: Ipv4Addr) {
     let mut buf = [0u8; 1500];
 
     let mut gw_buf = [Ipv4Addr::UNSPECIFIED];

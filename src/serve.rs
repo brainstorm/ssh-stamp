@@ -2,12 +2,11 @@ use core::option::Option::{self, None, Some};
 use core::result::Result;
 use core::writeln;
 
-use crate::espressif::rng;
 use crate::espressif::net::{accept_requests, if_up};
+use crate::espressif::rng;
 
 use crate::keys;
 use crate::serial::serial_bridge;
-
 
 // Embassy
 use embassy_executor::Spawner;
@@ -17,10 +16,10 @@ use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 
-use esp_hal::uart::{Config, Uart};
 use esp_hal::clock::CpuClock;
 use esp_hal::rng::Rng;
 use esp_hal::timer::timg::TimerGroup;
+use esp_hal::uart::{Config, Uart};
 use esp_hal::Async;
 
 use heapless::String;
@@ -159,7 +158,7 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
 
     // Bring up the network interface and start accepting SSH connections.
     let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng).await?;
-    
+
     // Espressif-specific UART setup
     let uart_config = Config::default().with_rx_timeout(1);
 
