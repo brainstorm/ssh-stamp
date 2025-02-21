@@ -1,8 +1,9 @@
 use esp_backtrace as _;
-use esp_println::println;
 use esp_hal::{
-    uart::{UartRx, UartTx}, Async
+    uart::{UartRx, UartTx},
+    Async,
 };
+use esp_println::println;
 
 #[embassy_executor::task]
 async fn writer(mut tx: UartTx<'static, Async>, serial_tx_ring_buf: &'static mut [u8]) {

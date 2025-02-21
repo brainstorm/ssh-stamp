@@ -1,10 +1,6 @@
 use embassy_executor::Spawner;
+use embassy_net::{tcp::TcpSocket, Stack, StackResources};
 use embassy_net::{IpListenEndpoint, Runner};
-use embassy_net::{
-    tcp::TcpSocket,
-    Stack,
-    StackResources,
-};
 use embassy_time::{Duration, Timer};
 
 use esp_hal::peripheral::Peripheral;
@@ -15,17 +11,11 @@ use esp_hal::uart::Uart;
 use esp_hal::Async;
 use esp_println::println;
 
-use esp_wifi::EspWifiController;
+use esp_wifi::wifi::{
+    AccessPointConfiguration, Configuration, WifiApDevice, WifiController, WifiDevice,
+};
 use esp_wifi::wifi::{WifiEvent, WifiState};
-use esp_wifi::
-    wifi::{
-        AccessPointConfiguration,
-        Configuration,
-        WifiApDevice,
-        WifiController,
-        WifiDevice,
-    };
-
+use esp_wifi::EspWifiController;
 
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {
@@ -37,12 +27,15 @@ macro_rules! mk_static {
     }};
 }
 
-pub async fn if_up(spawner: Spawner, wifi_controller: EspWifiController<'static>, wifi: impl Peripheral<P = WIFI> + 'static, rng: &mut Rng) -> Result<Stack<'static>, sunset::Error>
-{
-    let wifi_init = &*mk_static!(
-        EspWifiController<'static>,
-        wifi_controller);
-    let (wifi_ap_interface, _wifi_sta_interface, controller) = esp_wifi::wifi::new_ap_sta(&wifi_init, wifi).unwrap();
+pub async fn if_up(
+    spawner: Spawner,
+    wifi_controller: EspWifiController<'static>,
+    wifi: impl Peripheral<P = WIFI> + 'static,
+    rng: &mut Rng,
+) -> Result<Stack<'static>, sunset::Error> {
+    let wifi_init = &*mk_static!(EspWifiController<'static>, wifi_controller);
+    let (wifi_ap_interface, _wifi_sta_interface, controller) =
+        esp_wifi::wifi::new_ap_sta(wifi_init, wifi).unwrap();
 
     let config = embassy_net::Config::dhcpv4(Default::default());
     let seed = (rng.random() as u64) << 32 | rng.random() as u64;
@@ -73,26 +66,31 @@ pub async fn if_up(spawner: Spawner, wifi_controller: EspWifiController<'static>
     Ok(ap_stack)
 }
 
-pub async fn accept_requests(stack: Stack<'static>, uart: Uart<'static, Async>) -> Result<(), sunset::Error> {
-
+pub async fn accept_requests(
+    stack: Stack<'static>,
+    uart: Uart<'static, Async>,
+) -> Result<(), sunset::Error> {
     let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
     let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
 
     //loop {
-        let mut socket = TcpSocket::new(stack, rx_buffer, tx_buffer);
+    let mut socket = TcpSocket::new(stack, rx_buffer, tx_buffer);
 
-        if let Err(e) = socket.accept(IpListenEndpoint {
+    if let Err(e) = socket
+        .accept(IpListenEndpoint {
             addr: None,
             port: 22,
-        }).await {
-            println!("connect error: {:?}", e);
-            //continue;
-        }
+        })
+        .await
+    {
+        println!("connect error: {:?}", e);
+        //continue;
+    }
 
-        println!("Connected, port 22");
-        crate::serve::handle_ssh_client(&mut socket, uart).await?;
+    println!("Connected, port 22");
+    crate::serve::handle_ssh_client(&mut socket, uart).await?;
     //}
-    
+
     Ok(()) // FIXME: All is fine but not really if we lose connection only once... removed loop to deal with uart copy issues later
            // Probably best handled by some kind of supervisor task and signals instead of a loop anyway?
 }

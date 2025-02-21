@@ -1,10 +1,10 @@
 #![no_std]
 #![no_main]
 
+use core::marker::Sized;
 use esp_alloc as _;
 use esp_backtrace as _;
 use esp_println::println;
-use core::marker::Sized;
 
 use embassy_executor::Spawner;
 use esp_ssh_rs::serve::start;
