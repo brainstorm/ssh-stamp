@@ -19,7 +19,7 @@
                 {
                     "coreIndex": 0,
                     "programBinary": "target/riscv32imac-unknown-none-elf/debug/esp-ssh-rs",
-                    "svdFile": "${workspaceFolder}/esp32c6.svd"
+                    "svdFile": "${workspaceFolder}/docs/svd/esp32c6.svd"
                 }
             ]
         },
@@ -34,7 +34,7 @@
                 {
                     "coreIndex": 0,
                     "programBinary": "target/riscv32imac-unknown-none-elf/debug/esp-ssh-rs",
-                    "svdFile": "${workspaceFolder}/esp32c6.svd"
+                    "svdFile": "${workspaceFolder}/docs/svd/esp32c6.svd"
                 }
             ]
         }
