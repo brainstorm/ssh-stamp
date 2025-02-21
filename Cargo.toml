@@ -11,7 +11,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 cfg-if = "1.0.0"
 ed25519-dalek = { version = "2", default-features = false }
-embassy-executor = { version = "0.7", features = ["task-arena-size-81920"]}
+embassy-executor = { version = "0.7", features = ["task-arena-size-32768"]}
 embassy-net = { version = "0.6", features = ["tcp", "udp", "dhcpv4", "medium-ethernet"] }
 smoltcp = { version = "0.12", default-features = false, features = ["medium-ethernet", "socket-raw"]}
 embassy-time = { version = "0.4" }
@@ -38,10 +38,13 @@ static_cell = { version = "2", features = ["nightly"] }
 ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
 sunset = { version = "0.2.0", git="https://github.com/mkj/sunset", default-features = false, features = ["openssh-key", "embedded-io"]}
 sunset-embassy = { version = "0.2.0", git = "https://github.com/mkj/sunset", default-features = false}
-getrandom = { version="0.2.10", features = ["custom"] }
+getrandom = { version = "0.2.10", features = ["custom"] }
 embassy-sync = "0.6"
 heapless = "0.8"
 embassy-futures = "0.1"
+edge-dhcp = "0.5.0"
+edge-nal = "0.5.0"
+edge-nal-embassy = "0.5.0"
 
 [profile.dev]
 # Rust debug is too slow.
