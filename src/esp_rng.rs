@@ -1,4 +1,3 @@
-use core::borrow::BorrowMut;
 use core::cell::RefCell;
 
 use embassy_sync::blocking_mutex::Mutex;
