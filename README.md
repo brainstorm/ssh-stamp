@@ -1,4 +1,5 @@
-# esp_hosted_ssh
+# esp-ssh-rs
+
 Your everyday SSH secured serial access
 
 # Building
