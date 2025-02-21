@@ -16,7 +16,6 @@ use embassy_futures::select::{select3, Either3};
 
 use esp_hal::clock::CpuClock;
 use esp_hal::rng::Rng;
-use esp_hal::timer::systimer::Target;
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal::uart::{Config, Uart};
 use esp_hal::Async;
@@ -60,7 +59,7 @@ async fn connection_loop(serv: &SSHServer<'_>, chan_pipe: &Channel<NoopRawMutex,
                     h.hostkeys(&[&signkey])?;
                 }
                 ServEvent::PasswordAuth(a) => {
-                    a.allow();
+                    a.allow()?;
                 }
                 | ServEvent::PubkeyAuth(a) => {
                     a.allow()?;
@@ -134,7 +133,7 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
         config.cpu_clock = CpuClock::max();
         config
         });
-    let rng = Rng::new(peripherals.RNG);
+    let mut rng = Rng::new(peripherals.RNG);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
 
     esp_rng::register_custom_rng(rng);
@@ -145,7 +144,7 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
             esp_hal_embassy::init(timg1.timer0);
        } else {
            use esp_hal::timer::systimer::SystemTimer;
-           let systimer = SystemTimer::new(peripherals.SYSTIMER).split::<Target>();
+           let systimer = SystemTimer::new(peripherals.SYSTIMER);
            esp_hal_embassy::init(systimer.alarm0);
        }
     }
@@ -157,17 +156,19 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
         ).unwrap();
 
     // Bring up the network interface and start accepting SSH connections.
-    let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI).await?;
+    let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng).await?;
 
     // Connect to the serial port
     // TODO: Detection and/or resonable defaults for UART settings... or:
     //       - Make it configurable via settings.rs for now, but ideally...
     //       - ... do what https://keypub.sh does via alternative commands
     //
-    let config = Config::default().rx_timeout(Some(1));
-    let (tx_pin, rx_pin) = (peripherals.GPIO10, peripherals.GPIO11);
-    let uart = Uart::new_with_config(peripherals.UART1, config, rx_pin, tx_pin)
+    let config = Config::default().with_rx_timeout(1);
+ 
+    let uart = Uart::new(peripherals.UART1, config)
         .unwrap()
+        .with_rx(peripherals.GPIO11)
+        .with_tx(peripherals.GPIO10)
         .into_async();
 
     accept_requests(tcp_stack, uart).await?;

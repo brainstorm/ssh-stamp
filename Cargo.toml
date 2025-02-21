@@ -10,14 +10,14 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 cfg-if = "1.0.0"
-ed25519-dalek = { version = "2.1.1", default-features = false }
-embassy-executor = { version = "0.6.3", features = ["integrated-timers", "task-arena-size-81920"]}
-embassy-net = { version = "0.4.0", features = ["tcp", "udp", "dhcpv4", "medium-ethernet"] }
-smoltcp = { version = "0.11.0", default-features = false, features = ["medium-ethernet", "socket-raw"]}
-embassy-time = { version = "0.3.2" }
+ed25519-dalek = { version = "2", default-features = false }
+embassy-executor = { version = "0.7", features = ["task-arena-size-81920"]}
+embassy-net = { version = "0.6", features = ["tcp", "udp", "dhcpv4", "medium-ethernet"] }
+smoltcp = { version = "0.12", default-features = false, features = ["medium-ethernet", "socket-raw"]}
+embassy-time = { version = "0.4" }
 embedded-io-async = "0.6.0"
-esp-alloc = "0.5.0"
-esp-backtrace = { version = "0.14.2", features = [
+esp-alloc = "0.6"
+esp-backtrace = { version = "0.15", features = [
 #    "esp32s3",
     "esp32c6",
     "exception-handler",
@@ -28,20 +28,20 @@ esp-backtrace = { version = "0.14.2", features = [
 # esp-hal-embassy = { version = "0.3", features = ["esp32s3"] }
 # esp-println = { version = "0.11", features = ["esp32s3", "log"] }
 # esp-wifi = { version = "0.8.0", features = ["esp32s3", "wifi", "wifi-default", "utils", "smoltcp", "async", "embassy-net"] }
-esp-hal = { version = "0.22.0", features = [ "esp32c6" ] }
-esp-hal-embassy = { version = "0.5.0", features = ["esp32c6"] }
-esp-println = { version = "0.12.0", features = ["esp32c6", "log"] }
-esp-wifi = { version = "0.11.0", features = ["esp32c6", "wifi", "utils", "esp-alloc"] }
+esp-hal = { version = "0.23", features = [ "esp32c6" ] }
+esp-hal-embassy = { version = "0.6", features = ["esp32c6"] }
+esp-println = { version = "0.13", features = ["esp32c6", "log"] }
+esp-wifi = { version = "0.12", features = ["esp32c6", "wifi", "utils", "esp-alloc"] }
 hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
-static_cell = { version = "2.1.0", features = ["nightly"] }
-ssh-key = { version = "0.6.7", default-features = false, features = ["ed25519"] }
+static_cell = { version = "2", features = ["nightly"] }
+ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
 sunset = { version = "0.2.0", git="https://github.com/mkj/sunset", default-features = false, features = ["openssh-key", "embedded-io"]}
 sunset-embassy = { version = "0.2.0", git = "https://github.com/mkj/sunset", default-features = false}
-getrandom = { version="0.2.15", features = ["custom"] }
-embassy-sync = "0.6.2"
-heapless = "0.8.0"
-embassy-futures = "0.1.1"
+getrandom = { version="0.2.10", features = ["custom"] }
+embassy-sync = "0.6"
+heapless = "0.8"
+embassy-futures = "0.1"
 
 [profile.dev]
 # Rust debug is too slow.

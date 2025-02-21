@@ -1,12 +1,10 @@
-// https://github.com/esp-rs/esp-hal/blob/main/examples/src/bin/wifi_embassy_access_point.rs
-// https://github.com/embassy-rs/embassy/blob/main/examples/nrf52840/src/bin/wifi_esp_hosted.rs
+use core::net::Ipv4Addr;
+
 use embassy_executor::Spawner;
-use embassy_net::{IpListenEndpoint, Ipv4Address, Ipv4Cidr};
+use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, StaticConfigV4};
 use embassy_net::{
     tcp::TcpSocket,
-    Config,
     Stack,
-    StaticConfigV4,
     StackResources,
 };
 use embassy_time::{Duration, Timer};
@@ -14,6 +12,7 @@ use embassy_time::{Duration, Timer};
 use esp_hal::peripheral::Peripheral;
 use esp_hal::peripherals::WIFI;
 
+use esp_hal::rng::Rng;
 use esp_hal::uart::Uart;
 use esp_hal::Async;
 use esp_println::println;
@@ -40,34 +39,33 @@ macro_rules! mk_static {
     }};
 }
 
-pub async fn if_up(spawner: Spawner, wifi_controller: EspWifiController<'static>, wifi: impl Peripheral<P = WIFI> + 'static) -> Result<&'static Stack<WifiDevice<'static, WifiApDevice>>, sunset::Error>
+pub async fn if_up(spawner: Spawner, wifi_controller: EspWifiController<'static>, wifi: impl Peripheral<P = WIFI> + 'static, rng: &mut Rng) -> Result<Stack<'static>, sunset::Error>
 {
     let wifi_init = &*mk_static!(
         EspWifiController<'static>,
         wifi_controller);
     let (wifi_ap_interface, _wifi_sta_interface, controller) = esp_wifi::wifi::new_ap_sta(&wifi_init, wifi).unwrap();
 
-    let config = Config::ipv4_static(StaticConfigV4 {
-        address: Ipv4Cidr::new(Ipv4Address::new(192, 168, 2, 1), 24),
-        gateway: Some(Ipv4Address::from_bytes(&[192, 168, 2, 1])),
+    let gw_ip_addr = Ipv4Addr::new(192, 168, 2, 1);
+
+    let config = embassy_net::Config::ipv4_static(StaticConfigV4 {
+        address: Ipv4Cidr::new(gw_ip_addr, 24),
+        gateway: Some(gw_ip_addr),
         dns_servers: Default::default(),
     });
 
-    let seed = 1234; // very random, very secure seed
+    let seed = (rng.random() as u64) << 32 | rng.random() as u64;
 
     // Init network stack
-    let ap_stack = &*mk_static!(
-        Stack<WifiDevice<'static, WifiApDevice>>,
-        Stack::new(
-            wifi_ap_interface,
-            config,
-            mk_static!(StackResources<3>, StackResources::<3>::new()),
-            seed
-        )
+    let (ap_stack, runner) = embassy_net::new(
+        wifi_ap_interface,
+        config,
+        mk_static!(StackResources<3>, StackResources::<3>::new()),
+        seed,
     );
 
-    spawner.spawn(wifi_up(controller)).unwrap();
-    spawner.spawn(net_up(ap_stack)).unwrap();
+    spawner.spawn(wifi_up(controller)).ok();
+    spawner.spawn(net_up(runner)).ok();
 
     loop {
         println!("Checking if link is up...\n");
@@ -81,10 +79,10 @@ pub async fn if_up(spawner: Spawner, wifi_controller: EspWifiController<'static>
     println!("Connect to the AP `esp-ssh-rs` and point your ssh client to 192.168.2.1");
     println!("Use a static IP in the range 192.168.2.2 .. 192.168.2.255, use gateway 192.168.2.1");
 
-    Ok(&ap_stack)
+    Ok(ap_stack)
 }
 
-pub async fn accept_requests(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>, uart: Uart<'static, Async>) -> Result<(), sunset::Error> {
+pub async fn accept_requests(stack: Stack<'static>, uart: Uart<'static, Async>) -> Result<(), sunset::Error> {
 
     let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
     let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
@@ -132,7 +130,7 @@ async fn wifi_up(mut controller: WifiController<'static>) {
 }
 
 #[embassy_executor::task]
-async fn net_up(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) {
+async fn net_up(mut runner: Runner<'static, WifiDevice<'static, WifiApDevice>>) {
     println!("Bringing up network stack...\n");
-    stack.run().await
+    runner.run().await
 }
