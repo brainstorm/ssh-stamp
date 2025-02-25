@@ -22,7 +22,7 @@ where
 
     let r = async {
         // TODO: could have a single buffer to translate in-place.
-        let mut uart_rx_buf = [0u8; 4096];
+        let mut uart_rx_buf = [0u8; 64];
         loop {
             let n = uart_rx.read_async(&mut uart_rx_buf).await.unwrap(); // TODO: return error
             let uart_rx_buf = &mut uart_rx_buf[..n];
@@ -33,7 +33,7 @@ where
         Ok::<(), sunset::Error>(())
     };
     let w = async {
-        let mut uart_tx_buf = [0u8; 4096];
+        let mut uart_tx_buf = [0u8; 64];
         loop {
             let n = chanr.read(&mut uart_tx_buf).await?;
             dbg!(n);
