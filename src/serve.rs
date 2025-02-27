@@ -115,9 +115,9 @@ pub(crate) async fn handle_ssh_client(
     println!("Setting up serial bridge");
     let bridge = async {
         let ch = chan_pipe.receive().await;
-        let mut stdio = ssh_server.stdio(ch).await?;
-        let mut stdio2 = stdio.clone();
-        serial_bridge(&mut stdio, &mut stdio2, uart).await
+        let stdio = ssh_server.stdio(ch).await?;
+        let stdio2 = stdio.clone();
+        serial_bridge(stdio, stdio2, uart).await
     };
 
     println!("Main select() in handle_ssh_client()");
