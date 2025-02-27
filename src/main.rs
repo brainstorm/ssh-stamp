@@ -11,7 +11,7 @@ use esp_ssh_rs::serve::start;
 
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) -> ! {
-    esp_alloc::heap_allocator!(72 * 1024);
+    esp_alloc::heap_allocator!(size: 72 * 1024);
     esp_println::logger::init_logger_from_env();
 
     let res = start(spawner).await;

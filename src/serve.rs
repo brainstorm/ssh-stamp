@@ -16,10 +16,9 @@ use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 
-use esp_hal::clock::CpuClock;
 use esp_hal::rng::Rng;
 use esp_hal::timer::timg::TimerGroup;
-use esp_hal::uart::{Config, Uart};
+use esp_hal::uart::{Config, RxConfig, Uart};
 use esp_hal::Async;
 
 use heapless::String;
@@ -134,9 +133,7 @@ pub(crate) async fn handle_ssh_client(
 pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
     // System init
     let peripherals = esp_hal::init({
-        let mut config = esp_hal::Config::default();
-        config.cpu_clock = CpuClock::max();
-        config
+        esp_hal::Config::default()
     });
     let mut rng = Rng::new(peripherals.RNG);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
@@ -161,8 +158,7 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
 
     // Espressif-specific UART setup
     let uart_config = Config::default()
-        .with_rx_timeout(1)
-        .with_rx_fifo_full_threshold(16);
+        .with_rx(RxConfig::default().with_fifo_full_threshold(16));
 
     let uart = Uart::new(peripherals.UART1, uart_config)
         .unwrap()
