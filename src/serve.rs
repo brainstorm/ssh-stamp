@@ -116,9 +116,9 @@ pub(crate) async fn handle_ssh_client(
     println!("Setting up serial bridge");
     let bridge = async {
         let ch = chan_pipe.receive().await;
-        let mut stdio = ssh_server.stdio(ch).await?;
-        let mut stdio2 = stdio.clone();
-        serial_bridge(&mut stdio, &mut stdio2, uart).await
+        let stdio = ssh_server.stdio(ch).await?;
+        let stdio2 = stdio.clone();
+        serial_bridge(stdio, stdio2, uart).await
     };
 
     println!("Main select() in handle_ssh_client()");
@@ -161,13 +161,12 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
 
     // Espressif-specific UART setup
     let uart_config = Config::default()
-        .with_rx_timeout(1)
-        .with_rx_fifo_full_threshold(16);
+        .with_rx_timeout(1);
 
     let uart = Uart::new(peripherals.UART1, uart_config)
         .unwrap()
-        .with_rx(peripherals.GPIO11)
-        .with_tx(peripherals.GPIO10)
+        .with_rx(peripherals.GPIO12)
+        .with_tx(peripherals.GPIO13)
         .into_async();
 
     // Start accepting SSH connections and redirect them to the UART later on
