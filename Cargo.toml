@@ -16,7 +16,7 @@ embassy-net = { version = "0.6", features = ["tcp", "udp", "dhcpv4", "medium-eth
 smoltcp = { version = "0.12", default-features = false, features = ["medium-ethernet", "socket-raw"]}
 embassy-time = { version = "0.4" }
 embedded-io-async = "0.6.0"
-esp-alloc = "0.6"
+esp-alloc = "0.7"
 esp-backtrace = { version = "0.15", features = [
 #    "esp32s3",
     "esp32c6",
@@ -28,10 +28,10 @@ esp-backtrace = { version = "0.15", features = [
 # esp-hal-embassy = { version = "0.3", features = ["esp32s3"] }
 # esp-println = { version = "0.11", features = ["esp32s3", "log"] }
 # esp-wifi = { version = "0.8.0", features = ["esp32s3", "wifi", "wifi-default", "utils", "smoltcp", "async", "embassy-net"] }
-esp-hal = { version = "0.23", features = [ "esp32c6" ] }
-esp-hal-embassy = { version = "0.6", features = ["esp32c6"] }
+esp-hal = { version = "1.0.0-beta.0", features = [ "esp32c6", "unstable" ] }
+esp-hal-embassy = { version = "0.7", features = ["esp32c6"] }
 esp-println = { version = "0.13", features = ["esp32c6", "log"] }
-esp-wifi = { version = "0.12", features = ["esp32c6", "wifi", "utils", "esp-alloc"] }
+esp-wifi = { version = "0.13", features = ["esp32c6", "wifi", "esp-alloc"] }
 hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { version = "2", features = ["nightly"] }
@@ -42,9 +42,9 @@ getrandom = { version = "0.2.10", features = ["custom"] }
 embassy-sync = "0.6"
 heapless = "0.8"
 embassy-futures = "0.1"
-edge-dhcp = "0.5.0"
-edge-nal = "0.5.0"
-edge-nal-embassy = "0.5.0"
+edge-dhcp = "0.5"
+edge-nal = "0.5"
+edge-nal-embassy = "0.5"
 
 [profile.dev]
 # Rust debug is too slow.

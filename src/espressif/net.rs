@@ -15,7 +15,7 @@ use esp_hal::Async;
 use esp_println::{dbg, println};
 
 use esp_wifi::wifi::{
-    AccessPointConfiguration, Configuration, WifiApDevice, WifiController, WifiDevice,
+    AccessPointConfiguration, Configuration, WifiDevice, WifiController,
 };
 use esp_wifi::wifi::{WifiEvent, WifiState};
 use esp_wifi::EspWifiController;
@@ -49,8 +49,8 @@ pub async fn if_up(
     rng: &mut Rng,
 ) -> Result<Stack<'static>, sunset::Error> {
     let wifi_init = &*mk_static!(EspWifiController<'static>, wifi_controller);
-    let (wifi_ap_interface, _wifi_sta_interface, controller) =
-        esp_wifi::wifi::new_ap_sta(wifi_init, wifi).unwrap();
+    let (controller, interfaces) =
+        esp_wifi::wifi::new(wifi_init, wifi).unwrap();
 
     let gw_ip_addr_str = GW_IP_ADDR_ENV.unwrap_or("192.168.0.1");
     let gw_ip_addr = Ipv4Addr::from_str(gw_ip_addr_str).expect("failed to parse gateway ip");
@@ -65,7 +65,7 @@ pub async fn if_up(
 
     // Init network stack
     let (ap_stack, runner) = embassy_net::new(
-        wifi_ap_interface,
+        interfaces.ap,
         config,
         mk_static!(StackResources<3>, StackResources::<3>::new()),
         seed,
@@ -145,7 +145,7 @@ async fn wifi_up(mut controller: WifiController<'static>) {
 }
 
 #[embassy_executor::task]
-async fn net_up(mut runner: Runner<'static, WifiDevice<'static, WifiApDevice>>) {
+async fn net_up(mut runner: Runner<'static, WifiDevice<'static>>) {
     println!("Bringing up network stack...\n");
     runner.run().await
 }
