@@ -3,8 +3,8 @@ use embassy_sync::{blocking_mutex::raw::NoopRawMutex, pipe::Pipe};
 use embedded_io_async::{Read, Write};
 
 // Espressif specific crates
-use esp_hal::{uart::{Error::FifoOverflowed, Uart, UartRx}, Async};
-use esp_println::{dbg, println};
+use esp_hal::{uart::{RxError::FifoOverflowed, Uart, UartRx}, Async};
+use esp_println::println;
 
 /// Forwards an incoming SSH connection to/from the local UART, until
 /// the connection drops

@@ -162,8 +162,8 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
 
     let uart = Uart::new(peripherals.UART1, uart_config)
         .unwrap()
-        .with_rx(peripherals.GPIO12)
-        .with_tx(peripherals.GPIO13)
+        .with_rx(peripherals.GPIO11)
+        .with_tx(peripherals.GPIO10)
         .into_async();
 
     // Start accepting SSH connections and redirect them to the UART later on
