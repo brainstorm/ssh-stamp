@@ -158,7 +158,7 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
 
     // Espressif-specific UART setup
     let uart_config = Config::default()
-        .with_rx(RxConfig::default().with_fifo_full_threshold(16));
+        .with_rx(RxConfig::default().with_fifo_full_threshold(16).with_timeout(1));
 
     let uart = Uart::new(peripherals.UART1, uart_config)
         .unwrap()
