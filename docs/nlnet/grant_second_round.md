@@ -28,48 +28,51 @@ Understanding the two exhibits above, one can see how big the appeal is for the 
 on any device can help greatly in repairing efforts. Gathering data from John Deere tractors to your everyday dishwasher finite state machine **over a SSH connection that you own**
 means that you can, with skill, regain control of your devices and keep IoT enshittification at bay... and relay those learnings to the world.
 
-In order to prepare myself and do a better job at the software "breakdown of the main tasks"` ([which I personally find challenging][washing_machine_software_estimation]), 
-I've already spent a fair amount of hours and occasional embedded consulting fees (gladly!) to reach an early prototype that partially matches my original proposal, that is:
+While working on this project I've been indirectly preparing myself for your software "breakdown of the main tasks" ([which I personally find challenging][washing_machine_software_estimation]).
 
-- WIFI AP that bridges UART with SSH writting in safe, robust, no_alloc and no_std Rust.
+I've already spent a fair amount of hours and occasional embedded consulting fees (gladly!) and reached an early prototype that partially matches two points from my original proposal:
 
-In this couple of months journey I encountered HAL (Hardware Abstraction Layer) limitations and debugged issues that didn't occur to me before
-(see [washing_machine_software_estimation][washing_machine_software_estimation]).
+- Wireless AP that bridges UART with SSH **AND** written in memory-safe, `no_alloc` and `no_std` Rust.
+
+In my last few months journey, I encountered many challenges and strange HAL (Hardware Abstraction Layer) limitations while debugging issues that didn't occur to me they'd pose a serious challenge before
+(see [washing_machine_software_estimation][washing_machine_software_estimation] for a good real world analogy).
 
 So with this knowledge, here goes a more precise breakdown of tasks (as of March 2025):
 
-    1. To have a WiFi AP/STA device that a user can SSH into and securely manage any other device with an UART.
-	* Prototype costed me (out of pocket) around 500eur, needs more refinement, so probably should cost no more than 900eur at this point.
+1. To have a WiFi AP/STA device that a user can SSH into and securely manage any other device with an UART.
+	1. Prototype costed me (out of pocket) around 500€, needs more refinement, so probably should cost no more than 900€ at this point.
 
-    2. The device should be relatively effortless to deploy and provision with the required secret key material.
-	* Challenging as there are as many ways to onboard devices as opinions about it. But applyting simplicity and involving third parties in testing, I'd budget this at an additional 800eur.
+2. The device should be relatively effortless to deploy and provision with the required secret key material.
+	1. Challenging as there are as many ways to onboard devices as opinions about it. But applyting simplicity and involving third parties in testing, I'd budget this at an additional 800€.
 
-    3. Written in embedded Rust (ideally no_std and no alloc to reduce memory fragmentation and allow long runtimes without memory issues).
-	* Many of the unsafe issues have been circumvented, but way more work is needed to make this robust.
-		* Espressif UART-DMA serial driver vs Interrupt driver: Implementing the most suitable solution that does not overrun or glitch the UART (has happened), ~700eur
-		* Porting to as many Espressif targets as possible, taking care of memory requirements and setting up HIL (Hardware In the Loop) testing jigs: ~800eur
-		* [Sans-IO refactor][sans-io]: The current prototype needs a cleaner decoupling of finite state machines and IO, but a careful focus on performance, ~1500eur
-		* Run SSH audit with specialised tools such as SSHambles by HDmoore et al: 300eur
+3. Written in embedded Rust (ideally no_std and no alloc to reduce memory fragmentation and allow long runtimes without memory issues).
+	1. Many of the unsafe issues have been circumvented, but way more work is needed to make this robust.
+	2. Espressif UART-DMA serial driver vs Interrupt driver: Implementing the most suitable solution that does not overrun or glitch the UART (has happened), ~700€
+	3. Porting to as many Espressif targets as possible, taking care of memory requirements and setting up HIL (Hardware In the Loop) testing jigs: ~800€
+	4. [Sans-IO refactor][sans-io]: The current prototype needs a cleaner decoupling of finite state machines and IO, but a careful focus on performance, ~1500€
+	5. Run SSH audit with specialised tools such as SSHambles by HDmoore et al: 300€
 
 
 This breakdown doesn't include designing and producing the PCB, only developing and testing the software on its target hardware and fixing the bugs and challenges found. 
-It doesn't reach the asked-for 8000eur either from the original submission since I'm fully aware that the rest of the cost will be spent in-between those tasks (unknown unknowns)... hardware IS hard.
+It doesn't reach the asked-for 8000€ either from the original submission since I'm fully aware that the rest of the cost will be spent in-between those tasks (unknown unknowns). **Hardware IS hard. Software on constrained hardware is ALSO hard(er?)**.
 
-Last but not least, I'm very open to adjust to any amount that NLnet considers best suited for this project's "urgency, relevance and value for money". I believe in this project and I'm commited to push it to existence.
-For now I'm keeping this project a bit under wraps (private repository) until it matures a bit more, in the hopes of at least economically breaking even with it and learning a bit more about the manufacturing business side of it.
+Last but not least, I'm very open to adjusting my proposed grant amount to another one that NLnet considers best suited for this project's "urgency, relevance and value for money". I believe in this project and I'm commited to push it into existence.
+For now I'm keeping this project under wraps (private repository) until it matures a bit more, in the hopes of at least economically breaking even with it and learning more about the realities of the manufacturing business side of it.
 
-Full disclosure, my current model is "closed-then-open" depending on gauged interest (for lack of a better name), [as I proposed a few months ago to NanoKVM authors (seems to have worked well for them so far?)][closed-then-open].
+Full disclosure, my current model is "closed-then-open" depending on gauged public interest (for lack of a better name), [as I proposed a few months ago to NanoKVM authors (seems to have worked well for them so far?)][closed-then-open].
 
-To be clear, I don't particulary like my own proposed "closed-then-source" model, but I think it can play well with the realities of OSS developers and in particular hardware OSS developers. I've never managed to
-monetise hardware myself independently, so my highest hope is NLNet enabling me to change that statement?
+To be frank, I don't particulary like my own proposed "closed-then-source" model to Sipeed's NanoKVM, but I think it can play well with the realities of OSS developers and in particular hardware open source developers. I've never managed to
+monetise hardware myself independently, so my highest hope here is NLNet enabling me to change that statement and going forward?
 
-If and when I get accepted in this grant, I'll publish all current source code in a permissive OSS license from day 1.
+And to be consistent with my remarks, if and when I get accepted in this grant, I'll publish all current source code in a permissive OSS license immediately, from day 1.
 
 Best regards,
-Roman
+
+Roman Valls Guimera (a.k.a brainstorm)
 
 
 [washing_machine_software_estimation]: https://www.cosive.com/blog/my-washing-machine-refreshed-my-thinking-on-software-effort-estimation
 [stm8_reverse_engineering]: https://github.com/brainstorm/treadmill-re
 [sans-io]: https://www.firezone.dev/blog/sans-io
 [closed-then-open]: https://github.com/sipeed/NanoKVM/issues/1#issuecomment-2246900903
+[sshamble]: https://www.runzero.com/sshamble/
