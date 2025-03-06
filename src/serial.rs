@@ -6,6 +6,11 @@ use embedded_io_async::{Read, Write};
 use esp_hal::{uart::{RxError::FifoOverflowed, Uart, UartRx}, Async};
 use esp_println::println;
 
+#[embassy_executor::task]
+async fn uart_task(instance: BufferedUart<'static>) {
+  instance.run();
+}
+
 /// Forwards an incoming SSH connection to/from the local UART, until
 /// the connection drops
 pub(crate) async fn serial_bridge(
