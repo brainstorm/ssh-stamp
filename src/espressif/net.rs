@@ -10,8 +10,6 @@ use esp_hal::peripheral::Peripheral;
 use esp_hal::peripherals::WIFI;
 
 use esp_hal::rng::Rng;
-use esp_hal::uart::Uart;
-use esp_hal::Async;
 use esp_println::{dbg, println};
 
 use esp_wifi::wifi::{
@@ -29,6 +27,8 @@ use edge_dhcp::{
 };
 use edge_nal::UdpBind;
 use edge_nal_embassy::{Udp, UdpBuffers};
+
+use super::buffered_uart::BufferedUart;
 
 const GW_IP_ADDR_ENV: Option<&'static str> = option_env!("GATEWAY_IP");
 
@@ -94,7 +94,7 @@ pub async fn if_up(
 
 pub async fn accept_requests(
     stack: Stack<'static>,
-    uart: Uart<'static, Async>,
+    uart: &BufferedUart,
 ) -> Result<(), sunset::Error> {
     let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
     let tx_buffer = mk_static!([u8; 1536], [0; 1536]);

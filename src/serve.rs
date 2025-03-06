@@ -2,24 +2,18 @@ use core::option::Option::{self, None, Some};
 use core::result::Result;
 use core::writeln;
 
-use crate::espressif::net::{accept_requests, if_up};
-use crate::espressif::rng;
 
+use crate::espressif::buffered_uart::BufferedUart;
 use crate::keys;
 use crate::serial::serial_bridge;
 
 // Embassy
-use embassy_executor::Spawner;
 use embassy_futures::select::{select3, Either3};
 use embassy_net::tcp::TcpSocket;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 
-use esp_hal::rng::Rng;
-use esp_hal::timer::timg::TimerGroup;
-use esp_hal::uart::{Config, RxConfig, Uart};
-use esp_hal::Async;
 
 use heapless::String;
 use sunset::{error, ChanHandle, ServEvent, SignKey};
@@ -96,7 +90,7 @@ async fn connection_loop(
 
 pub(crate) async fn handle_ssh_client(
     stream: &mut TcpSocket<'_>,
-    uart: Uart<'static, Async>,
+    uart: &BufferedUart,
 ) -> Result<(), sunset::Error> {
     // Spawn network tasks to handle incoming connections with demo_common::session()
     let mut inbuf = [0u8; 4096];
@@ -127,48 +121,5 @@ pub(crate) async fn handle_ssh_client(
         Either3::Third(r) => r,
     }?;
 
-    Ok(())
-}
-
-pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
-    // System init
-    let peripherals = esp_hal::init({
-        esp_hal::Config::default()
-    });
-    let mut rng = Rng::new(peripherals.RNG);
-    let timg0 = TimerGroup::new(peripherals.TIMG0);
-
-    rng::register_custom_rng(rng);
-
-    cfg_if::cfg_if! {
-       if #[cfg(feature = "esp32")] {
-            let timg1 = TimerGroup::new(peripherals.TIMG1);
-            esp_hal_embassy::init(timg1.timer0);
-       } else {
-           use esp_hal::timer::systimer::SystemTimer;
-           let systimer = SystemTimer::new(peripherals.SYSTIMER);
-           esp_hal_embassy::init(systimer.alarm0);
-       }
-    }
-
-    let wifi_controller = esp_wifi::init(timg0.timer0, rng, peripherals.RADIO_CLK).unwrap();
-
-    // Bring up the network interface and start accepting SSH connections.
-    let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng).await?;
-
-    // Espressif-specific UART setup
-    let uart_config = Config::default()
-        .with_rx(RxConfig::default().with_fifo_full_threshold(16).with_timeout(1));
-
-    let uart = Uart::new(peripherals.UART1, uart_config)
-        .unwrap()
-        .with_rx(peripherals.GPIO11)
-        .with_tx(peripherals.GPIO10)
-        .into_async();
-
-    // Start accepting SSH connections and redirect them to the UART later on
-    accept_requests(tcp_stack, uart).await?;
-
-    // All is fine :)
     Ok(())
 }
