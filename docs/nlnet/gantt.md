@@ -13,11 +13,12 @@ gantt
         Provisioning            :      prov, after uart_ssh, 16h
         OTA updates             :      ota, after prov, 12h
     section Docs
-        usage docs              :      usage_docs, after ota, 10h
-        dev docs                :      dev_docs, after ota, 8h
+        usage docs              :      usage_docs, after ota, 4h
+        dev docs                :      dev_docs, after ota, 2h
     section Robustness
         #forbid(unsafe)         :      no_unsafe, after ota, 12h
         UART perf               :      uart_intr, after uart_ssh, 12h
+        sans-io refactor        :      sans_io, after uart_intr, 16h
     section Multi-target
         Espressif chips         :      all_espressif, after no_unsafe, 12h
         Other chip1             :      chip1, after all_espressif, 20h
