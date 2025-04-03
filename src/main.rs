@@ -7,7 +7,7 @@ use esp_backtrace as _;
 use esp_println::println;
 
 use embassy_executor::Spawner;
-use esp_ssh_rs::serve::start;
+use ssh_stamp::serve::start;
 
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) -> ! {

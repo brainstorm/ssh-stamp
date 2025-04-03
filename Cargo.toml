@@ -2,9 +2,9 @@
 # https://github.com/card-io-ecg/card-io-fw/blob/main/Cargo.toml
 
 [package]
-name = "esp-ssh-rs"
+name = "ssh-stamp"
 version = "0.1.0"
-authors = ["Roman Valls Guimera <brainstorm@users.noreply.github.com>"]
+authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
 

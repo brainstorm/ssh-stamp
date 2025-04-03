@@ -18,7 +18,7 @@
             "coreConfigs": [
                 {
                     "coreIndex": 0,
-                    "programBinary": "target/riscv32imac-unknown-none-elf/debug/esp-ssh-rs",
+                    "programBinary": "target/riscv32imac-unknown-none-elf/debug/ssh-stamp",
                     "svdFile": "${workspaceFolder}/docs/svd/esp32c6.svd"
                 }
             ]
@@ -33,7 +33,7 @@
             "coreConfigs": [
                 {
                     "coreIndex": 0,
-                    "programBinary": "target/riscv32imac-unknown-none-elf/debug/esp-ssh-rs",
+                    "programBinary": "target/riscv32imac-unknown-none-elf/debug/ssh-stamp",
                     "svdFile": "${workspaceFolder}/docs/svd/esp32c6.svd"
                 }
             ]

@@ -21,7 +21,7 @@ For (Linux) embedded systems, having such a "supervisor SSH board" could mean th
 serial console (and reporting it) versus "we're just rebooting the router because it hangs sometimes" and carry on with limping, broken, potentially vulnerable software.
 
 I have a [keen interest in reverse engineering][stm8_reverse_engineering] and understanding how things work. I believe that adding out of band access to (proprietary) 
-consumer electronics should be easier and can unlock many current blackboxes present in our lives. Adding the esp-ssh-rs "stamp" PCB on a domestic treadmill, like the
+consumer electronics should be easier and can unlock many current blackboxes present in our lives. Adding the SSH Stamp PCB on a domestic treadmill, like the
 one I linked above and presented in r2con, means that hackers around the world could band together and decipher complex devices and interfaces as long as a SSH client is available.
 
 Understanding the two exhibits above, one can see how big the appeal is for the Right to Repair situation worldwide: placing a relatively low power PCB

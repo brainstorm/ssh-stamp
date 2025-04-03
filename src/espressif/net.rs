@@ -85,7 +85,7 @@ pub async fn if_up(
 
     // TODO: Use wifi_manager instead?
     println!(
-        "Connect to the AP `esp-ssh-rs` as a DHCP client with IP: {}",
+        "Connect to the AP `ssh-stamp` as a DHCP client with IP: {}",
         gw_ip_addr_str
     );
 
@@ -132,7 +132,7 @@ async fn wifi_up(mut controller: WifiController<'static>) {
         }
         if !matches!(controller.is_started(), Ok(true)) {
             let client_config = Configuration::AccessPoint(AccessPointConfiguration {
-                ssid: "esp-ssh-rs".try_into().unwrap(),
+                ssid: "ssh-stamp".try_into().unwrap(),
                 ..Default::default()
             });
             controller.set_configuration(&client_config).unwrap();
