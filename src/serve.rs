@@ -156,18 +156,8 @@ pub async fn start(spawner: Spawner) -> Result<(), sunset::Error> {
     // Bring up the network interface and start accepting SSH connections.
     let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng).await?;
 
-    // Espressif-specific UART setup
-    let uart_config = Config::default()
-        .with_rx(RxConfig::default().with_fifo_full_threshold(16).with_timeout(1));
-
-    let uart = Uart::new(peripherals.UART1, uart_config)
-        .unwrap()
-        .with_rx(peripherals.GPIO11)
-        .with_tx(peripherals.GPIO10)
-        .into_async();
-
-    // Start accepting SSH connections and redirect them to the UART later on
-    accept_requests(tcp_stack, uart).await?;
+    // Start accepting SSH connections
+    accept_requests(tcp_stack).await?;
 
     // All is fine :)
     Ok(())

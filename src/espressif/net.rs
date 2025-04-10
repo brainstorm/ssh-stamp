@@ -94,7 +94,6 @@ pub async fn if_up(
 
 pub async fn accept_requests(
     stack: Stack<'static>,
-    uart: Uart<'static, Async>,
 ) -> Result<(), sunset::Error> {
     let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
     let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
@@ -114,7 +113,7 @@ pub async fn accept_requests(
     }
 
     println!("Connected, port 22");
-    crate::serve::handle_ssh_client(&mut socket, uart).await?;
+    crate::serve::handle_ssh_client(&mut socket).await?;
     //}
 
     Ok(()) // FIXME: All is fine but not really if we lose connection only once... removed loop to deal with uart copy issues later

@@ -1,22 +1,8 @@
-// use esp_hal::uart::{Config, Uart};
-// use esp_hal::Async;
-// use esp_hal::peripherals::Peripherals;
-
-// pub(crate) fn init_uart(peripherals: UART1) -> Uart<'static, Async> {
-//     let config = Config::default().with_rx_timeout(1);
-
-//     Uart::new(peripherals.UART1, config)
-//         .unwrap()
-//         .with_rx(peripherals.GPIO11)
-//         .with_tx(peripherals.GPIO10)
-//         .into_async()
-// }
-
 use embassy_executor::Spawner;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pipe::Pipe};
 use embassy_futures::select::select;
 use esp_hal::Async;
-use esp_hal::uart::Uart;
+use esp_hal::uart::{Config, RxConfig, Uart};
 
 const RD_BUF_SZ: usize = 512;
 const WR_BUF_SZ: usize = 256;
@@ -29,8 +15,15 @@ struct BufferedUart<'a> {
 
 impl BufferedUart<'static> {
     pub fn uart_init(spawner: Spawner) -> Self {
+        // Espressif-specific UART setup
+        let uart_config = Config::default()
+            .with_rx(RxConfig::default().with_fifo_full_threshold(16).with_timeout(1));
 
-
+        let uart = Uart::new(peripherals.UART1, uart_config)
+            .unwrap()
+            .with_rx(peripherals.GPIO11)
+            .with_tx(peripherals.GPIO10)
+            .into_async();
     }
 
     // Call this from inside the embassy Task
