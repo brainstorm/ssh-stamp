@@ -1,28 +1,12 @@
-// use esp_hal::uart::{Config, Uart};
-// use esp_hal::Async;
-// use esp_hal::peripherals::Peripherals;
-
-// pub(crate) fn init_uart(peripherals: UART1) -> Uart<'static, Async> {
-//     let config = Config::default().with_rx_timeout(1);
-
-//     Uart::new(peripherals.UART1, config)
-//         .unwrap()
-//         .with_rx(peripherals.GPIO11)
-//         .with_tx(peripherals.GPIO10)
-//         .into_async()
-// }
-
-use embassy_executor::Spawner;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pipe::Pipe};
 use embassy_futures::select::select;
-use embedded_io_async;
 use esp_hal::Async;
-use esp_hal::uart::{ Uart, UartRx, UartTx };
+use esp_hal::uart::{ UartRx, UartTx };
 
 const RD_BUF_SZ: usize = 512;
 const WR_BUF_SZ: usize = 256;
 
-struct BufferedUart<'a> {
+pub struct BufferedUart<'a> {
     uart_rx: UartRx<'a, Async>,
     uart_tx: UartTx<'a, Async>,
     from_uart: Pipe<CriticalSectionRawMutex, RD_BUF_SZ>,
@@ -30,9 +14,8 @@ struct BufferedUart<'a> {
 }
 
 impl<'a> BufferedUart<'a> {
-    pub fn new(uart: impl Into<Uart<'a, Async>>) -> Self {
-        let (mut uart_rx, mut uart_tx) = self.uart.into().split();
-        return BufferedUart { uart_rx, uart_tx, from_uart: Pipe::new(), to_uart: Pipe::new() }
+    pub fn new(self) -> Self {
+        return BufferedUart { uart_rx: self.uart_rx, uart_tx: self.uart_tx, from_uart: Pipe::new(), to_uart: Pipe::new() }
     }
 
     // Call this from inside the embassy Task

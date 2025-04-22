@@ -5,6 +5,7 @@ use embedded_io_async::{Read, Write};
 // Espressif specific crates
 use esp_hal::{uart::{RxError::FifoOverflowed, Uart, UartRx}, Async};
 use esp_println::println;
+use crate::espressif::serial::BufferedUart;
 
 #[embassy_executor::task]
 async fn uart_task(instance: BufferedUart<'static>) {
