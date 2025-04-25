@@ -44,7 +44,7 @@ cargo build --release
 Running on the target:
 
 ```
-cargo install cargo-espflash
+cargo install espflash
 cargo run --release
 ```
 
