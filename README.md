@@ -1,8 +1,12 @@
 # SSH Stamp
 
+Sponsored by:
+
+![nlnet_zero_commons][nlnet_zero_commons]
+
 # ⚠️ WARNING: Pre-alpha PoC quality, DO NOT use in production. Currently contains highly unsafe business logic auth issues (both password and key management handlers need to be fixed). 
 
-# ⚠️ WARNING: Do not file CVEs reports since deficiencies are very much known at this point in time and they'll be worked on soon as part of [the NLNet SSH-Stamp research and development grant][nlnet-grant] ;)
+# ⚠️ WARNING: Do not file CVEs reports since deficiencies are very much known at this point in time and they'll be worked on soon as part of [this NLNet SSH-Stamp research and development grant][nlnet-grant] ;)
 
 Expect panics, lost bytes on the UART and other tricky UX issues, we are working on it, pull-requests are accepted too!
 
@@ -44,11 +48,27 @@ cargo install cargo-espflash
 cargo run --release
 ```
 
+# Example usecases
+
+The following depicts a typical OpenWrt router with a (prototype) SSH Stamp connected to its UART. After ssh-ing into the SSH Stamp, one can interact with the router's UART "off band", to i.e:
+
+1. Recover from OpenWrt not booting without needing to open up the case and connect a wired TTL2USB converter. A simple SSH-based <acronym title="Board Management Controller">BMC</acronym>.
+2. Capture kernel panics during your router's (ab)normal operation. I.e: [to debug a buggy wireless driver][openwrt_mediatek_no_monitor].
+3. Re-provision the whole OpenWrt installation without having to physically unmount the device from its place, all from your wireless SSH shell comfort.
+
+Here are some PoC shots:
+
+![physical_setup](./docs/img/ssh_stamp_openwrt_setup.png)
+![connection](./docs/img/connecting_to_ssh_stamp.png)
+![openwrt_hello](./docs/img/openwrt_ssh_helloworld.png)
+
 # Generate SBOM
 
 ```
 cargo install cargo-cyclonedx
-cargo cyclonedx -f json
+cargo cyclonedx -f json --manifest-path ./docs/
 ```
 
 [nlnet-grant]: https://nlnet.nl/project/SSH-Stamp/
+[openwrt_mediatek_no_monitor]: https://github.com/openwrt/openwrt/issues/16279
+[nlnet_zero_commons]: ./docs/nlnet/zero_commons_logo.svg
