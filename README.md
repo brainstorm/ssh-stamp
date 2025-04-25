@@ -1,5 +1,13 @@
 # SSH Stamp
 
+# ⚠️ WARNING: Pre-alpha PoC quality, DO NOT use in production. Currently contains highly unsafe business logic auth issues (both password and key management handlers need to be fixed). 
+
+# ⚠️ WARNING: Do not file CVEs reports since deficiencies are very much known at this point in time and they'll be worked on soon as part of [the NLNet SSH-Stamp research and development grant][nlnet-grant] ;)
+
+Expect panics, lost bytes on the UART and other tricky UX issues, we are working on it, pull-requests are accepted too!
+
+## Description
+
 Your everyday SSH secured serial access.
 
 The **SSH Stamp** is a secure wireless to UART bridge
@@ -35,3 +43,12 @@ Running on the target:
 cargo install cargo-espflash
 cargo run --release
 ```
+
+# Generate SBOM
+
+```
+cargo install cargo-cyclonedx
+cargo cyclonedx -f json
+```
+
+[nlnet-grant]: https://nlnet.nl/project/SSH-Stamp/
