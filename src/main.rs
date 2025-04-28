@@ -8,7 +8,6 @@ use esp_hal::{gpio::AnyPin, interrupt::{software::SoftwareInterruptControl, Prio
 use esp_hal_embassy::InterruptExecutor;
 
 use embassy_executor::Spawner;
-use esp_println::println;
 use ssh_stamp::espressif::{net::{accept_requests, if_up}, rng, buffered_uart::BufferedUart};
 use static_cell::StaticCell;
 
@@ -49,11 +48,7 @@ async fn main(spawner: Spawner) -> ! {
     let interrupt_spawner = interrupt_exeuctor.start(Priority::Priority10);
     interrupt_spawner.spawn(uart_task(uart_buf, peripherals.UART1, peripherals.GPIO11.into(), peripherals.GPIO10.into())).unwrap();
 
-    loop {
-        println!("Waiting for SSH connection...");
-        accept_requests(tcp_stack, uart_buf).await.expect("failure handling todo");
-        // TODO: handle error if a connection returns an error?
-    }
+    accept_requests(tcp_stack, uart_buf).await;
 }
 
 static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();

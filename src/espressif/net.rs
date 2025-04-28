@@ -94,31 +94,34 @@ pub async fn if_up(
 
 pub async fn accept_requests(
     stack: Stack<'static>,
-    uart: &BufferedUart,
-) -> Result<(), sunset::Error> {
+    uart: &BufferedUart) -> ! {
     let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
     let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
 
-    //loop {
-    let mut socket = TcpSocket::new(stack, rx_buffer, tx_buffer);
+    loop {
+        let mut socket = TcpSocket::new(stack, rx_buffer, tx_buffer);
 
-    if let Err(e) = socket
-        .accept(IpListenEndpoint {
-            addr: None,
-            port: 22,
-        })
-        .await
-    {
-        println!("connect error: {:?}", e);
-        //continue;
+        println!("Waiting for SSH client...");
+
+        if let Err(e) = socket
+            .accept(IpListenEndpoint {
+                addr: None,
+                port: 22,
+            })
+            .await
+        {
+            println!("connect error: {:?}", e);
+            continue;
+        }
+
+        println!("Connected, port 22");
+        match crate::serve::handle_ssh_client(&mut socket, uart).await {
+            Ok(_) => (),
+            Err(e) => {
+                println!("SSH client fatal error: {}", e);
+            },
+        };
     }
-
-    println!("Connected, port 22");
-    crate::serve::handle_ssh_client(&mut socket, uart).await?;
-    //}
-
-    Ok(()) // FIXME: All is fine but not really if we lose connection only once... removed loop to deal with uart copy issues later
-           // Probably best handled by some kind of supervisor task and signals instead of a loop anyway?
 }
 
 #[embassy_executor::task]
