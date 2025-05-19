@@ -45,7 +45,13 @@ async fn main(spawner: Spawner) -> ! {
     let uart_buf = UART_BUF.init_with(BufferedUart::new);
     let software_interrupts = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     let interrupt_exeuctor = INT_EXECUTOR.init_with(|| InterruptExecutor::new(software_interrupts.software_interrupt0));
-    let interrupt_spawner = interrupt_exeuctor.start(Priority::Priority10);
+    cfg_if::cfg_if! {
+        if #[cfg(any(feature = "esp32", feature = "esp32s2", feature = "esp32s3"))] {
+            let interrupt_spawner = interrupt_exeuctor.start(Priority::Priority1);
+        } else {
+            let interrupt_spawner = interrupt_exeuctor.start(Priority::Priority10);
+        }
+    }
     interrupt_spawner.spawn(uart_task(uart_buf, peripherals.UART1, peripherals.GPIO11.into(), peripherals.GPIO10.into())).unwrap();
 
     accept_requests(tcp_stack, uart_buf).await;

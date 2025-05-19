@@ -33,12 +33,41 @@ A "low level to SSH Swiss army knife".
 
 Rust versions are controlled via `rust-toolchain.toml` and the equivalent defined on the CI workflow.
 
-On a fresh system the following should be enough to build and run on an ESP32-C6 dev board.
-
+Required for all targets:
 ```
 rustup toolchain install stable --component rust-src
+```
+
+On a fresh system the following should be enough to build and run on an ESP32-C6 dev board.
+```
 rustup target add riscv32imac-unknown-none-elf
-cargo build --release
+cargo build-esp32c6
+```
+
+Building for ESP32-C2 / ESP32-C3:
+```
+rustup target add riscv32imc-unknown-none-elf
+cargo build-esp32c2
+cargo build-esp32c3
+```
+
+Building for ESP32 / ESP32-S2 / ESP32-S3 (Xtensa Cores) -
+Install esp toolchain first: https://github.com/esp-rs/espup
+```
+cargo install espup
+espup install
+$HOME/export-esp.sh
+rustup override set esp
+cargo build-esp32
+cargo build-esp32s2
+cargo build-esp32s3
+```
+
+Alternatively to not use rustup override:
+```
+cargo +esp build-esp32
+cargo +esp build-esp32s2
+cargo +esp build-esp32s3
 ```
 
 Running on the target:

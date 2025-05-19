@@ -18,20 +18,14 @@ embassy-time = { version = "0.4" }
 embedded-io-async = "0.6.0"
 esp-alloc = "0.7"
 esp-backtrace = { version = "0.15", features = [
-#    "esp32s3",
-    "esp32c6",
     "exception-handler",
     "panic-handler",
     "println",
 ] }
-# esp-hal = { version = "0.20", features = [ "esp32s3", "async" ] }
-# esp-hal-embassy = { version = "0.3", features = ["esp32s3"] }
-# esp-println = { version = "0.11", features = ["esp32s3", "log"] }
-# esp-wifi = { version = "0.8.0", features = ["esp32s3", "wifi", "wifi-default", "utils", "smoltcp", "async", "embassy-net"] }
-esp-hal = { version = "1.0.0-beta.0", features = [ "esp32c6", "unstable" ] }
-esp-hal-embassy = { version = "0.7", features = ["esp32c6"] }
-esp-println = { version = "0.13", features = ["esp32c6", "log"] }
-esp-wifi = { version = "0.13", features = ["esp32c6", "wifi", "esp-alloc"] }
+esp-hal = { version = "1.0.0-beta.0", features = [ "unstable" ] }
+esp-hal-embassy = { version = "0.7"}
+esp-println = { version = "0.13", features = ["log"] }
+esp-wifi = { version = "0.13", features = ["wifi", "esp-alloc"] }
 hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { version = "2", features = ["nightly"] }
@@ -61,4 +55,47 @@ opt-level = 3
 overflow-checks = false
 
 [features]
-esp32 = []
+
+# MCU options
+esp32 = [
+    "esp-hal/esp32",
+    "esp-backtrace/esp32",
+    "esp-wifi/esp32",
+    "esp-hal-embassy/esp32",
+    "esp-println/esp32",
+]
+esp32c2 = [
+    "esp-hal/esp32c2",
+    "esp-backtrace/esp32c2",
+    "esp-wifi/esp32c2",
+    "esp-hal-embassy/esp32c2",
+    "esp-println/esp32c2",
+]
+esp32c3 = [
+    "esp-hal/esp32c3",
+    "esp-backtrace/esp32c3",
+    "esp-wifi/esp32c3",
+    "esp-hal-embassy/esp32c3",
+    "esp-println/esp32c3",
+]
+esp32c6 = [
+    "esp-hal/esp32c6",
+    "esp-backtrace/esp32c6",
+    "esp-wifi/esp32c6",
+    "esp-hal-embassy/esp32c6",
+    "esp-println/esp32c6",
+]
+esp32s2 = [
+    "esp-hal/esp32s2",
+    "esp-backtrace/esp32s2",
+    "esp-wifi/esp32s2",
+    "esp-hal-embassy/esp32s2",
+    "esp-println/esp32s2",
+]
+esp32s3 = [
+    "esp-hal/esp32s3",
+    "esp-backtrace/esp32s3",
+    "esp-wifi/esp32s3",
+    "esp-hal-embassy/esp32s3",
+    "esp-println/esp32s3",
+]
