@@ -17,9 +17,7 @@ async fn main(spawner: Spawner) -> ! {
     esp_println::logger::init_logger_from_env();
 
     // System init
-    let peripherals = esp_hal::init({
-        esp_hal::Config::default()
-    });
+    let peripherals = esp_hal::init(esp_hal::Config::default());
     let mut rng = Rng::new(peripherals.RNG);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
 
