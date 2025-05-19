@@ -49,7 +49,7 @@ jobs:
         run: cargo +${{ matrix.device.toolchain }} build-${{ matrix.device.soc }}
 
       - name: Check lints and format
-        if: ${{ !contains(fromJson('["esp32c6"]'), matrix.device.soc) }}
+        if: ${{ contains(fromJson('["esp32c6"]'), matrix.device.soc) }}
         run: |
-          cargo +${{ matrix.device.toolchain }} clippy --features ${matrix.device.soc} --target riscv32imac-unknown-none-elf -- -D warnings
+          cargo +${{ matrix.device.toolchain }} clippy --features ${{ matrix.device.soc }} --target riscv32imac-unknown-none-elf -- -D warnings
           cargo +${{ matrix.device.toolchain }} fmt -- --check
