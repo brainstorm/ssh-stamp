@@ -4,11 +4,22 @@
 use core::marker::Sized;
 use esp_alloc as _;
 use esp_backtrace as _;
-use esp_hal::{gpio::AnyPin, interrupt::{software::SoftwareInterruptControl, Priority}, peripherals::UART1, rng::Rng, timer::timg::TimerGroup, uart::{Config, RxConfig, Uart}};
+use esp_hal::{
+    gpio::AnyPin,
+    interrupt::{software::SoftwareInterruptControl, Priority},
+    peripherals::UART1,
+    rng::Rng,
+    timer::timg::TimerGroup,
+    uart::{Config, RxConfig, Uart},
+};
 use esp_hal_embassy::InterruptExecutor;
 
 use embassy_executor::Spawner;
-use ssh_stamp::espressif::{net::{accept_requests, if_up}, rng, buffered_uart::BufferedUart};
+use ssh_stamp::espressif::{
+    buffered_uart::BufferedUart,
+    net::{accept_requests, if_up},
+    rng,
+};
 use static_cell::StaticCell;
 
 #[esp_hal_embassy::main]
@@ -37,12 +48,15 @@ async fn main(spawner: Spawner) -> ! {
     let wifi_controller = esp_wifi::init(timg0.timer0, rng, peripherals.RADIO_CLK).unwrap();
 
     // Bring up the network interface and start accepting SSH connections.
-    let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng).await.unwrap();
+    let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng)
+        .await
+        .unwrap();
 
     // Set up software buffered UART to run in a higher priority InterruptExecutor
     let uart_buf = UART_BUF.init_with(BufferedUart::new);
     let software_interrupts = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
-    let interrupt_exeuctor = INT_EXECUTOR.init_with(|| InterruptExecutor::new(software_interrupts.software_interrupt0));
+    let interrupt_exeuctor =
+        INT_EXECUTOR.init_with(|| InterruptExecutor::new(software_interrupts.software_interrupt0));
     cfg_if::cfg_if! {
         if #[cfg(any(feature = "esp32", feature = "esp32s2", feature = "esp32s3"))] {
             let interrupt_spawner = interrupt_exeuctor.start(Priority::Priority1);
@@ -65,10 +79,18 @@ static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();
 static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
 
 #[embassy_executor::task]
-async fn uart_task(buffer: &'static BufferedUart, uart_periph: UART1, rx_pin: AnyPin, tx_pin: AnyPin) {
+async fn uart_task(
+    buffer: &'static BufferedUart,
+    uart_periph: UART1,
+    rx_pin: AnyPin,
+    tx_pin: AnyPin,
+) {
     // Hardware UART setup
-    let uart_config = Config::default()
-        .with_rx(RxConfig::default().with_fifo_full_threshold(16).with_timeout(1));
+    let uart_config = Config::default().with_rx(
+        RxConfig::default()
+            .with_fifo_full_threshold(16)
+            .with_timeout(1),
+    );
 
     let uart = Uart::new(uart_periph, uart_config)
         .unwrap()
