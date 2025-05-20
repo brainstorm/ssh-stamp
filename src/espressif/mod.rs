@@ -1,3 +1,3 @@
+pub mod buffered_uart;
 pub mod net;
 pub mod rng;
-pub mod buffered_uart;

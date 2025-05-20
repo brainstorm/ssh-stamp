@@ -2,8 +2,8 @@ use embassy_futures::select::select;
 use embedded_io_async::{Read, Write};
 
 // Espressif specific crates
-use esp_println::println;
 use crate::espressif::buffered_uart::BufferedUart;
+use esp_println::println;
 
 /// Forwards an incoming SSH connection to/from the local UART, until
 /// the connection drops
@@ -11,17 +11,18 @@ pub(crate) async fn serial_bridge(
     chanr: impl Read<Error = sunset::Error>,
     chanw: impl Write<Error = sunset::Error>,
     uart: &BufferedUart,
-) -> Result<(), sunset::Error>
-{
+) -> Result<(), sunset::Error> {
     println!("Starting serial <--> SSH bridge");
 
-    select(uart_to_ssh(uart, chanw),
-           ssh_to_uart(chanr, uart)).await;
+    select(uart_to_ssh(uart, chanw), ssh_to_uart(chanr, uart)).await;
     println!("Stopping serial <--> SSH bridge");
     Ok(())
 }
 
-async fn uart_to_ssh(uart_buf: &BufferedUart, mut chanw: impl Write<Error = sunset::Error>) -> Result<(), sunset::Error> {
+async fn uart_to_ssh(
+    uart_buf: &BufferedUart,
+    mut chanw: impl Write<Error = sunset::Error>,
+) -> Result<(), sunset::Error> {
     let mut ssh_tx_buf = [0u8; 512];
     loop {
         let n = uart_buf.read(&mut ssh_tx_buf).await;
@@ -29,7 +30,10 @@ async fn uart_to_ssh(uart_buf: &BufferedUart, mut chanw: impl Write<Error = suns
     }
 }
 
-async fn ssh_to_uart(mut chanr: impl Read<Error = sunset::Error>, uart_buf: &BufferedUart) -> Result<(), sunset::Error> {
+async fn ssh_to_uart(
+    mut chanr: impl Read<Error = sunset::Error>,
+    uart_buf: &BufferedUart,
+) -> Result<(), sunset::Error> {
     let mut uart_tx_buf = [0u8; 64];
     loop {
         let n = chanr.read(&mut uart_tx_buf).await?;
