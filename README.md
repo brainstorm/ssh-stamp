@@ -36,22 +36,26 @@ Rust versions are controlled via `rust-toolchain.toml` and the equivalent define
 Required for all targets:
 ```
 rustup toolchain install stable --component rust-src
+cargo install espflash
 ```
 
 On a fresh system the following should be enough to build and run on an ESP32-C6 dev board.
 ```
 rustup target add riscv32imac-unknown-none-elf
 cargo build-esp32c6
+cargo run-esp32c6
 ```
 
-Building for ESP32-C2 / ESP32-C3:
+Build and run for ESP32-C2 / ESP32-C3:
 ```
 rustup target add riscv32imc-unknown-none-elf
 cargo build-esp32c2
 cargo build-esp32c3
+cargo run-esp32c2
+cargo run-esp32c3
 ```
 
-Building for ESP32 / ESP32-S2 / ESP32-S3 (Xtensa Cores) -
+Build for ESP32 / ESP32-S2 / ESP32-S3 (Xtensa Cores) -
 Install esp toolchain first: https://github.com/esp-rs/espup
 ```
 cargo install espup
@@ -62,6 +66,12 @@ cargo build-esp32
 cargo build-esp32s2
 cargo build-esp32s3
 ```
+Running on the target:
+```
+cargo run-esp32
+cargo run-esp32s2
+cargo run-esp32s3
+```
 
 Alternatively to not use rustup override:
 ```
@@ -71,10 +81,10 @@ cargo +esp build-esp32s3
 ```
 
 Running on the target:
-
 ```
-cargo install espflash
-cargo run --release
+cargo +esp run-esp32
+cargo +esp run-esp32s2
+cargo +esp run-esp32s3
 ```
 
 # Example usecases
