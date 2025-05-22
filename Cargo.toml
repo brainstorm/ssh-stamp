@@ -118,11 +118,3 @@ esp32s3 = [
     "esp-println/esp32s3",
     "embassy-executor/task-arena-size-40960",
 ]
-#esp32p4 = [
-#    "esp-hal/esp32p4",
-#    "esp-backtrace/esp32p4",
-#    "esp-wifi/esp32p4",
-#    "esp-hal-embassy/esp32p4",
-#    "esp-println/esp32p4",
-#    "embassy-executor/task-arena-size-40960",
-#]
