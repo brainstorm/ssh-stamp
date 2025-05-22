@@ -20,6 +20,8 @@ jobs:
             # RISC-V devices:
             { soc: "esp32c2", toolchain: "stable" },
             { soc: "esp32c3", toolchain: "stable" },
+#            { soc: "esp32c5", toolchain: "stable" },
+#            { soc: "esp32p4", toolchain: "stable" },
             { soc: "esp32c6", toolchain: "stable" },
             # Xtensa devices:
             { soc: "esp32", toolchain: "esp" },

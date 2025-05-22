@@ -86,6 +86,14 @@ esp32c3 = [
     "esp-println/esp32c3",
     "embassy-executor/task-arena-size-40960",
 ]
+#esp32c5 = [
+#    "esp-hal/esp32c5",
+#    "esp-backtrace/esp32c5",
+#    "esp-wifi/esp32c5",
+#    "esp-hal-embassy/esp32c5",
+#    "esp-println/esp32c5",
+#    "embassy-executor/task-arena-size-40960",
+#]
 esp32c6 = [
     "esp-hal/esp32c6",
     "esp-backtrace/esp32c6",
@@ -110,3 +118,11 @@ esp32s3 = [
     "esp-println/esp32s3",
     "embassy-executor/task-arena-size-40960",
 ]
+#esp32p4 = [
+#    "esp-hal/esp32p4",
+#    "esp-backtrace/esp32p4",
+#    "esp-wifi/esp32p4",
+#    "esp-hal-embassy/esp32p4",
+#    "esp-println/esp32p4",
+#    "embassy-executor/task-arena-size-40960",
+#]
