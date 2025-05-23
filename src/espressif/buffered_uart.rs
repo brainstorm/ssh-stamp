@@ -1,12 +1,12 @@
+use embassy_futures::select::select;
 /// Wrapper around bidirectional embassy-sync Pipes, in order to handle UART
 /// RX/RX happening in an InterruptExecutor at higher priority.
 ///
 /// Doesn't implement the InterruptExecutor, in the task in the app should await
 /// the 'run' async function.
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pipe::Pipe};
-use embassy_futures::select::select;
-use esp_hal::Async;
 use esp_hal::uart::Uart;
+use esp_hal::Async;
 
 // Sizes of the software buffers. Inward is more
 // important as an overrun here drops bytes. A full outward
@@ -23,13 +23,14 @@ pub struct BufferedUart {
     inward: Pipe<CriticalSectionRawMutex, INWARD_BUF_SZ>,
 }
 
-pub struct Config {
-
-}
+pub struct Config {}
 
 impl BufferedUart {
     pub fn new() -> Self {
-        BufferedUart { outward: Pipe::new(), inward: Pipe::new() }
+        BufferedUart {
+            outward: Pipe::new(),
+            inward: Pipe::new(),
+        }
     }
 
     /// Transfer data between the UART and the buffer struct.
@@ -70,7 +71,6 @@ impl BufferedUart {
     pub fn reconfigure(&self, _config: Config) {
         todo!();
     }
-
 }
 
 impl Default for BufferedUart {

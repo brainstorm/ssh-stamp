@@ -1,19 +1,43 @@
-#[target.xtensa-esp32s3-none-elf]
+[alias]
+build-esp32   = "build --release --target xtensa-esp32-none-elf --features esp32"
+build-esp32c2 = "build --release --target riscv32imc-unknown-none-elf --features esp32c2"
+build-esp32c3 = "build --release --target riscv32imc-unknown-none-elf --features esp32c3"
+# Available but not supported by esp-hal (yet).
+#build-esp32c5 = "build --release --target riscv32imac-unknown-none-elf --features esp32c5"
+build-esp32c6 = "build --release --target riscv32imac-unknown-none-elf --features esp32c6"
+build-esp32s2 = "build --profile esp32s2 --target xtensa-esp32s2-none-elf --features esp32s2"
+build-esp32s3 = "build --release --target xtensa-esp32s3-none-elf --features esp32s3"
+
+run-esp32   = "run --release --target xtensa-esp32-none-elf --features esp32"
+run-esp32c2 = "run --release --target riscv32imc-unknown-none-elf --features esp32c2"
+run-esp32c3 = "run --release --target riscv32imc-unknown-none-elf --features esp32c3"
+# Available but not supported by esp-hal (yet).
+#run-esp32c5 = "run --release --target riscv32imac-unknown-none-elf --features esp32c5"
+run-esp32c6 = "run --release --target riscv32imac-unknown-none-elf --features esp32c6"
+run-esp32s2 = "run --profile esp32s2 --target xtensa-esp32s2-none-elf --features esp32s2"
+run-esp32s3 = "run --release --target xtensa-esp32s3-none-elf --features esp32s3"
+
+[target.xtensa-esp32-none-elf]
+runner = "espflash flash --baud=921600 --monitor --chip esp32"
+rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32"']
+[target.riscv32imc-unknown-none-elf]
+runner = "espflash flash --baud=921600 --monitor"
+rustflags = [ "-C", "force-frame-pointers"]
 [target.riscv32imac-unknown-none-elf]
 runner = "espflash flash --baud=921600 --monitor"
+rustflags = [ "-C", "force-frame-pointers"]
+[target.xtensa-esp32s2-none-elf]
+runner = "espflash flash --baud=921600 --monitor --chip esp32s2"
+rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s2"']
+[target.xtensa-esp32s3-none-elf]
+runner = "espflash flash --baud=921600 --monitor --chip esp32s3"
+rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s3"']
 
 
 [env]
 ESP_LOG="INFO"
 
-[build]
-rustflags = [
-#  "-C", "link-arg=-nostartfiles",
-  "-C", "force-frame-pointers",
-]
-
-#target = "xtensa-esp32s3-none-elf"
 target = "riscv32imac-unknown-none-elf"
 
-#[unstable]
-#build-std = ["core"]
+[unstable]
+build-std = ["core", "alloc"]

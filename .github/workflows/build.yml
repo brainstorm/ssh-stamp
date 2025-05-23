@@ -7,22 +7,51 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build:
+    name: Build ${{ matrix.device.soc }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [
+            # RISC-V devices:
+            { soc: "esp32c2", toolchain: "stable" },
+            { soc: "esp32c3", toolchain: "stable" },
+#            { soc: "esp32c5", toolchain: "stable" },
+#            { soc: "esp32p4", toolchain: "stable" },
+            { soc: "esp32c6", toolchain: "stable" },
+            # Xtensa devices:
+            { soc: "esp32", toolchain: "esp" },
+            { soc: "esp32s2", toolchain: "esp" },
+            { soc: "esp32s3", toolchain: "esp" },
+        ]
     steps:
       - name: Cache
         uses: mozilla-actions/sccache-action@v0.0.7
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust toolchain for RISC-V
+        if: ${{ !contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.device.soc) }}
+        uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: 1.86.0
-      - name: Install RISCV toolchain (ESP32-C6)
-        run: |
-          rustup toolchain install stable --component rust-src
-          rustup target add riscv32imac-unknown-none-elf
+          target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
+          toolchain: stable
+          components: rust-src
+      - name: Setup Rust toolchain for Xtensa
+        if: ${{ contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.device.soc) }}
+        uses: esp-rs/xtensa-toolchain@v1.5
+        with:
+          ldproxy: false
+          version: 1.86.0.0
+
       - name: Build project
-        run: cargo build --release
+        run: cargo +${{ matrix.device.toolchain }} build-${{ matrix.device.soc }}
+
+      - name: Check lints and format
+        if: ${{ contains(fromJson('["esp32c6"]'), matrix.device.soc) }}
+        run: |
+          cargo +${{ matrix.device.toolchain }} clippy --features ${{ matrix.device.soc }} --target riscv32imac-unknown-none-elf -- -D warnings
+          cargo +${{ matrix.device.toolchain }} fmt -- --check

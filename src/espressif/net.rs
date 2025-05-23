@@ -12,9 +12,7 @@ use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_println::{dbg, println};
 
-use esp_wifi::wifi::{
-    AccessPointConfiguration, Configuration, WifiDevice, WifiController,
-};
+use esp_wifi::wifi::{AccessPointConfiguration, Configuration, WifiController, WifiDevice};
 use esp_wifi::wifi::{WifiEvent, WifiState};
 use esp_wifi::EspWifiController;
 
@@ -49,8 +47,7 @@ pub async fn if_up(
     rng: &mut Rng,
 ) -> Result<Stack<'static>, sunset::Error> {
     let wifi_init = &*mk_static!(EspWifiController<'static>, wifi_controller);
-    let (controller, interfaces) =
-        esp_wifi::wifi::new(wifi_init, wifi).unwrap();
+    let (controller, interfaces) = esp_wifi::wifi::new(wifi_init, wifi).unwrap();
 
     let gw_ip_addr_str = GW_IP_ADDR_ENV.unwrap_or("192.168.0.1");
     let gw_ip_addr = Ipv4Addr::from_str(gw_ip_addr_str).expect("failed to parse gateway ip");
@@ -92,9 +89,7 @@ pub async fn if_up(
     Ok(ap_stack)
 }
 
-pub async fn accept_requests(
-    stack: Stack<'static>,
-    uart: &BufferedUart) -> ! {
+pub async fn accept_requests(stack: Stack<'static>, uart: &BufferedUart) -> ! {
     let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
     let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
 
@@ -119,7 +114,7 @@ pub async fn accept_requests(
             Ok(_) => (),
             Err(e) => {
                 println!("SSH client fatal error: {}", e);
-            },
+            }
         };
     }
 }

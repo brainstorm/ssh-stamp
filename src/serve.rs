@@ -2,7 +2,6 @@ use core::option::Option::{self, None, Some};
 use core::result::Result;
 use core::writeln;
 
-
 use crate::espressif::buffered_uart::BufferedUart;
 use crate::keys;
 use crate::serial::serial_bridge;
@@ -13,7 +12,6 @@ use embassy_net::tcp::TcpSocket;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
-
 
 use heapless::String;
 use sunset::{error, ChanHandle, ServEvent, SignKey};
