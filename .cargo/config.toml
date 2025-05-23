@@ -19,19 +19,19 @@ run-esp32s3 = "run --release --target xtensa-esp32s3-none-elf --features esp32s3
 
 [target.xtensa-esp32-none-elf]
 runner = "espflash flash --baud=921600 --monitor --chip esp32"
-rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32"']
+rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32"', "-C", "link-args=-Map=target/debug/espressif_memory.map"]
 [target.riscv32imc-unknown-none-elf]
 runner = "espflash flash --baud=921600 --monitor"
-rustflags = [ "-C", "force-frame-pointers"]
+rustflags = [ "-C", "force-frame-pointers", "-C", "link-args=-Map=target/debug/espressif_memory.map"]
 [target.riscv32imac-unknown-none-elf]
 runner = "espflash flash --baud=921600 --monitor"
-rustflags = [ "-C", "force-frame-pointers"]
+rustflags = [ "-C", "force-frame-pointers", "-C", "link-args=-Map=target/debug/espressif_memory.map"]
 [target.xtensa-esp32s2-none-elf]
 runner = "espflash flash --baud=921600 --monitor --chip esp32s2"
-rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s2"']
+rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s2"', "-C", "link-args=-Map=target/debug/espressif_memory.map"]
 [target.xtensa-esp32s3-none-elf]
 runner = "espflash flash --baud=921600 --monitor --chip esp32s3"
-rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s3"']
+rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s3"', "-C", "link-args=-Map=target/debug/espressif_memory.map"]
 
 
 [env]
