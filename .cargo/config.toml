@@ -37,6 +37,7 @@ rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s3"']
 [env]
 ESP_LOG="INFO"
 
+[build]
 target = "riscv32imac-unknown-none-elf"
 
 [unstable]
