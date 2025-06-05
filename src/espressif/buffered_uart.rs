@@ -1,3 +1,5 @@
+use portable_atomic::{AtomicUsize, Ordering};
+
 use embassy_futures::select::select;
 use embassy_sync::pipe::TryWriteError;
 /// Wrapper around bidirectional embassy-sync Pipes, in order to handle UART
@@ -8,7 +10,6 @@ use embassy_sync::pipe::TryWriteError;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pipe::Pipe};
 use esp_hal::uart::Uart;
 use esp_hal::Async;
-use esp_println::println;
 
 // Sizes of the software buffers. Inward is more
 // important as an overrun here drops bytes. A full outward
@@ -23,6 +24,7 @@ const UART_BUF_SZ: usize = 64;
 pub struct BufferedUart {
     outward: Pipe<CriticalSectionRawMutex, OUTWARD_BUF_SZ>,
     inward: Pipe<CriticalSectionRawMutex, INWARD_BUF_SZ>,
+    dropped_rx_bytes: AtomicUsize,
 }
 
 pub struct Config {}
@@ -32,6 +34,7 @@ impl BufferedUart {
         BufferedUart {
             outward: Pipe::new(),
             inward: Pipe::new(),
+            dropped_rx_bytes: AtomicUsize::from(0),
         }
     }
 
@@ -63,9 +66,11 @@ impl BufferedUart {
                                     .inward
                                     .try_read(&mut drop_buf[..rx_slice.len()])
                                     .unwrap_or_default();
-                                // Note that writing these messages to serial console is the slowest part of this process,
-                                // and can back up the UART RX FIFO by itself - keep log line as short as possible.
-                                println!("Lost {} RX bytes", dropped);
+                                let _ = self.dropped_rx_bytes.fetch_update(
+                                    Ordering::Relaxed,
+                                    Ordering::Relaxed,
+                                    |d| Some(d.saturating_add(dropped)),
+                                );
                                 rx_slice
                             }
                         };
@@ -89,6 +94,12 @@ impl BufferedUart {
 
     pub async fn write(&self, buf: &[u8]) {
         self.outward.write_all(buf).await;
+    }
+
+    /// Return the number of dropped bytes (if any) since the last check,
+    /// and reset the internal count to 0.
+    pub fn check_dropped_bytes(&self) -> usize {
+        self.dropped_rx_bytes.swap(0, Ordering::Relaxed)
     }
 
     pub fn reconfigure(&self, _config: Config) {

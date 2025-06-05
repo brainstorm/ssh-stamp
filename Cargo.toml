@@ -39,6 +39,7 @@ embassy-futures = "0.1"
 edge-dhcp = "0.5"
 edge-nal = "0.5"
 edge-nal-embassy = "0.5"
+portable-atomic = "1.11.0"
 
 [profile.dev]
 # Rust debug is too slow.
