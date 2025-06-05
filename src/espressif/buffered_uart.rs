@@ -1,4 +1,5 @@
 use embassy_futures::select::select;
+use embassy_sync::pipe::TryWriteError;
 /// Wrapper around bidirectional embassy-sync Pipes, in order to handle UART
 /// RX/RX happening in an InterruptExecutor at higher priority.
 ///
@@ -7,6 +8,7 @@ use embassy_futures::select::select;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pipe::Pipe};
 use esp_hal::uart::Uart;
 use esp_hal::Async;
+use esp_println::println;
 
 // Sizes of the software buffers. Inward is more
 // important as an overrun here drops bytes. A full outward
@@ -46,7 +48,28 @@ impl BufferedUart {
             let rd_from = async {
                 loop {
                     let n = uart_rx.read_async(&mut uart_rx_buf).await.unwrap();
-                    self.inward.write_all(&uart_rx_buf[..n]).await;
+                    let mut rx_slice = &uart_rx_buf[..n];
+
+                    // Write rx_slice to 'inward' pipe, dropping bytes rather than blocking if
+                    // the pipe is full
+                    while !rx_slice.is_empty() {
+                        rx_slice = match self.inward.try_write(rx_slice) {
+                            Ok(w) => &rx_slice[w..],
+                            Err(TryWriteError::Full) => {
+                                // If the receive buffer is full (no SSH client, or network congestion) then
+                                // drop the oldest bytes from the pipe so we can still write the newest ones.
+                                let mut drop_buf = [0u8; UART_BUF_SZ];
+                                let dropped = self
+                                    .inward
+                                    .try_read(&mut drop_buf[..rx_slice.len()])
+                                    .unwrap_or_default();
+                                // Note that writing these messages to serial console is the slowest part of this process,
+                                // and can back up the UART RX FIFO by itself - keep log line as short as possible.
+                                println!("Lost {} RX bytes", dropped);
+                                rx_slice
+                            }
+                        };
+                    }
                 }
             };
             let rd_to = async {
