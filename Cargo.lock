@@ -1545,6 +1545,7 @@ dependencies = [
  "heapless",
  "hex",
  "log",
+ "portable-atomic",
  "smoltcp",
  "ssh-key",
  "static_cell",

@@ -1,4 +1,7 @@
+use portable_atomic::{AtomicUsize, Ordering};
+
 use embassy_futures::select::select;
+use embassy_sync::pipe::TryWriteError;
 /// Wrapper around bidirectional embassy-sync Pipes, in order to handle UART
 /// RX/RX happening in an InterruptExecutor at higher priority.
 ///
@@ -21,6 +24,7 @@ const UART_BUF_SZ: usize = 64;
 pub struct BufferedUart {
     outward: Pipe<CriticalSectionRawMutex, OUTWARD_BUF_SZ>,
     inward: Pipe<CriticalSectionRawMutex, INWARD_BUF_SZ>,
+    dropped_rx_bytes: AtomicUsize,
 }
 
 pub struct Config {}
@@ -30,6 +34,7 @@ impl BufferedUart {
         BufferedUart {
             outward: Pipe::new(),
             inward: Pipe::new(),
+            dropped_rx_bytes: AtomicUsize::from(0),
         }
     }
 
@@ -46,7 +51,30 @@ impl BufferedUart {
             let rd_from = async {
                 loop {
                     let n = uart_rx.read_async(&mut uart_rx_buf).await.unwrap();
-                    self.inward.write_all(&uart_rx_buf[..n]).await;
+                    let mut rx_slice = &uart_rx_buf[..n];
+
+                    // Write rx_slice to 'inward' pipe, dropping bytes rather than blocking if
+                    // the pipe is full
+                    while !rx_slice.is_empty() {
+                        rx_slice = match self.inward.try_write(rx_slice) {
+                            Ok(w) => &rx_slice[w..],
+                            Err(TryWriteError::Full) => {
+                                // If the receive buffer is full (no SSH client, or network congestion) then
+                                // drop the oldest bytes from the pipe so we can still write the newest ones.
+                                let mut drop_buf = [0u8; UART_BUF_SZ];
+                                let dropped = self
+                                    .inward
+                                    .try_read(&mut drop_buf[..rx_slice.len()])
+                                    .unwrap_or_default();
+                                let _ = self.dropped_rx_bytes.fetch_update(
+                                    Ordering::Relaxed,
+                                    Ordering::Relaxed,
+                                    |d| Some(d.saturating_add(dropped)),
+                                );
+                                rx_slice
+                            }
+                        };
+                    }
                 }
             };
             let rd_to = async {
@@ -66,6 +94,12 @@ impl BufferedUart {
 
     pub async fn write(&self, buf: &[u8]) {
         self.outward.write_all(buf).await;
+    }
+
+    /// Return the number of dropped bytes (if any) since the last check,
+    /// and reset the internal count to 0.
+    pub fn check_dropped_bytes(&self) -> usize {
+        self.dropped_rx_bytes.swap(0, Ordering::Relaxed)
     }
 
     pub fn reconfigure(&self, _config: Config) {
