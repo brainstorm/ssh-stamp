@@ -15,7 +15,7 @@ use embassy_sync::mutex::Mutex;
 
 use heapless::String;
 use sunset::{error, ChanHandle, ServEvent, SignKey};
-use sunset_embassy::{ProgressHolder, SSHServer};
+use sunset_async::{ProgressHolder, SSHServer};
 
 use esp_println::{dbg, println};
 
@@ -81,6 +81,9 @@ async fn connection_loop(
                 println!("Expected caller to handle event");
                 //error!("Expected caller to handle {event:?}");
                 error::BadUsage.fail()?
+            }
+            ServEvent::PollAgain => {
+                println!("TODO: See what this event entails?");
             }
         };
     }
