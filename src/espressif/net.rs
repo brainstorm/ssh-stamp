@@ -129,7 +129,7 @@ async fn wifi_up(mut controller: WifiController<'static>) {
         }
         if !matches!(controller.is_started(), Ok(true)) {
             let client_config = Configuration::AccessPoint(AccessPointConfiguration {
-                ssid: "ssh-stamp".try_into().unwrap(),
+                ssid: "ssh-stamp".into(),
                 ..Default::default()
             });
             controller.set_configuration(&client_config).unwrap();
