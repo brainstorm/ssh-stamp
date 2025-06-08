@@ -61,6 +61,7 @@ opt-level = "s"  # Optimize for size.
 
 
 [features]
+default = ["esp32c6"]
 
 # MCU options
 esp32 = [
