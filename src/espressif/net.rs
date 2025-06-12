@@ -6,7 +6,6 @@ use embassy_net::{tcp::TcpSocket, Stack, StackResources};
 use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, StaticConfigV4};
 use embassy_time::{Duration, Timer};
 
-use esp_hal::peripheral::Peripheral;
 use esp_hal::peripherals::WIFI;
 
 use esp_hal::rng::Rng;
@@ -43,7 +42,7 @@ macro_rules! mk_static {
 pub async fn if_up(
     spawner: Spawner,
     wifi_controller: EspWifiController<'static>,
-    wifi: impl Peripheral<P = WIFI> + 'static,
+    wifi: WIFI<'static>,
     rng: &mut Rng,
 ) -> Result<Stack<'static>, sunset::Error> {
     let wifi_init = &*mk_static!(EspWifiController<'static>, wifi_controller);
@@ -130,7 +129,7 @@ async fn wifi_up(mut controller: WifiController<'static>) {
         }
         if !matches!(controller.is_started(), Ok(true)) {
             let client_config = Configuration::AccessPoint(AccessPointConfiguration {
-                ssid: "ssh-stamp".try_into().unwrap(),
+                ssid: "ssh-stamp".into(),
                 ..Default::default()
             });
             controller.set_configuration(&client_config).unwrap();

@@ -24,7 +24,15 @@ use static_cell::StaticCell;
 
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) -> ! {
-    esp_alloc::heap_allocator!(size: 72 * 1024);
+    cfg_if::cfg_if!(
+        if #[cfg(feature = "esp32s2")] {
+            // TODO: This heap size will crash at runtime, we need to fix this
+            // applying ideas from https://github.com/brainstorm/ssh-stamp/pull/41#issuecomment-2964775170
+                esp_alloc::heap_allocator!(size: 69 * 1024);
+        } else {
+                esp_alloc::heap_allocator!(size: 72 * 1024);
+        }
+    );
     esp_println::logger::init_logger_from_env();
 
     // System init
@@ -55,13 +63,13 @@ async fn main(spawner: Spawner) -> ! {
     // Set up software buffered UART to run in a higher priority InterruptExecutor
     let uart_buf = UART_BUF.init_with(BufferedUart::new);
     let software_interrupts = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
-    let interrupt_exeuctor =
+    let interrupt_executor =
         INT_EXECUTOR.init_with(|| InterruptExecutor::new(software_interrupts.software_interrupt0));
     cfg_if::cfg_if! {
         if #[cfg(any(feature = "esp32", feature = "esp32s2", feature = "esp32s3"))] {
-            let interrupt_spawner = interrupt_exeuctor.start(Priority::Priority1);
+            let interrupt_spawner = interrupt_executor.start(Priority::Priority1);
         } else {
-            let interrupt_spawner = interrupt_exeuctor.start(Priority::Priority10);
+            let interrupt_spawner = interrupt_executor.start(Priority::Priority10);
         }
     }
     cfg_if::cfg_if! {
@@ -81,9 +89,9 @@ static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
 #[embassy_executor::task]
 async fn uart_task(
     buffer: &'static BufferedUart,
-    uart_periph: UART1,
-    rx_pin: AnyPin,
-    tx_pin: AnyPin,
+    uart_periph: UART1<'static>,
+    rx_pin: AnyPin<'static>,
+    tx_pin: AnyPin<'static>,
 ) {
     // Hardware UART setup
     let uart_config = Config::default().with_rx(
