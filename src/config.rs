@@ -21,8 +21,8 @@ use crate::settings::KEY_SLOTS;
 // https://github.com/esp-rs/esp-storage/issues/39#issuecomment-1980991446
 // TODO: Review config.rs from sunset, has nice abstractions for this already:
 
-// https://github.com/mkj/sunset/blob/main/embassy/demos/common/src/config.rs
-// https://github.com/mkj/sunset/blob/main/embassy/demos/picow/src/flashconfig.rs
+// https://github.com/mkj/sunset/blob/main/demo/common/src/config.rs
+// https://github.com/mkj/sunset/blob/main/demo/picow/src/flashconfig.rs
 
 // https://github.com/Erik1000/car/blob/main/starter-firmware/src/ble.rs
 
