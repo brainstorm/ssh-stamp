@@ -58,7 +58,8 @@ overflow-checks = false
 [profile.esp32s2]
 inherits = "release"
 opt-level = "s"  # Optimize for size.
-
+overflow-checks = false
+lto = 'fat'
 
 [features]
 #default = ["esp32c6"]
