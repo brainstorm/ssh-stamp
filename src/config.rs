@@ -9,37 +9,21 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
-use sunset::Result;
+use sunset::error::TrapBug;
+use sunset::{KeyType, Result};
 use sunset::{
     packets::Ed25519PubKey,
     sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
     SignKey,
 };
 
-use crate::settings::KEY_SLOTS;
-
-// https://github.com/esp-rs/esp-storage/issues/39#issuecomment-1980991446
-// TODO: Review config.rs from sunset, has nice abstractions for this already:
-
-// https://github.com/mkj/sunset/blob/main/demo/common/src/config.rs
-// https://github.com/mkj/sunset/blob/main/demo/picow/src/flashconfig.rs
-
-// https://github.com/Erik1000/car/blob/main/starter-firmware/src/ble.rs
+use crate::settings::{KEY_SLOTS, SSH_SERVER_ID};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SSHConfig {
     pub hostkey: SignKey,
 
-    // We just want passwords and/or keys on the SSH side, not UART side
-    // TODO: Ask @mkj the purpose for this...
-    // i.e:automatically filling a password when a device (cisco router) asks for it on a prompt?
-    //
-    // /// login password for serial
-    // pub console_pw: Option<PwHash>,
-    // pub console_keys: [Option<Ed25519PubKey>; KEY_SLOTS],
-    // pub console_noauth: bool,
     pub password_authentication: bool,
-    /// for ssh admin
     pub admin_pw: Option<PwHash>,
     pub admin_keys: [Option<Ed25519PubKey>; KEY_SLOTS],
 
@@ -48,12 +32,65 @@ pub struct SSHConfig {
     /// WPA2 passphrase. None is Open network.
     pub wifi_pw: Option<String<63>>,
 
-    /// For wl5500. cyw43 uses its own internal
-    /// TODO: Populate this field hardware?
+    /// TODO: Populate this field from esp's hardware info or just refer it from HAL?
+    /// Only intended purpose I see for keeping it here is for spoofing?
     pub mac: [u8; 6],
 
     /// `None` for DHCP
     pub ip4_static: Option<StaticConfigV4>,
+}
+
+impl SSHConfig {
+    /// Bump this when the format changes
+    pub const CURRENT_VERSION: u8 = 6;
+    /// A buffer this large will fit any SSHConfig.
+    // It can be updated by looking at
+    // `cargo test -- roundtrip_config`
+    // in the demos/common directory
+    pub const BUF_SIZE: usize = 460;
+
+    /// Creates a new config with default parameters.
+    ///
+    /// Will only fail on RNG failure.
+    pub fn new() -> Result<Self> {
+        let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
+        let wifi_ssid: String<32> =
+            option_env!("WIFI_SSID").unwrap_or(SSH_SERVER_ID).try_into().trap()?;
+        let wifi_pw: Option<String<63>> =
+            option_env!("WIFI_PW").map(|s| s.try_into()).transpose().trap()?;
+        let mac = random_mac()?;
+        Ok(SSHConfig {
+            hostkey,
+            password_authentication: true,
+            admin_pw: None,
+            admin_keys: Default::default(),
+            wifi_ssid,
+            wifi_pw,
+            mac,
+            ip4_static: None,
+        })
+    }
+
+    pub fn set_admin_pw(&mut self, pw: Option<&str>) -> Result<()> {
+        self.admin_pw = pw.map(|p| PwHash::new(p)).transpose()?;
+        Ok(())
+    }
+
+    pub fn check_admin_pw(&mut self, pw: &str) -> bool {
+        if let Some(ref p) = self.admin_pw {
+            p.check(pw)
+        } else {
+            false
+        }
+    }
+}
+
+fn random_mac() -> Result<[u8; 6]> {
+    let mut mac = [0u8; 6];
+    sunset::random::fill_random(&mut mac)?;
+    // unicast, locally administered
+    mac[0] = (mac[0] & 0xfc) | 0x02;
+    Ok(mac)
 }
 
 // a private encoding specific to demo config, not SSH defined.
@@ -160,13 +197,6 @@ impl<'de> SSHDecode<'de> for SSHConfig {
     {
         let hostkey = dec_signkey(s)?;
 
-        // let console_pw = dec_option(s)?;
-
-        // let mut console_keys = [None, None, None];
-        // for k in console_keys.iter_mut() {
-        //     *k = dec_option(s)?;
-        // }
-
         let admin_pw = dec_option(s)?;
 
         let mut admin_keys = [None, None, None];
@@ -186,9 +216,6 @@ impl<'de> SSHDecode<'de> for SSHConfig {
 
         Ok(Self {
             hostkey,
-            // console_pw,
-            // console_keys,
-            // console_noauth,
             password_authentication,
             admin_pw,
             admin_keys,
