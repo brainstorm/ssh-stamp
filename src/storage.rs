@@ -14,6 +14,8 @@ use sunset::sshwire;
 use sunset::sshwire::OwnOrBorrow;
 use sunset_sshwire_derive::*;
 
+use sunset::sshwire::{SSHDecode, SSHEncode};
+
 use crate::config::SSHConfig;
 
 // TODO: Adapt those for Espressif targets...
