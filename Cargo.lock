@@ -16,9 +16,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.97"
+version = "1.0.98"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcfed56ad506cb2c684a14971b8861fdc3baaaae314b9e5f9bb532cbe3ba7a4f"
+checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
 
 [[package]]
 name = "ascii"
@@ -671,7 +671,7 @@ version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4cd70abe47945c9116972781b5c05277ad855a5f5569fe2afd3e2e61a103cc0"
 dependencies = [
- "esp-build",
+ "esp-build 0.2.0",
  "esp-println",
  "semihosting",
 ]
@@ -681,6 +681,17 @@ name = "esp-build"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8aa1c8f9954c9506699cf1ca10a2adcc226ff10b6ae3cb9e875cf2c6a0b9a372"
+dependencies = [
+ "quote",
+ "syn",
+ "termcolor",
+]
+
+[[package]]
+name = "esp-build"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "837020ff95fbf4c15c206541dda7994f1bbe6e1505e36a6a5ecb51fdb61656d7"
 dependencies = [
  "quote",
  "syn",
@@ -722,10 +733,10 @@ dependencies = [
  "embedded-io",
  "embedded-io-async",
  "enumset",
- "esp-build",
+ "esp-build 0.2.0",
  "esp-config",
  "esp-hal-procmacros",
- "esp-metadata",
+ "esp-metadata 0.6.0",
  "esp-riscv-rt",
  "esp-synopsys-usb-otg",
  "esp32",
@@ -763,11 +774,11 @@ dependencies = [
  "embassy-time",
  "embassy-time-driver",
  "embassy-time-queue-utils",
- "esp-build",
+ "esp-build 0.2.0",
  "esp-config",
  "esp-hal",
  "esp-hal-procmacros",
- "esp-metadata",
+ "esp-metadata 0.6.0",
  "portable-atomic",
  "static_cell",
 ]
@@ -802,13 +813,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "esp-metadata"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0154d59933c2419ef25a01938517cc6969f47b6af53ebb34c279393aa20d9654"
+dependencies = [
+ "anyhow",
+ "basic-toml",
+ "serde",
+ "strum 0.27.1",
+]
+
+[[package]]
 name = "esp-println"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "960703930f9f3c899ddedd122ea27a09d6a612c22323157e524af5b18876448e"
 dependencies = [
  "critical-section",
- "esp-build",
+ "esp-build 0.2.0",
  "log",
  "portable-atomic",
 ]
@@ -826,13 +849,15 @@ dependencies = [
 
 [[package]]
 name = "esp-storage"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e98b5069bd1482fb85f9236f8ea6cd1b5b6b5a1c3c3fb8c938c97ccfbbb051b"
+checksum = "5b6502654e5750e8162e66512d7e8d84f7eb51d17ec6aa7e0da95cd102769425"
 dependencies = [
  "critical-section",
+ "document-features",
  "embedded-storage",
- "esp-build",
+ "esp-build 0.3.0",
+ "esp-metadata 0.7.0",
 ]
 
 [[package]]
@@ -863,10 +888,10 @@ dependencies = [
  "embedded-io-async",
  "enumset",
  "esp-alloc",
- "esp-build",
+ "esp-build 0.2.0",
  "esp-config",
  "esp-hal",
- "esp-metadata",
+ "esp-metadata 0.6.0",
  "esp-wifi-sys",
  "heapless",
  "libm",
@@ -1619,6 +1644,7 @@ dependencies = [
  "subtle",
  "sunset",
  "sunset-embassy",
+ "sunset-sshwire-derive",
 ]
 
 [[package]]

@@ -6,13 +6,13 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-cfg-if = "1.0.0"
+cfg-if = "1"
 ed25519-dalek = { version = "2", default-features = false }
 embassy-executor = { version = "0.7"}
 embassy-net = { version = "0.7", features = ["tcp", "udp", "dhcpv4", "medium-ethernet"] }
 smoltcp = { version = "0.12", default-features = false, features = ["medium-ethernet", "socket-raw"]}
 embassy-time = { version = "0.4" }
-embedded-io-async = "0.6.0"
+embedded-io-async = "0.6"
 esp-alloc = "0.7"
 esp-backtrace = { version = "0.15", features = [
     "exception-handler",
@@ -29,6 +29,7 @@ static_cell = { version = "2", features = ["nightly"] }
 ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
 sunset = { version = "0.2.0", git="https://github.com/mkj/sunset", default-features = false, features = ["openssh-key", "embedded-io"]}
 sunset-embassy = { version = "0.2.0", git = "https://github.com/mkj/sunset", default-features = false}
+sunset-sshwire-derive = { version = "0.2.0", git = "https://github.com/mkj/sunset", default-features = false }
 getrandom = { version = "0.2.10", features = ["custom"] }
 embassy-sync = "0.7"
 heapless = "0.8"
@@ -37,7 +38,7 @@ edge-dhcp = "0.6"
 edge-nal = "0.5"
 edge-nal-embassy = "0.6"
 sequential-storage = { version = "4.0.1", features = ["heapless"] }
-esp-storage = { version = "0.5.0", features = ["storage"]}
+esp-storage = { version = "0.6" }
 embedded-storage = "0.3.1"
 embassy-embedded-hal = "0.3.0"
 bcrypt = { version = "0.17.0", default-features = false }
@@ -55,16 +56,21 @@ opt-level = 3
 [profile.release]
 codegen-units = 1 # LLVM can perform better optimizations using a single thread
 debug = 2
-debug-assertions = false
+debug-assertions = true
 incremental = false
 lto = 'fat'
 opt-level = 3
-overflow-checks = false
+overflow-checks = true
 
 [profile.esp32s2]
 inherits = "release"
 opt-level = "s"  # Optimize for size.
 
+[profile.dev.package.esp-storage]
+opt-level = "s"
+
+[profile.dev.package.esp-wifi]
+opt-level = "s"
 
 [features]
 default = ["esp32c6"]

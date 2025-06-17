@@ -10,7 +10,9 @@ use embedded_storage::Storage;
 use embedded_storage_async::nor_flash::NorFlash;
 
 use sunset::error::Error;
-use sunset::sshwire::{self, OwnOrBorrow};
+use sunset::sshwire;
+use sunset::sshwire::OwnOrBorrow;
+use sunset_sshwire_derive::*;
 
 use crate::config::SSHConfig;
 
@@ -31,7 +33,8 @@ impl<'a> Fl {
     }
 }
 
-// SSHConfig::CURRENT_VERSION must be bumped if any of this struct #[derive(SSHEncode, SSHDecode)]
+// SSHConfig::CURRENT_VERSION must be bumped if any of this struct
+#[derive(SSHEncode, SSHDecode)]
 struct FlashConfig<'a> {
     version: u8,
     config: OwnOrBorrow<'a, SSHConfig>,
@@ -73,7 +76,7 @@ pub async fn create(flash: &mut Fl) -> Result<SSHConfig, Error> {
 }
 
 pub async fn load(fl: &mut Fl) -> Result<SSHConfig, Error> {
-    fl.flash.read(CONFIG_OFFSET, &mut fl.buf).await.map_err(|e| {
+    fl.flash.read(CONFIG_OFFSET, &mut fl.buf).map_err(|e| {
         dbg!("flash read error 0x{CONFIG_OFFSET:x} {e:?}");
         Error::msg("flash error")
     })?;
@@ -108,14 +111,15 @@ pub async fn save(fl: &mut Fl, config: &SSHConfig) -> Result<(), Error> {
 
     dbg!("flash erase");
     fl.flash
-        .erase(CONFIG_OFFSET, CONFIG_OFFSET + ERASE_SIZE as u32)
+    // TODO: Adapt 4096, ERASE_SIZE in rp, what's in Espressif?
+        .erase(CONFIG_OFFSET, CONFIG_OFFSET + 4096 as u32)
         .await
         .map_err(|_| Error::msg("flash erase error"))?;
 
     dbg!("flash write");
     fl.flash
         .write(CONFIG_OFFSET, &buf)
-        .await
+        //.await
         .map_err(|_| Error::msg("flash write error"))?;
 
     println!("flash save done");
