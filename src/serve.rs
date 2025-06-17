@@ -78,17 +78,11 @@ async fn connection_loop(
             }
             ServEvent::Defunct | ServEvent::SessionShell(_) => {
                 println!("Expected caller to handle event");
-                //error!("Expected caller to handle {event:?}");
                 error::BadUsage.fail()?
             }
-            ServEvent::PollAgain => {
-                println!("TODO: See what this event entails?");
-            }
-            ServEvent::SessionSubsystem(a) => {
-                // We don't support subsystems, so we just fail it
-                a.fail()?;
-            }
-        };
+            ServEvent::PollAgain => (),
+            ServEvent::SessionSubsystem(_) => (),
+        }
     }
 }
 
