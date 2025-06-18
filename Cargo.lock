@@ -27,15 +27,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d92bec98840b8f03a5ff5413de5293bfcd8bf96467cf5452609f939ec6f5de16"
 
 [[package]]
-name = "atomic-polyfill"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cf2bce30dfe09ef0bfaef228b9d414faaf7e563035494d7fe092dba54b300f4"
-dependencies = [
- "critical-section",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -436,19 +427,6 @@ name = "embassy-net-driver"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "524eb3c489760508f71360112bca70f6e53173e6fe48fc5f0efd0f5ab217751d"
-
-[[package]]
-name = "embassy-sync"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd938f25c0798db4280fcd8026bf4c2f48789aebf8f77b6e5cf8a7693ba114ec"
-dependencies = [
- "cfg-if",
- "critical-section",
- "embedded-io-async",
- "futures-util",
- "heapless",
-]
 
 [[package]]
 name = "embassy-sync"
@@ -1643,7 +1621,7 @@ dependencies = [
  "static_cell",
  "subtle",
  "sunset",
- "sunset-embassy",
+ "sunset-async",
  "sunset-sshwire-derive",
 ]
 
@@ -1720,8 +1698,8 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "sunset"
-version = "0.2.0"
-source = "git+https://github.com/mkj/sunset#b1d2c836f1893a7b880937a3fbe1313fb7978f5c"
+version = "0.3.0"
+source = "git+https://github.com/mkj/sunset?rev=1dcf2ec#1dcf2ec1f117bc51b899bd9af17822c1c35d8024"
 dependencies = [
  "aes",
  "ascii",
@@ -1750,23 +1728,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "sunset-embassy"
-version = "0.2.0"
-source = "git+https://github.com/mkj/sunset#b1d2c836f1893a7b880937a3fbe1313fb7978f5c"
+name = "sunset-async"
+version = "0.3.0"
+source = "git+https://github.com/mkj/sunset?rev=1dcf2ec#1dcf2ec1f117bc51b899bd9af17822c1c35d8024"
 dependencies = [
- "atomic-polyfill",
  "embassy-futures",
- "embassy-sync 0.5.0",
+ "embassy-sync 0.7.0",
  "embedded-io-async",
  "log",
- "pin-utils",
+ "portable-atomic",
  "sunset",
 ]
 
 [[package]]
 name = "sunset-sshwire-derive"
 version = "0.2.0"
-source = "git+https://github.com/mkj/sunset#b1d2c836f1893a7b880937a3fbe1313fb7978f5c"
+source = "git+https://github.com/mkj/sunset?rev=1dcf2ec#1dcf2ec1f117bc51b899bd9af17822c1c35d8024"
 dependencies = [
  "virtue",
 ]
@@ -1877,9 +1854,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "virtue"
-version = "0.0.16"
+version = "0.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b6826a786a78cf1bb0937507b5551fb6f827d66269a24b00af0de247b19bbc7"
+checksum = "7302ac74a033bf17b6e609ceec0f891ca9200d502d31f02dc7908d3d98767c9d"
 
 [[package]]
 name = "void"

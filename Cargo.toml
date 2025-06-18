@@ -27,9 +27,9 @@ hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { version = "2", features = ["nightly"] }
 ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
-sunset = { version = "0.2.0", git="https://github.com/mkj/sunset", default-features = false, features = ["openssh-key", "embedded-io"]}
-sunset-embassy = { version = "0.2.0", git = "https://github.com/mkj/sunset", default-features = false}
-sunset-sshwire-derive = { version = "0.2.0", git = "https://github.com/mkj/sunset", default-features = false }
+sunset = { git="https://github.com/mkj/sunset", rev = "1dcf2ec", default-features = false, features = ["openssh-key", "embedded-io"]}
+sunset-async = { git = "https://github.com/mkj/sunset", rev = "1dcf2ec", default-features = false}
+sunset-sshwire-derive = { git = "https://github.com/mkj/sunset", rev = "1dcf2ec", default-features = false }
 getrandom = { version = "0.2.10", features = ["custom"] }
 embassy-sync = "0.7"
 heapless = "0.8"

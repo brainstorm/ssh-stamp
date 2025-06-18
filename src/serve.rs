@@ -15,7 +15,7 @@ use embassy_sync::mutex::Mutex;
 
 use heapless::String;
 use sunset::{error, ChanHandle, ServEvent, SignKey};
-use sunset_embassy::{ProgressHolder, SSHServer};
+use sunset_async::{ProgressHolder, SSHServer};
 
 use esp_println::{dbg, println};
 
@@ -36,7 +36,7 @@ async fn connection_loop(
         match ev {
             ServEvent::SessionShell(a) => {
                 if let Some(ch) = session.take() {
-                    debug_assert!(ch.num() == a.channel()?);
+                    debug_assert!(ch.num() == a.channel());
                     a.succeed()?;
                     dbg!("We got shell");
                     let _ = chan_pipe.try_send(ch);
@@ -81,7 +81,8 @@ async fn connection_loop(
                 println!("Expected caller to handle event");
                 //error!("Expected caller to handle {event:?}");
                 error::BadUsage.fail()?
-            }
+            },
+            _ => ()
         };
     }
 }
@@ -94,7 +95,7 @@ pub(crate) async fn handle_ssh_client(
     let mut inbuf = [0u8; 4096];
     let mut outbuf = [0u8; 4096];
 
-    let ssh_server = SSHServer::new(&mut inbuf, &mut outbuf)?;
+    let ssh_server = SSHServer::new(&mut inbuf, &mut outbuf);
     let (mut rsock, mut wsock) = stream.split();
 
     let chan_pipe = Channel::<NoopRawMutex, ChanHandle, 1>::new();

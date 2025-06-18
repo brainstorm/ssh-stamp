@@ -6,15 +6,14 @@ use sha2::Digest;
 
 use core::borrow::Borrow;
 
-use embedded_storage::Storage;
-use embedded_storage_async::nor_flash::NorFlash;
+//use embedded_storage::Storage;
+use embedded_storage::nor_flash::NorFlash;
+//use embedded_storage_async::nor_flash::NorFlash;
 
 use sunset::error::Error;
 use sunset::sshwire;
 use sunset::sshwire::OwnOrBorrow;
 use sunset_sshwire_derive::*;
-
-use sunset::sshwire::{SSHDecode, SSHEncode};
 
 use crate::config::SSHConfig;
 
@@ -22,7 +21,7 @@ use crate::config::SSHConfig;
 const CONFIG_OFFSET: u32 = 0x150000;
 pub const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
-pub(crate) struct Fl {
+pub struct Fl {
     flash: FlashStorage,
     // Only a single task can write to flash at a time,
     // keeping a buffer here saves duplicated buffer space in each task.
@@ -78,7 +77,7 @@ pub async fn create(flash: &mut Fl) -> Result<SSHConfig, Error> {
 }
 
 pub async fn load(fl: &mut Fl) -> Result<SSHConfig, Error> {
-    fl.flash.read(CONFIG_OFFSET, &mut fl.buf).map_err(|e| {
+    fl.flash.read(CONFIG_OFFSET, &mut fl.buf).map_err(|_e| {
         dbg!("flash read error 0x{CONFIG_OFFSET:x} {e:?}");
         Error::msg("flash error")
     })?;
@@ -115,7 +114,7 @@ pub async fn save(fl: &mut Fl, config: &SSHConfig) -> Result<(), Error> {
     fl.flash
     // TODO: Adapt 4096, ERASE_SIZE in rp, what's in Espressif?
         .erase(CONFIG_OFFSET, CONFIG_OFFSET + 4096 as u32)
-        .await
+        //.await
         .map_err(|_| Error::msg("flash erase error"))?;
 
     dbg!("flash write");
