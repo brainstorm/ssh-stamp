@@ -14,13 +14,15 @@ use esp_hal::{
 };
 use esp_hal_embassy::InterruptExecutor;
 
+use esp_storage::FlashStorage;
 use embassy_executor::Spawner;
-use ssh_stamp::espressif::{
+use ssh_stamp::{config::SSHConfig, espressif::{
     buffered_uart::BufferedUart,
     net::{accept_requests, if_up},
     rng,
-};
+}, storage::Fl};
 use static_cell::StaticCell;
+use sunset_async::SunsetMutex;
 
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) -> ! {
@@ -44,6 +46,15 @@ async fn main(spawner: Spawner) -> ! {
            esp_hal_embassy::init(systimer.alarm0);
        }
     }
+
+    // Read SSH configuration from Flash (if it exists)
+    let mut flash = Fl::new(FlashStorage::new());
+    let mut config = ssh_stamp::storage::load_or_create(&mut flash).await;
+
+    static FLASH: StaticCell<SunsetMutex<Fl>> = StaticCell::new();
+    let flash = FLASH.init(SunsetMutex::new(flash));
+    static CONFIG: StaticCell<SunsetMutex<SSHConfig>> = StaticCell::new();
+    let config = CONFIG.init(SunsetMutex::new(config.unwrap()));
 
     let wifi_controller = esp_wifi::init(timg0.timer0, rng, peripherals.RADIO_CLK).unwrap();
 

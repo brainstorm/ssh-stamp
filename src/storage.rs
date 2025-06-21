@@ -6,9 +6,7 @@ use sha2::Digest;
 
 use core::borrow::Borrow;
 
-//use embedded_storage::Storage;
 use embedded_storage::nor_flash::NorFlash;
-//use embedded_storage_async::nor_flash::NorFlash;
 
 use sunset::error::Error;
 use sunset::sshwire;
@@ -114,13 +112,11 @@ pub async fn save(fl: &mut Fl, config: &SSHConfig) -> Result<(), Error> {
     fl.flash
     // TODO: Adapt 4096, ERASE_SIZE in rp, what's in Espressif?
         .erase(CONFIG_OFFSET, CONFIG_OFFSET + 4096 as u32)
-        //.await
         .map_err(|_| Error::msg("flash erase error"))?;
 
     dbg!("flash write");
     fl.flash
         .write(CONFIG_OFFSET, &buf)
-        //.await
         .map_err(|_| Error::msg("flash write error"))?;
 
     println!("flash save done");
