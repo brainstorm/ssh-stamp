@@ -16,6 +16,21 @@ use sunset_sshwire_derive::*;
 use crate::config::SSHConfig;
 
 // TODO: Adapt those for Espressif targets...
+// TODO: Define a partitions.csv and decide how much space to allocate for SSH ENV vars?
+//I.e
+
+// creds,    data, nvs,     0x110000, 0x2000,
+// pub const MAP_FLASH_RANGE: Range<u32> = 0x110000..(0x110000 + 0x2000);
+
+// Where partitions.csv is:
+
+// # ESP-IDF Partition Table
+// # Name,   Type, SubType, Offset,  Size, Flags
+// nvs,      data, nvs,     0x9000,  0x6000,
+// phy_init, data, phy,     0xf000,  0x1000,
+// factory,  app,  factory, 0x10000, 1M,
+// creds,    data, nvs,     0x110000, 0x2000,
+
 const CONFIG_OFFSET: u32 = 0x150000;
 pub const FLASH_SIZE: usize = 2 * 1024 * 1024;
 

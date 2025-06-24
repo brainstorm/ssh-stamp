@@ -24,7 +24,7 @@ rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32"']
 runner = "espflash flash --baud=921600 --monitor"
 rustflags = [ "-C", "force-frame-pointers"]
 [target.riscv32imac-unknown-none-elf]
-runner = "espflash flash --baud=921600 --monitor"
+runner = "espflash flash --baud=921600 --monitor" # --partition-table partitions.csv
 rustflags = [ "-C", "force-frame-pointers"]
 [target.xtensa-esp32s2-none-elf]
 runner = "espflash flash --baud=921600 --monitor --chip esp32s2"
