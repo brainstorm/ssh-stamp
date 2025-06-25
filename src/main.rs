@@ -2,6 +2,7 @@
 #![no_main]
 
 use core::marker::Sized;
+use embassy_embedded_hal::adapter::BlockingAsync;
 use esp_alloc as _;
 use esp_backtrace as _;
 use esp_hal::{
@@ -48,17 +49,12 @@ async fn main(spawner: Spawner) -> ! {
     }
 
     // Read SSH configuration from Flash (if it exists)
-    let mut flash = Fl::new(FlashStorage::new());
-    let mut config = ssh_stamp::storage::load_or_create(&mut flash).await;
+    let flash = FlashStorage::new();
+    let mut flash = BlockingAsync::new(flash);
+    let config = SSHConfig::load(&mut flash)?;
 
-    static FLASH: StaticCell<SunsetMutex<Fl>> = StaticCell::new();
-    let flash = FLASH.init(SunsetMutex::new(flash));
-    static CONFIG: StaticCell<SunsetMutex<SSHConfig>> = StaticCell::new();
-    let config = CONFIG.init(SunsetMutex::new(config.unwrap()));
-
+    // Bring up wifi, network interface and start accepting SSH connections.
     let wifi_controller = esp_wifi::init(timg0.timer0, rng, peripherals.RADIO_CLK).unwrap();
-
-    // Bring up the network interface and start accepting SSH connections.
     let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng)
         .await
         .unwrap();

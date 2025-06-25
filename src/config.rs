@@ -1,5 +1,7 @@
 use core::net::Ipv4Addr;
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
+use embedded_storage::nor_flash::ReadNorFlash;
+use esp_storage::FlashStorage;
 use heapless::{String, Vec};
 
 use esp_println::println;
@@ -10,7 +12,7 @@ use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
 use sunset::error::TrapBug;
-use sunset::{KeyType, Result};
+use sunset::{Error, KeyType, Result};
 use sunset::{
     packets::Ed25519PubKey,
     sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
@@ -18,6 +20,7 @@ use sunset::{
 };
 
 use crate::settings::{KEY_SLOTS, SSH_SERVER_ID};
+use crate::storage::{CONFIG_AREA_SIZE, CONFIG_OFFSET};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SSHConfig {
@@ -42,23 +45,20 @@ pub struct SSHConfig {
 
 impl SSHConfig {
     /// Bump this when the format changes
+    /// TODO: Revise this, unclear if this is needed with sequential_storage internal map() representation
     pub const CURRENT_VERSION: u8 = 6;
-    /// A buffer this large will fit any SSHConfig.
-    // It can be updated by looking at
-    // `cargo test -- roundtrip_config`
-    // in the demos/common directory
-    pub const BUF_SIZE: usize = 460;
 
     /// Creates a new config with default parameters.
     ///
     /// Will only fail on RNG failure.
-    pub fn new() -> Result<Self> {
+    pub fn new() -> Result<Self, Error> {
         let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
         let wifi_ssid: String<32> =
             option_env!("WIFI_SSID").unwrap_or(SSH_SERVER_ID).try_into().trap()?;
         let wifi_pw: Option<String<63>> =
             option_env!("WIFI_PW").map(|s| s.try_into()).transpose().trap()?;
         let mac = random_mac()?;
+
         Ok(SSHConfig {
             hostkey,
             password_authentication: true,
@@ -71,17 +71,33 @@ impl SSHConfig {
         })
     }
 
-    pub fn set_admin_pw(&mut self, pw: Option<&str>) -> Result<()> {
+    pub fn set_admin_pw(&mut self, pw: Option<&str>) -> Result<Self, Error> {
         self.admin_pw = pw.map(|p| PwHash::new(p)).transpose()?;
-        Ok(())
+        Ok(self.clone())
     }
 
-    pub fn check_admin_pw(&mut self, pw: &str) -> bool {
+    pub fn check_admin_pw(&mut self, pw: &str) -> Result<bool, Error> {
         if let Some(ref p) = self.admin_pw {
-            p.check(pw)
+            Ok(p.check(pw))
         } else {
-            false
+            Ok(false)
         }
+    }
+
+    /// Loads (deserialises) SSHConfig from FlashStorage
+    pub fn load(flash: &FlashStorage) -> Result<Self, Error> {
+        let mut config = [0u8; CONFIG_AREA_SIZE];
+        flash.read(CONFIG_OFFSET, &mut config);
+
+        let config = SSHConfig::serialise();
+
+        Ok(config)
+    }
+
+    /// Saves (serialises) SSHConfig to FlashStorage
+    pub fn save(config: SSHConfig) -> Result<SSHConfig, Error> {
+        let mut source = sunset::sshwire::SliceSource::new(config);
+        SSHConfig::dec(&mut source).map_err(|_| Error::Format)
     }
 }
 
@@ -196,9 +212,7 @@ impl<'de> SSHDecode<'de> for SSHConfig {
         S: SSHSource<'de>,
     {
         let hostkey = dec_signkey(s)?;
-
         let admin_pw = dec_option(s)?;
-
         let mut admin_keys = [None, None, None];
         for k in admin_keys.iter_mut() {
             *k = dec_option(s)?;

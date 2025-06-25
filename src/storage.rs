@@ -31,7 +31,12 @@ use crate::config::SSHConfig;
 // factory,  app,  factory, 0x10000, 1M,
 // creds,    data, nvs,     0x110000, 0x2000,
 
-const CONFIG_OFFSET: u32 = 0x150000;
+/// A buffer this large will fit any SSHConfig.
+// It can be updated by looking at
+// `cargo test -- roundtrip_config`
+// in the demos/common directory
+pub const CONFIG_AREA_SIZE: usize = 460;
+pub const CONFIG_OFFSET: u32 = 0x150000;
 pub const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
 pub struct Fl {
@@ -57,7 +62,7 @@ struct FlashConfig<'a> {
 }
 
 impl FlashConfig<'_> {
-    const BUF_SIZE: usize = 4 + SSHConfig::BUF_SIZE + 32;
+    const BUF_SIZE: usize = 4 + CONFIG_AREA_SIZE + 32;
 }
 const _: () =
     assert!(FlashConfig::BUF_SIZE % 4 == 0, "flash reads must be a multiple of 4");
