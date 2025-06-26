@@ -5,12 +5,7 @@ use core::marker::Sized;
 use esp_alloc as _;
 use esp_backtrace as _;
 use esp_hal::{
-    gpio::AnyPin,
-    interrupt::{software::SoftwareInterruptControl, Priority},
-    peripherals::UART1,
-    rng::Rng,
-    timer::timg::TimerGroup,
-    uart::{Config, RxConfig, Uart},
+    interrupt::{software::SoftwareInterruptControl, Priority}, peripherals::UART1, rng::Rng, timer::timg::TimerGroup, uart::{Config, RxConfig, Uart}
 };
 use esp_hal_embassy::InterruptExecutor;
 
@@ -49,37 +44,38 @@ async fn main(spawner: Spawner) -> ! {
 
     // Read SSH configuration from Flash (if it exists)
     let mut flash = Fl::new(FlashStorage::new());
-    let mut config = ssh_stamp::storage::load_or_create(&mut flash).await;
+    let config = ssh_stamp::storage::load_or_create(&mut flash).await;
 
     static FLASH: StaticCell<SunsetMutex<Fl>> = StaticCell::new();
-    let flash = FLASH.init(SunsetMutex::new(flash));
+    let _flash = FLASH.init(SunsetMutex::new(flash));
+
     static CONFIG: StaticCell<SunsetMutex<SSHConfig>> = StaticCell::new();
-    let config = CONFIG.init(SunsetMutex::new(config.unwrap()));
+    let mut config = CONFIG.init(SunsetMutex::new(config.unwrap()));
 
     let wifi_controller = esp_wifi::init(timg0.timer0, rng, peripherals.RADIO_CLK).unwrap();
 
     // Bring up the network interface and start accepting SSH connections.
-    let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng)
+    let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng, config)
         .await
         .unwrap();
 
     // Set up software buffered UART to run in a higher priority InterruptExecutor
     let uart_buf = UART_BUF.init_with(BufferedUart::new);
     let software_interrupts = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
-    let interrupt_exeuctor =
+    let interrupt_executor =
         INT_EXECUTOR.init_with(|| InterruptExecutor::new(software_interrupts.software_interrupt0));
     cfg_if::cfg_if! {
         if #[cfg(any(feature = "esp32", feature = "esp32s2", feature = "esp32s3"))] {
-            let interrupt_spawner = interrupt_exeuctor.start(Priority::Priority1);
+            let interrupt_spawner = interrupt_executor.start(Priority::Priority1);
         } else {
-            let interrupt_spawner = interrupt_exeuctor.start(Priority::Priority10);
+            let interrupt_spawner = interrupt_executor.start(Priority::Priority10);
         }
     }
     cfg_if::cfg_if! {
         if #[cfg(not(feature = "esp32c2"))] {
-    interrupt_spawner.spawn(uart_task(uart_buf, peripherals.UART1, peripherals.GPIO11.into(), peripherals.GPIO10.into())).unwrap();
+            interrupt_spawner.spawn(uart_task(uart_buf, peripherals.UART1, config)).unwrap();
         } else {
-            interrupt_spawner.spawn(uart_task(uart_buf, peripherals.UART1, peripherals.GPIO9.into(), peripherals.GPIO10.into())).unwrap();
+            interrupt_spawner.spawn(uart_task(uart_buf, peripherals.UART1, config)).unwrap();
         }
     }
     accept_requests(tcp_stack, uart_buf).await;
@@ -93,9 +89,17 @@ static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
 async fn uart_task(
     buffer: &'static BufferedUart,
     uart_periph: UART1,
-    rx_pin: AnyPin,
-    tx_pin: AnyPin,
+    config: &'static SunsetMutex<SSHConfig>
 ) {
+    // TODO: Find the "live reconfiguration" calls to change all parameters
+    // while firmware is running, including but not limited to mapped GPIOs.
+
+    // TODO: Map input u8 to correct AnyPin/GPIO pin(s)
+    //config.lock().await.uart_rx_pin
+    let rx_pin_num = config.lock().await.uart_rx_pin;
+    let rx_pin = AnyPin
+    //let tx_pin = config.lock().await.uart_tx_pin;
+
     // Hardware UART setup
     let uart_config = Config::default().with_rx(
         RxConfig::default()

@@ -38,16 +38,13 @@ pub struct SSHConfig {
 
     /// `None` for DHCP
     pub ip4_static: Option<StaticConfigV4>,
+    pub uart_rx_pin: u8,
+    pub uart_tx_pin: u8
 }
 
 impl SSHConfig {
     /// Bump this when the format changes
     pub const CURRENT_VERSION: u8 = 6;
-    /// A buffer this large will fit any SSHConfig.
-    // It can be updated by looking at
-    // `cargo test -- roundtrip_config`
-    // in the demos/common directory
-    pub const BUF_SIZE: usize = 460;
 
     /// Creates a new config with default parameters.
     ///
@@ -68,6 +65,8 @@ impl SSHConfig {
             wifi_pw,
             mac,
             ip4_static: None,
+            uart_rx_pin: 1,
+            uart_tx_pin: 2,
         })
     }
 
@@ -214,6 +213,9 @@ impl<'de> SSHDecode<'de> for SSHConfig {
         // Decode password_authentication (missing in original code)
         let password_authentication = SSHDecode::dec(s)?;
 
+        let uart_rx_pin = SSHDecode::dec(s)?;
+        let uart_tx_pin = SSHDecode::dec(s)?;
+
         Ok(Self {
             hostkey,
             password_authentication,
@@ -223,6 +225,8 @@ impl<'de> SSHDecode<'de> for SSHConfig {
             wifi_pw,
             mac,
             ip4_static,
+            uart_rx_pin,
+            uart_tx_pin
         })
     }
 }

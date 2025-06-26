@@ -16,8 +16,8 @@ use sunset_sshwire_derive::*;
 use crate::config::SSHConfig;
 
 // TODO: Adapt those for Espressif targets...
-const CONFIG_OFFSET: u32 = 0x150000;
-pub const FLASH_SIZE: usize = 2 * 1024 * 1024;
+pub const CONFIG_AREA_SIZE: usize = 460;
+const CONFIG_OFFSET: u32 = 0x110000;
 
 pub struct Fl {
     flash: FlashStorage,
@@ -42,7 +42,7 @@ struct FlashConfig<'a> {
 }
 
 impl FlashConfig<'_> {
-    const BUF_SIZE: usize = 4 + SSHConfig::BUF_SIZE + 32;
+    const BUF_SIZE: usize = 4 + CONFIG_AREA_SIZE + 32;
 }
 const _: () =
     assert!(FlashConfig::BUF_SIZE % 4 == 0, "flash reads must be a multiple of 4");

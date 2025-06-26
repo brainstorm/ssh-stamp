@@ -15,6 +15,7 @@ use esp_println::{dbg, println};
 use esp_wifi::wifi::{AccessPointConfiguration, Configuration, WifiController, WifiDevice};
 use esp_wifi::wifi::{WifiEvent, WifiState};
 use esp_wifi::EspWifiController;
+use sunset_async::SunsetMutex;
 
 use core::net::SocketAddrV4;
 use edge_dhcp;
@@ -26,9 +27,9 @@ use edge_dhcp::{
 use edge_nal::UdpBind;
 use edge_nal_embassy::{Udp, UdpBuffers};
 
-use super::buffered_uart::BufferedUart;
+use crate::config::SSHConfig;
 
-const GW_IP_ADDR_ENV: Option<&'static str> = option_env!("GATEWAY_IP");
+use super::buffered_uart::BufferedUart;
 
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {
@@ -45,16 +46,22 @@ pub async fn if_up(
     wifi_controller: EspWifiController<'static>,
     wifi: impl Peripheral<P = WIFI> + 'static,
     rng: &mut Rng,
+    config: &'static SunsetMutex<SSHConfig>
 ) -> Result<Stack<'static>, sunset::Error> {
     let wifi_init = &*mk_static!(EspWifiController<'static>, wifi_controller);
     let (controller, interfaces) = esp_wifi::wifi::new(wifi_init, wifi).unwrap();
 
-    let gw_ip_addr_str = GW_IP_ADDR_ENV.unwrap_or("192.168.0.1");
-    let gw_ip_addr = Ipv4Addr::from_str(gw_ip_addr_str).expect("failed to parse gateway ip");
+    let gw_ip_addr_ipv4 = Ipv4Addr::from_str("192.168.0.1").expect("failed to parse gateway ip");
 
-    let config = embassy_net::Config::ipv4_static(StaticConfigV4 {
-        address: Ipv4Cidr::new(gw_ip_addr, 24),
-        gateway: Some(gw_ip_addr),
+    let _gw_ip_addr = if let Some(ref s) = config.lock().await.ip4_static {
+        embassy_net::Config::ipv4_static(s.clone())
+    } else {
+        embassy_net::Config::dhcpv4(Default::default())
+    };
+    
+    let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
+        address: Ipv4Cidr::new(gw_ip_addr_ipv4, 24),
+        gateway: Some(gw_ip_addr_ipv4),
         dns_servers: Default::default(),
     });
 
@@ -63,14 +70,14 @@ pub async fn if_up(
     // Init network stack
     let (ap_stack, runner) = embassy_net::new(
         interfaces.ap,
-        config,
+        net_config,
         mk_static!(StackResources<3>, StackResources::<3>::new()),
         seed,
     );
 
     spawner.spawn(wifi_up(controller)).ok();
     spawner.spawn(net_up(runner)).ok();
-    spawner.spawn(dhcp_server(ap_stack, gw_ip_addr)).ok();
+    spawner.spawn(dhcp_server(ap_stack, gw_ip_addr_ipv4)).ok();
 
     loop {
         println!("Checking if link is up...\n");
@@ -83,7 +90,7 @@ pub async fn if_up(
     // TODO: Use wifi_manager instead?
     println!(
         "Connect to the AP `ssh-stamp` as a DHCP client with IP: {}",
-        gw_ip_addr_str
+        gw_ip_addr_ipv4
     );
 
     Ok(ap_stack)
