@@ -13,16 +13,16 @@ embassy-net = { version = "0.7", features = ["tcp", "udp", "dhcpv4", "medium-eth
 smoltcp = { version = "0.12", default-features = false, features = ["medium-ethernet", "socket-raw"]}
 embassy-time = { version = "0.4" }
 embedded-io-async = "0.6"
-esp-alloc = "0.7"
-esp-backtrace = { version = "0.15", features = [
+esp-alloc = "0.8"
+esp-backtrace = { version = "0.16", features = [
     "exception-handler",
     "panic-handler",
     "println",
 ] }
-esp-hal = { version = "1.0.0-beta.0", features = [ "unstable" ] }
-esp-hal-embassy = { version = "0.7"}
-esp-println = { version = "0.13", features = ["log"] }
-esp-wifi = { version = "0.13", features = ["wifi", "esp-alloc"] }
+esp-hal = { version = "1.0.0-beta.1", features = [ "unstable" ] }
+esp-hal-embassy = { version = "0.8"}
+esp-println = { version = "0.14", features = ["log-04"]}
+esp-wifi = { version = "0.14", features = ["wifi", "esp-alloc"] }
 hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { version = "2", features = ["nightly"] }
@@ -40,13 +40,14 @@ edge-nal-embassy = "0.6"
 sequential-storage = { version = "4", features = ["heapless"] }
 esp-storage = { version = "0.6" }
 embedded-storage = "0.3.1"
-embassy-embedded-hal = "0.3.0"
-bcrypt = { version = "0.17.0", default-features = false }
-subtle = { version = "2.6.1", default-features = false }
-hmac = { version = "0.12.1", default-features = false }
-sha2 = { version = "0.10.9", default-features = false }
-digest = { version = "0.10.7", default-features = false, features = ["rand_core", "subtle"] }
-embedded-storage-async = "0.4.1"
+embassy-embedded-hal = "0.3"
+bcrypt = { version = "0.17", default-features = false }
+subtle = { version = "2", default-features = false }
+hmac = { version = "0.12", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+digest = { version = "0.10", default-features = false, features = ["rand_core", "subtle"] }
+embedded-storage-async = "0.4"
+portable-atomic = "1"
 
 [profile.dev]
 # Rust debug is too slow.

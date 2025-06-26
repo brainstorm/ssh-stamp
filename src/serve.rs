@@ -37,6 +37,7 @@ async fn connection_loop(
             ServEvent::SessionShell(a) => {
                 if let Some(ch) = session.take() {
                     debug_assert!(ch.num() == a.channel());
+
                     a.succeed()?;
                     dbg!("We got shell");
                     let _ = chan_pipe.try_send(ch);
@@ -79,7 +80,6 @@ async fn connection_loop(
             }
             ServEvent::Defunct | ServEvent::SessionShell(_) => {
                 println!("Expected caller to handle event");
-                //error!("Expected caller to handle {event:?}");
                 error::BadUsage.fail()?
             },
             _ => ()

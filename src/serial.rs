@@ -25,6 +25,12 @@ async fn uart_to_ssh(
 ) -> Result<(), sunset::Error> {
     let mut ssh_tx_buf = [0u8; 512];
     loop {
+        let dropped = uart_buf.check_dropped_bytes();
+        if dropped > 0 {
+            // TODO: should this also go to the SSH client?
+            println!("UART RX dropped {} bytes", dropped);
+        }
+
         let n = uart_buf.read(&mut ssh_tx_buf).await;
         chanw.write_all(&ssh_tx_buf[..n]).await?;
     }
