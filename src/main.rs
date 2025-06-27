@@ -5,7 +5,7 @@ use core::marker::Sized;
 use esp_alloc as _;
 use esp_backtrace as _;
 use esp_hal::{
-    interrupt::{software::SoftwareInterruptControl, Priority}, peripherals::UART1, rng::Rng, timer::timg::TimerGroup, uart::{Config, RxConfig, Uart}
+    gpio::AnyPin, interrupt::{software::SoftwareInterruptControl, Priority}, peripherals::UART1, rng::Rng, timer::timg::TimerGroup, uart::{Config, RxConfig, Uart}
 };
 use esp_hal_embassy::InterruptExecutor;
 
@@ -58,7 +58,7 @@ async fn main(spawner: Spawner) -> ! {
     let _flash = FLASH.init(SunsetMutex::new(flash));
 
     static CONFIG: StaticCell<SunsetMutex<SSHConfig>> = StaticCell::new();
-    let mut config = CONFIG.init(SunsetMutex::new(config.unwrap()));
+    let config = CONFIG.init(SunsetMutex::new(config.unwrap()));
 
     let wifi_controller = esp_wifi::init(timg0.timer0, rng, peripherals.RADIO_CLK).unwrap();
 
@@ -93,34 +93,39 @@ static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();
 
 static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
 
-#[embassy_executor::task]
+#[embassy_executor::task()]
 async fn uart_task(
     buffer: &'static BufferedUart,
-    uart_periph: UART1,
+    uart_periph: UART1<'static>,
     config: &'static SunsetMutex<SSHConfig>
 ) {
     // TODO: Find the "live reconfiguration" calls to change all parameters
     // while firmware is running, including but not limited to mapped GPIOs.
 
-    // TODO: Map input u8 to correct AnyPin/GPIO pin(s)
-    //config.lock().await.uart_rx_pin
+    // TODO: Yikes, unsafe code here, but we need to steal the pins to reconfigure the UART
+    // when config changes via SSH env vars... I need to find a better way for this :/
+
     let rx_pin_num = config.lock().await.uart_rx_pin;
-    let rx_pin = AnyPin
-    //let tx_pin = config.lock().await.uart_tx_pin;
+    let tx_pin_num = config.lock().await.uart_tx_pin;
+    unsafe {
+        let rx_pin = AnyPin::steal(rx_pin_num);
+        let tx_pin = AnyPin::steal(tx_pin_num);
+  
 
-    // Hardware UART setup
-    let uart_config = Config::default().with_rx(
-        RxConfig::default()
-            .with_fifo_full_threshold(16)
-            .with_timeout(1),
-    );
+        // Hardware UART setup
+        let uart_config = Config::default().with_rx(
+            RxConfig::default()
+                .with_fifo_full_threshold(16)
+                .with_timeout(1)
+        );
 
-    let uart = Uart::new(uart_periph, uart_config)
-        .unwrap()
-        .with_rx(rx_pin)
-        .with_tx(tx_pin)
-        .into_async();
+        let uart = Uart::new(uart_periph, uart_config)
+            .unwrap()
+            .with_rx(rx_pin)
+            .with_tx(tx_pin)
+            .into_async();
 
-    // Run the main buffered TX/RX loop
-    buffer.run(uart).await;
+        // Run the main buffered TX/RX loop
+        buffer.run(uart).await;
+    }
 }
