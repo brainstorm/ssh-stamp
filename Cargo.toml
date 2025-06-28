@@ -1,6 +1,3 @@
-# TODO: Potentially switch to cargo_xtask for easy re-targetting, i.e:
-# https://github.com/card-io-ecg/card-io-fw/blob/main/Cargo.toml
-
 [package]
 name = "ssh-stamp"
 version = "0.1.0"
@@ -9,13 +6,13 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-cfg-if = "1.0.0"
+cfg-if = "1"
 ed25519-dalek = { version = "2", default-features = false }
 embassy-executor = { version = "0.7"}
 embassy-net = { version = "0.7", features = ["tcp", "udp", "dhcpv4", "medium-ethernet"] }
 smoltcp = { version = "0.12", default-features = false, features = ["medium-ethernet", "socket-raw"]}
 embassy-time = { version = "0.4" }
-embedded-io-async = "0.6.0"
+embedded-io-async = "0.6"
 esp-alloc = "0.8"
 esp-backtrace = { version = "0.16", features = [
     "exception-handler",
@@ -30,15 +27,26 @@ hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { version = "2", features = ["nightly"] }
 ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
+sunset = { git="https://github.com/mkj/sunset", rev = "5ff44bb", default-features = false, features = ["openssh-key", "embedded-io"]}
+sunset-async = { git = "https://github.com/mkj/sunset", rev = "5ff44bb", default-features = false, features = ["multi-thread"]}
+sunset-sshwire-derive = { git = "https://github.com/mkj/sunset", rev = "5ff44bb", default-features = false }
 getrandom = { version = "0.2.10", features = ["custom"] }
-sunset = { git="https://github.com/mkj/sunset", rev = "cb6c720", default-features = false, features = ["openssh-key", "embedded-io"]}
-sunset-async = { git = "https://github.com/mkj/sunset", rev = "cb6c720", default-features = false}
 embassy-sync = "0.7"
 heapless = "0.8"
 embassy-futures = "0.1"
 edge-dhcp = "0.6"
 edge-nal = "0.5"
 edge-nal-embassy = "0.6"
+#sequential-storage = { version = "4", features = ["heapless"] }
+esp-storage = { version = "0.6" }
+embedded-storage = "0.3.1"
+embassy-embedded-hal = "0.3"
+bcrypt = { version = "0.17", default-features = false }
+subtle = { version = "2", default-features = false }
+hmac = { version = "0.12", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+digest = { version = "0.10", default-features = false, features = ["rand_core", "subtle"] }
+embedded-storage-async = "0.4"
 portable-atomic = "1"
 
 [profile.dev]
@@ -49,21 +57,24 @@ opt-level = 3
 [profile.release]
 codegen-units = 1 # LLVM can perform better optimizations using a single thread
 debug = 2
-debug-assertions = false
+debug-assertions = true
 incremental = false
 lto = 'fat'
 opt-level = 3
-overflow-checks = false
+overflow-checks = true
 
 [profile.esp32s2]
 inherits = "release"
 opt-level = "s"  # Optimize for size.
-overflow-checks = false
-lto = 'fat'
+
+[profile.dev.package.esp-storage]
+opt-level = "s"
+
+[profile.dev.package.esp-wifi]
+opt-level = "s"
 
 [features]
-#default = ["esp32c6"]
-
+default = ["esp32c6"]
 # MCU options
 esp32 = [
     "esp-hal/esp32",
@@ -71,6 +82,7 @@ esp32 = [
     "esp-wifi/esp32",
     "esp-hal-embassy/esp32",
     "esp-println/esp32",
+    "esp-storage/esp32",
     "embassy-executor/task-arena-size-40960",
 ]
 esp32c2 = [
@@ -79,6 +91,7 @@ esp32c2 = [
     "esp-wifi/esp32c2",
     "esp-hal-embassy/esp32c2",
     "esp-println/esp32c2",
+    "esp-storage/esp32c2",
     "embassy-executor/task-arena-size-40960",
 ]
 esp32c3 = [
@@ -87,6 +100,7 @@ esp32c3 = [
     "esp-wifi/esp32c3",
     "esp-hal-embassy/esp32c3",
     "esp-println/esp32c3",
+    "esp-storage/esp32c3",
     "embassy-executor/task-arena-size-40960",
 ]
 #esp32c5 = [
@@ -95,6 +109,7 @@ esp32c3 = [
 #    "esp-wifi/esp32c5",
 #    "esp-hal-embassy/esp32c5",
 #    "esp-println/esp32c5",
+#    "esp-storage/esp32c5",
 #    "embassy-executor/task-arena-size-40960",
 #]
 esp32c6 = [
@@ -103,6 +118,7 @@ esp32c6 = [
     "esp-wifi/esp32c6",
     "esp-hal-embassy/esp32c6",
     "esp-println/esp32c6",
+    "esp-storage/esp32c6",
     "embassy-executor/task-arena-size-40960",
 ]
 esp32s2 = [
@@ -111,6 +127,7 @@ esp32s2 = [
     "esp-wifi/esp32s2",
     "esp-hal-embassy/esp32s2",
     "esp-println/esp32s2",
+    "esp-storage/esp32s2",
     "embassy-executor/task-arena-size-32768",
 ]
 esp32s3 = [
@@ -119,5 +136,6 @@ esp32s3 = [
     "esp-wifi/esp32s3",
     "esp-hal-embassy/esp32s3",
     "esp-println/esp32s3",
+    "esp-storage/esp32s3",
     "embassy-executor/task-arena-size-40960",
 ]
