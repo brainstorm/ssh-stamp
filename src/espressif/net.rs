@@ -45,7 +45,7 @@ pub async fn if_up(
     wifi_controller: EspWifiController<'static>,
     wifi: WIFI<'static>,
     rng: &mut Rng,
-    config: &'static SunsetMutex<SSHConfig>
+    config: &'static mut SunsetMutex<SSHConfig>
 ) -> Result<Stack<'static>, sunset::Error> {
     let wifi_init = &*mk_static!(EspWifiController<'static>, wifi_controller);
     let (controller, interfaces) = esp_wifi::wifi::new(wifi_init, wifi).unwrap();
@@ -74,7 +74,7 @@ pub async fn if_up(
         seed,
     );
 
-    spawner.spawn(wifi_up(controller)).ok();
+    spawner.spawn(wifi_up(controller, config)).ok();
     spawner.spawn(net_up(runner)).ok();
     spawner.spawn(dhcp_server(ap_stack, gw_ip_addr_ipv4)).ok();
 
@@ -126,8 +126,13 @@ pub async fn accept_requests(stack: Stack<'static>, uart: &BufferedUart) -> ! {
 }
 
 #[embassy_executor::task]
-async fn wifi_up(mut controller: WifiController<'static>) {
+async fn wifi_up(mut controller: WifiController<'static>, config: &'static mut SunsetMutex<SSHConfig>) {
     println!("Device capabilities: {:?}", controller.capabilities());
+
+    let wifi_ssid = &config.lock().await.wifi_ssid;
+    // TODO: No wifi password(s) yet...
+    //let wifi_password = config.lock().await.wifi_pw;
+
     loop {
         if esp_wifi::wifi::wifi_state() == WifiState::ApStarted {
             // wait until we're no longer connected
@@ -136,7 +141,7 @@ async fn wifi_up(mut controller: WifiController<'static>) {
         }
         if !matches!(controller.is_started(), Ok(true)) {
             let client_config = Configuration::AccessPoint(AccessPointConfiguration {
-                ssid: "ssh-stamp".into(),
+                ssid: wifi_ssid.to_ascii_lowercase(),
                 ..Default::default()
             });
             controller.set_configuration(&client_config).unwrap();

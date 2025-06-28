@@ -28,7 +28,7 @@ log = { version = "0.4" }
 static_cell = { version = "2", features = ["nightly"] }
 ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
 sunset = { git="https://github.com/mkj/sunset", rev = "5ff44bb", default-features = false, features = ["openssh-key", "embedded-io"]}
-sunset-async = { git = "https://github.com/mkj/sunset", rev = "5ff44bb", default-features = false}
+sunset-async = { git = "https://github.com/mkj/sunset", rev = "5ff44bb", default-features = false, features = ["multi-thread"]}
 sunset-sshwire-derive = { git = "https://github.com/mkj/sunset", rev = "5ff44bb", default-features = false }
 getrandom = { version = "0.2.10", features = ["custom"] }
 embassy-sync = "0.7"
@@ -37,7 +37,7 @@ embassy-futures = "0.1"
 edge-dhcp = "0.6"
 edge-nal = "0.5"
 edge-nal-embassy = "0.6"
-sequential-storage = { version = "4", features = ["heapless"] }
+#sequential-storage = { version = "4", features = ["heapless"] }
 esp-storage = { version = "0.6" }
 embedded-storage = "0.3.1"
 embassy-embedded-hal = "0.3"

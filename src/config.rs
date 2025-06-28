@@ -27,19 +27,20 @@ pub struct SSHConfig {
     pub admin_pw: Option<PwHash>,
     pub admin_keys: [Option<Ed25519PubKey>; KEY_SLOTS],
 
-    /// WiFi SSID
+    /// WiFi
     pub wifi_ssid: String<32>,
-    /// WPA2 passphrase. None is Open network.
     pub wifi_pw: Option<String<63>>,
 
+    /// Networking
     /// TODO: Populate this field from esp's hardware info or just refer it from HAL?
     /// Only intended purpose I see for keeping it here is for spoofing?
     pub mac: [u8; 6],
-
     /// `None` for DHCP
     pub ip4_static: Option<StaticConfigV4>,
+
+    /// UART
     pub uart_rx_pin: u8,
-    pub uart_tx_pin: u8
+    pub uart_tx_pin: u8,
 }
 
 impl SSHConfig {
