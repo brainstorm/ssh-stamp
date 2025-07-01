@@ -5,7 +5,7 @@ use core::marker::Sized;
 use esp_alloc as _;
 use esp_backtrace as _;
 use esp_hal::{
-    gpio::AnyPin, interrupt::{software::SoftwareInterruptControl, Priority}, peripherals::UART1, rng::Rng, timer::timg::TimerGroup, uart::{Config, RxConfig, Uart}
+    gpio::AnyPin, interrupt::{software::SoftwareInterruptControl, Priority}, peripherals::{self, UART1}, rng::Rng, timer::timg::TimerGroup, uart::{Config, RxConfig, Uart}
 };
 use esp_hal_embassy::InterruptExecutor;
 
@@ -18,6 +18,7 @@ use ssh_stamp::{config::SSHConfig, espressif::{
 }, storage::Fl};
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
+use heapless::Vec;
 
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) -> ! {
@@ -79,11 +80,24 @@ async fn main(spawner: Spawner) -> ! {
             let interrupt_spawner = interrupt_executor.start(Priority::Priority10);
         }
     }
+    // Grab UART1, typically not connected to dev board's TTL2USB IC nor builtin JTAG functionality
+    let uart1 = peripherals.UART1.reborrow();
+
+    // Potential pins to use for such UART, to be owned by uart_task.
+    // TODO: Unsure if that's what was referred in the conversations below...
+    let uart_pins = Vec::<AnyPin<'static>, 2>::from([
+        peripherals.GPIO1,
+        peripherals.GPIO2
+    ]);
+    
+    // let rx = config.lock().await.uart_rx_pin;
+    // let tx = config.lock().await.uart_tx_pin;
+
     cfg_if::cfg_if! {
         if #[cfg(not(feature = "esp32c2"))] {
-            interrupt_spawner.spawn(uart_task(uart_buf, peripherals.UART1)).unwrap(); //, _config)).unwrap();
+            interrupt_spawner.spawn(uart_task(uart_buf, uart1, uart_pins)).unwrap(); //, _config)).unwrap();
         } else {
-            interrupt_spawner.spawn(uart_task(uart_buf, peripherals.UART1)).unwrap(); //, config)).unwrap();
+            interrupt_spawner.spawn(uart_task(uart_buf, uart1, uart_pins)).unwrap(); //, config)).unwrap();
         }
     }
     accept_requests(tcp_stack, uart_buf).await;
@@ -96,43 +110,44 @@ static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
 async fn uart_task(
     buffer: &'static BufferedUart,
     uart_periph: UART1<'static>,
-    //config: &'static SunsetMutex<SSHConfig>
+    uart_pins: &'static Vec<AnyPin<'static>, 2>,
+    config: &'static SunsetMutex<SSHConfig>
 ) {
-    // TODO: Find the "live reconfiguration" calls to change all parameters
-    // while firmware is running, including but not limited to mapped GPIOs.
-
-    // TODO: Yikes, unsafe code here, but we need to steal the pins to reconfigure the UART
-    // when config changes via SSH env vars... I need to find a better way for this :/
-
-    // let rx_pin_num = config.lock().await.uart_rx_pin;
-    // let tx_pin_num = config.lock().await.uart_tx_pin;
-
-    let rx_pin_num = 1;
-    let tx_pin_num = 2;
+    // Suggestions from esp-rs/esp-hal matrix channel by different authors on how to handle runtime UART pin changes, WIP:
 
     // You can do all of this without steal by passing the pins and uart with .reborrow() appended (so that we borrow the pins/uart, not move), 
     // then if you drop the uart driver all the resources will still be there so you can construct again
     // If you just need to set the config again, just call apply_config
 
-    unsafe {
-        let rx_pin = AnyPin::steal(rx_pin_num);
-        let tx_pin = AnyPin::steal(tx_pin_num);
-  
+    // are you reading this from a non-rust file or something? I'd expect a cross-platform crate to take pins as some generic parameter and use a 
+    // non-chip-specific trait to access them, not use integers. Should be straightforward enough at compile-time and if you're doing it at runtime 
+    // that seems a bit weird.
 
-        // Hardware UART setup
-        let uart_config = Config::default().with_rx(
-            RxConfig::default()
-                .with_fifo_full_threshold(16)
-                .with_timeout(1)
-        );
+    // I think to do that, you could have the uart task own all of the AnyPins that might be chosen for uart on that platform, as well as uart_periph = UART1. 
+    // Turn the pins array into an array of PeripheralRef<AnyPin> with .into_ref(), and also uart_periph.into_ref(). then when you want to configure, 
+    // like mabez said you .reborrow() from chosen pins in that array. (might need an array of refcells?). then pass the reborrowed uart_tx/uart_rx into the 
+    // .with_rx or .with_tx? Then when you next reconfigure, you drop the "reborrow" instances and then the borrow checker should let you borrow again.
 
-        let uart = Uart::new(uart_periph, uart_config)
-            .unwrap()
-            .with_rx(rx_pin)
-            .with_tx(tx_pin)
-            .into_async();
+    // yeah, and if you want it to put them to different uses then you can probably build a map to hold the pins you aren't currently using in a mutex or the like, 
+    // so you can check that the configuration is sensible at runtime.
 
-        // Run the main buffered TX/RX loop
-        buffer.run(uart).await;
-    }
+    // TODO: Probably better use a HashMap as suggested above instead of an array of pins?
+    let rx_pin_num = uart_pins[config.lock().await.uart_rx_pin as usize];
+    let tx_pin_num = uart_pins[config.lock().await.uart_tx_pin as usize];
+
+    // Hardware UART setup
+    let uart_config = Config::default().with_rx(
+        RxConfig::default()
+            .with_fifo_full_threshold(16)
+            .with_timeout(1)
+    );
+
+    let uart = Uart::new(uart_periph, uart_config)
+        .unwrap()
+        .with_rx(rx_pin_num)
+        .with_tx(tx_pin_num)
+        .into_async();
+
+    // Run the main buffered TX/RX loop
+    buffer.run(uart).await;
 }

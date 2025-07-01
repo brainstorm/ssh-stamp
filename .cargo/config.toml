@@ -33,9 +33,17 @@ rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s2"']
 runner = "espflash flash --baud=921600 --monitor --chip esp32s3"
 rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s3"']
 
-
+# https://docs.espressif.com/projects/rust/esp-hal/1.0.0-beta.1/esp32c6/esp_hal/index.html#additional-configuration
 [env]
-ESP_LOG="INFO"
+ESP_LOG = "INFO"
+#ESP_HAL_CONFIG_PLACE_SWITCH_TABLES_IN_RAM=true
+#ESP_HAL_CONFIG_PLACE_ANON_IN_RAM=false
+#ESP_HAL_CONFIG_FLIP_LINK=false
+#ESP_HAL_CONFIG_STACK_GUARD_OFFSET=4096
+#ESP_HAL_CONFIG_STACK_GUARD_VALUE=3740121773
+#ESP_HAL_CONFIG_IMPL_CRITICAL_SECTION=ture
+
+
 
 [build]
 target = "riscv32imac-unknown-none-elf"
