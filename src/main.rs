@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use core::marker::Sized;
+use core::{any::Any, iter::Map, marker::Sized};
 use esp_alloc as _;
 use esp_backtrace as _;
 use esp_hal::{
@@ -64,7 +64,9 @@ async fn main(spawner: Spawner) -> ! {
     let wifi_controller = esp_wifi::init(timg0.timer0, rng, peripherals.RADIO_CLK).unwrap();
 
     // Bring up the network interface and start accepting SSH connections.
-    let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng, config)
+    // Clone the reference to config to avoid borrow checker issues.
+    let config_for_network = config;
+    let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng, config_for_network)
         .await
         .unwrap();
 
@@ -81,23 +83,25 @@ async fn main(spawner: Spawner) -> ! {
         }
     }
     // Grab UART1, typically not connected to dev board's TTL2USB IC nor builtin JTAG functionality
-    let uart1 = peripherals.UART1.reborrow();
+    let uart1 = peripherals.UART1;
 
     // Potential pins to use for such UART, to be owned by uart_task.
     // TODO: Unsure if that's what was referred in the conversations below...
-    let uart_pins = Vec::<AnyPin<'static>, 2>::from([
-        peripherals.GPIO1,
-        peripherals.GPIO2
-    ]);
-    
-    // let rx = config.lock().await.uart_rx_pin;
-    // let tx = config.lock().await.uart_tx_pin;
+    static UART_PINS: StaticCell<Vec<AnyPin<'static>, 2>> = StaticCell::new();
+    let uart_pins = UART_PINS.init({
+        let mut pins = Vec::<AnyPin<'static>, 2>::new();
+        pins.push(peripherals.GPIO1.into()).unwrap();
+        pins.push(peripherals.GPIO2.into()).unwrap();
+        pins
+    });
 
+    // let rx = config.lock().await.uart_rx_pin;
+    // Use the same config reference for UART task.
     cfg_if::cfg_if! {
         if #[cfg(not(feature = "esp32c2"))] {
-            interrupt_spawner.spawn(uart_task(uart_buf, uart1, uart_pins)).unwrap(); //, _config)).unwrap();
+            interrupt_spawner.spawn(uart_task(uart_buf, uart1, uart_pins, config)).unwrap(); //, _config)).unwrap();
         } else {
-            interrupt_spawner.spawn(uart_task(uart_buf, uart1, uart_pins)).unwrap(); //, config)).unwrap();
+            interrupt_spawner.spawn(uart_task(uart_buf, uart1, uart_pins, config)).unwrap(); //, config)).unwrap();
         }
     }
     accept_requests(tcp_stack, uart_buf).await;
@@ -132,8 +136,8 @@ async fn uart_task(
     // so you can check that the configuration is sensible at runtime.
 
     // TODO: Probably better use a HashMap as suggested above instead of an array of pins?
-    let rx_pin_num = uart_pins[config.lock().await.uart_rx_pin as usize];
-    let tx_pin_num = uart_pins[config.lock().await.uart_tx_pin as usize];
+    let rx_pin_num = &uart_pins[config.lock().await.uart_rx_pin as usize];
+    let tx_pin_num = &uart_pins[config.lock().await.uart_tx_pin as usize];
 
     // Hardware UART setup
     let uart_config = Config::default().with_rx(
