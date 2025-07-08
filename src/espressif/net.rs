@@ -45,7 +45,7 @@ pub async fn if_up(
     wifi_controller: EspWifiController<'static>,
     wifi: WIFI<'static>,
     rng: &mut Rng,
-    config: &'static mut SunsetMutex<SSHConfig>
+    config: &'static SunsetMutex<SSHConfig>
 ) -> Result<Stack<'static>, sunset::Error> {
     let wifi_init = &*mk_static!(EspWifiController<'static>, wifi_controller);
     let (controller, interfaces) = esp_wifi::wifi::new(wifi_init, wifi).unwrap();
@@ -126,7 +126,7 @@ pub async fn accept_requests(stack: Stack<'static>, uart: &BufferedUart) -> ! {
 }
 
 #[embassy_executor::task]
-async fn wifi_up(mut controller: WifiController<'static>, config: &'static mut SunsetMutex<SSHConfig>) {
+async fn wifi_up(mut controller: WifiController<'static>, config: &'static SunsetMutex<SSHConfig>) {
     println!("Device capabilities: {:?}", controller.capabilities());
 
     let wifi_ssid = &config.lock().await.wifi_ssid;
