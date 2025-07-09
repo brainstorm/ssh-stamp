@@ -90,8 +90,8 @@ async fn main(spawner: Spawner) -> ! {
     static UART_PINS: StaticCell<Vec<SunsetMutex<AnyPin<'static>>, 2>> = StaticCell::new();
     let uart_pins = UART_PINS.init({
         let mut pins = Vec::<SunsetMutex<AnyPin<'static>>, 2>::new();
-        pins.push(SunsetMutex::new(peripherals.GPIO1.into())).unwrap();
-        pins.push(SunsetMutex::new(peripherals.GPIO2.into())).unwrap();
+        pins.push(SunsetMutex::new(peripherals.GPIO10.into())).unwrap();
+        pins.push(SunsetMutex::new(peripherals.GPIO11.into())).unwrap();
         pins
     });
 
