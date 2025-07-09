@@ -31,6 +31,7 @@ async fn main(spawner: Spawner) -> ! {
                 esp_alloc::heap_allocator!(size: 72 * 1024);
         }
     );
+    esp_bootloader_esp_idf::esp_app_desc!();
     esp_println::logger::init_logger_from_env();
 
     // System init
