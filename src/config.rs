@@ -17,7 +17,7 @@ use sunset::{
     SignKey,
 };
 
-use crate::settings::{KEY_SLOTS, SSH_SERVER_ID};
+use crate::settings::{DEFAULT_SSID, KEY_SLOTS};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SSHConfig {
@@ -53,7 +53,7 @@ impl SSHConfig {
     pub fn new() -> Result<Self> {
         let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
         let wifi_ssid: String<32> =
-            option_env!("WIFI_SSID").unwrap_or(SSH_SERVER_ID).try_into().trap()?;
+            option_env!("WIFI_SSID").unwrap_or(DEFAULT_SSID).try_into().trap()?;
         let wifi_pw: Option<String<63>> =
             option_env!("WIFI_PW").map(|s| s.try_into()).transpose().trap()?;
         let mac = random_mac()?;
@@ -66,8 +66,8 @@ impl SSHConfig {
             wifi_pw,
             mac,
             ip4_static: None,
-            uart_rx_pin: 1,
-            uart_tx_pin: 2,
+            uart_rx_pin: 0,
+            uart_tx_pin: 1,
         })
     }
 
