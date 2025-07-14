@@ -52,11 +52,14 @@ pub async fn if_up(
 
     let gw_ip_addr_ipv4 = Ipv4Addr::from_str("192.168.0.1").expect("failed to parse gateway ip");
 
-    let _gw_ip_addr = if let Some(ref s) = config.lock().await.ip4_static {
-        embassy_net::Config::ipv4_static(s.clone())
-    } else {
-        embassy_net::Config::dhcpv4(Default::default())
-    };
+    // let _gw_ip_addr = {
+    //     let guard = config.lock().await;
+    //     if let Some(ref s) = guard.ip4_static {
+    //         embassy_net::Config::ipv4_static(s.clone())
+    //     } else {
+    //         embassy_net::Config::dhcpv4(Default::default())
+    //     }
+    // };
     
     let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(gw_ip_addr_ipv4, 24),
@@ -129,7 +132,11 @@ pub async fn accept_requests(stack: Stack<'static>, uart: &BufferedUart) -> ! {
 async fn wifi_up(mut controller: WifiController<'static>, config: &'static SunsetMutex<SSHConfig>) {
     println!("Device capabilities: {:?}", controller.capabilities());
 
-    let wifi_ssid = &config.lock().await.wifi_ssid;
+    let wifi_ssid = {
+        let guard = config.lock().await;
+        guard.wifi_ssid.clone()
+        // drop guard
+    };
     // TODO: No wifi password(s) yet...
     //let wifi_password = config.lock().await.wifi_pw;
 

@@ -9,6 +9,7 @@ use esp_hal::{
 };
 use esp_hal_embassy::InterruptExecutor;
 
+use esp_println::dbg;
 use esp_storage::FlashStorage;
 use embassy_executor::Spawner;
 use ssh_stamp::{config::SSHConfig, espressif::{
@@ -20,6 +21,13 @@ use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
 use heapless::Vec;
  
+pub struct PinConfig {
+    pub tx: SunsetMutex<AnyPin<'static>>,
+    pub rx: SunsetMutex<AnyPin<'static>>,
+    pub rts: Option<SunsetMutex<AnyPin<'static>>>,
+    pub cts: Option<SunsetMutex<AnyPin<'static>>>,
+}
+
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) -> ! {
     cfg_if::cfg_if!(
@@ -87,16 +95,18 @@ async fn main(spawner: Spawner) -> ! {
 
     // Potential pins to use for such UART, to be owned by uart_task.
     // TODO: Unsure if that's what was referred in the conversations below...
-    static UART_PINS: StaticCell<Vec<SunsetMutex<AnyPin<'static>>, 2>> = StaticCell::new();
+    static UART_PINS: StaticCell<PinConfig> = StaticCell::new();
     let uart_pins = UART_PINS.init({
-        let mut pins = Vec::<SunsetMutex<AnyPin<'static>>, 2>::new();
-        pins.push(SunsetMutex::new(peripherals.GPIO10.into())).unwrap();
-        pins.push(SunsetMutex::new(peripherals.GPIO11.into())).unwrap();
-        pins
+        PinConfig {
+            tx: SunsetMutex::new(map[config.tx].into()),
+            rx: SunsetMutex::new(map[config.rx].into()),
+            rts: None,
+            cts: None,
+        }
     });
 
     // Use the same config reference for UART task.
-    interrupt_spawner.spawn(uart_task(uart_buf, uart1, uart_pins, config)).unwrap();
+    interrupt_spawner.spawn(uart_task(uart_buf, uart1, uart_pins)).unwrap();
 
     accept_requests(tcp_stack, uart_buf).await;
 }
@@ -108,8 +118,8 @@ static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
 async fn uart_task(
     buffer: &'static BufferedUart,
     uart_periph: UART1<'static>,
-    uart_pins: &'static Vec<SunsetMutex<AnyPin<'static>>, 2>,
-    config: &'static SunsetMutex<SSHConfig>
+    uart_pins: &'static PinConfig,
+    // config: &'static SunsetMutex<SSHConfig>
 ) {
     // Hardware UART setup
     let uart_config = Config::default().with_rx(
@@ -117,11 +127,15 @@ async fn uart_task(
             .with_fifo_full_threshold(16)
             .with_timeout(1)
     );
+  
+    // let (rx_idx, tx_idx) = {
+    //     let guard = config.lock().await;
+    //     (guard.uart_rx_pin, guard.uart_tx_pin)
+    // };
 
-    let config = config.lock().await;
-    // TODO: Double check how SunsetMutex works: lock/unlock patterns.
-    let mut uart_rx_pin = uart_pins[config.uart_rx_pin as usize].lock().await;
-    let mut uart_tx_pin = uart_pins[config.uart_tx_pin as usize].lock().await;
+    let mut uart_rx_pin = uart_pins.rx.lock().await;
+    let mut uart_tx_pin = uart_pins.tx.lock().await;
+    dbg!(&uart_rx_pin);
 
     let uart = Uart::new(uart_periph, uart_config)
         .unwrap()

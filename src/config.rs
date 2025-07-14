@@ -1,5 +1,6 @@
 use core::net::Ipv4Addr;
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
+use esp_hal::gpio::AnyPin;
 use heapless::{String, Vec};
 
 use esp_println::println;
@@ -16,6 +17,7 @@ use sunset::{
     sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
     SignKey,
 };
+use sunset_async::SunsetMutex;
 
 use crate::settings::{DEFAULT_SSID, KEY_SLOTS};
 
@@ -41,6 +43,35 @@ pub struct SSHConfig {
     /// UART
     pub uart_rx_pin: u8,
     pub uart_tx_pin: u8,
+
+    // 10
+    pub tx: u8,
+    // 11
+    pub rx: u8,
+    pub rts: Option<u8>,
+    pub cts: Option<u8>,
+}
+
+// map! {
+//     10 => peripheral.GPIO11,
+//     11 => peripheral.GPI010,
+// }
+
+struct PinConfig {
+
+}
+
+impl PinConfig {
+    pub fn into_rx_pin() -> SunsetMutex<AnyPin<'static>> {
+
+        let pin_number = 11;
+        match pin_number {
+            11 => peripheral.GPIO11,
+            10 => peripheral.GPIO10,
+        }
+
+        todo!()
+    }
 }
 
 impl SSHConfig {
