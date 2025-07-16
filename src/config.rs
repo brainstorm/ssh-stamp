@@ -21,7 +21,7 @@ use sunset_async::SunsetMutex;
 
 use crate::settings::{DEFAULT_SSID, KEY_SLOTS};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug)]
 pub struct SSHConfig {
     pub hostkey: SignKey,
 
@@ -41,36 +41,30 @@ pub struct SSHConfig {
     pub ip4_static: Option<StaticConfigV4>,
 
     /// UART
-    pub uart_rx_pin: u8,
-    pub uart_tx_pin: u8,
-
-    // 10
-    pub tx: u8,
-    // 11
-    pub rx: u8,
-    pub rts: Option<u8>,
-    pub cts: Option<u8>,
+    pub uart_pins: PinConfig,
 }
 
-// map! {
-//     10 => peripheral.GPIO11,
-//     11 => peripheral.GPI010,
-// }
-
-struct PinConfig {
-
+#[derive(Debug)]
+pub struct PinConfig {
+    pub tx: SunsetMutex<AnyPin<'static>>,
+    pub rx: SunsetMutex<AnyPin<'static>>,
+    pub rts: Option<SunsetMutex<AnyPin<'static>>>,
+    pub cts: Option<SunsetMutex<AnyPin<'static>>>,
 }
 
 impl PinConfig {
-    pub fn into_rx_pin() -> SunsetMutex<AnyPin<'static>> {
 
-        let pin_number = 11;
-        match pin_number {
-            11 => peripheral.GPIO11,
-            10 => peripheral.GPIO10,
+}
+
+// TODO: Revisit this and compare them with esp-hal examples, see what they use for their HIL nowadays.
+impl Default for PinConfig {
+    fn default() -> Self {
+        PinConfig {
+            rx: 10,
+            tx: 11,
+            rts: None,
+            cts: None,
         }
-
-        todo!()
     }
 }
 
@@ -88,6 +82,9 @@ impl SSHConfig {
         let wifi_pw: Option<String<63>> =
             option_env!("WIFI_PW").map(|s| s.try_into()).transpose().trap()?;
         let mac = random_mac()?;
+
+        let uart_pins = PinConfig::default();
+
         Ok(SSHConfig {
             hostkey,
             password_authentication: true,
@@ -97,8 +94,7 @@ impl SSHConfig {
             wifi_pw,
             mac,
             ip4_static: None,
-            uart_rx_pin: 0,
-            uart_tx_pin: 1,
+            uart_pins,
         })
     }
 
@@ -191,6 +187,17 @@ where
     .transpose()
 }
 
+fn dec_uart_pins<'de, S>(s: &mut S) -> WireResult<PinConfig>
+where
+    S: SSHSource<'de>,
+{
+    let tx = u8::dec(s)?;
+    let rx = u8::dec(s)?;
+    let rts = dec_option(s)?;
+    let cts = dec_option(s)?;
+    Ok(PinConfig { tx, rx, rts, cts })
+}
+
 impl SSHEncode for SSHConfig {
     fn enc(&self, s: &mut dyn SSHSink) -> WireResult<()> {
         println!("enc si");
@@ -245,8 +252,7 @@ impl<'de> SSHDecode<'de> for SSHConfig {
         // Decode password_authentication (missing in original code)
         let password_authentication = SSHDecode::dec(s)?;
 
-        let uart_rx_pin = SSHDecode::dec(s)?;
-        let uart_tx_pin = SSHDecode::dec(s)?;
+        let uart_pins = dec_uart_pins(s)?;
 
         Ok(Self {
             hostkey,
@@ -257,8 +263,7 @@ impl<'de> SSHDecode<'de> for SSHConfig {
             wifi_pw,
             mac,
             ip4_static,
-            uart_rx_pin,
-            uart_tx_pin
+            uart_pins,
         })
     }
 }

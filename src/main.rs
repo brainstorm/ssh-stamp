@@ -20,13 +20,6 @@ use ssh_stamp::{config::SSHConfig, espressif::{
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
 use heapless::Vec;
- 
-pub struct PinConfig {
-    pub tx: SunsetMutex<AnyPin<'static>>,
-    pub rx: SunsetMutex<AnyPin<'static>>,
-    pub rts: Option<SunsetMutex<AnyPin<'static>>>,
-    pub cts: Option<SunsetMutex<AnyPin<'static>>>,
-}
 
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) -> ! {
@@ -97,12 +90,7 @@ async fn main(spawner: Spawner) -> ! {
     // TODO: Unsure if that's what was referred in the conversations below...
     static UART_PINS: StaticCell<PinConfig> = StaticCell::new();
     let uart_pins = UART_PINS.init({
-        PinConfig {
-            tx: SunsetMutex::new(map[config.tx].into()),
-            rx: SunsetMutex::new(map[config.rx].into()),
-            rts: None,
-            cts: None,
-        }
+        PinConfig::default();
     });
 
     // Use the same config reference for UART task.
