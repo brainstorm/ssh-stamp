@@ -1,6 +1,7 @@
 use core::net::Ipv4Addr;
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 use esp_hal::gpio::AnyPin;
+use esp_hal::peripherals::{GPIO, GPIO0, GPIO1};
 use heapless::{String, Vec};
 
 use esp_println::println;
@@ -53,15 +54,25 @@ pub struct PinConfig {
 }
 
 impl PinConfig {
-
+    /// Resolves a u8 pin number into an AnyPin GPIO type.
+    /// Returns None if the pin number is invalid or unsupported.
+    pub fn resolve_pin(pin_num: u8) -> Option<AnyPin<'static>> {
+        match pin_num {
+            0 => Some(AnyPin::GPIO0),
+            // (...)
+            _ => None
+        }
+    }
 }
 
 // TODO: Revisit this and compare them with esp-hal examples, see what they use for their HIL nowadays.
 impl Default for PinConfig {
     fn default() -> Self {
+        let rx = SunsetMutex::new(PinConfig::resolve_pin(10).expect("Invalid RX pin"));
+        let tx = SunsetMutex::new(PinConfig::resolve_pin(11).expect("Invalid TX pin"));
         PinConfig {
-            rx: 10,
-            tx: 11,
+            rx,
+            tx,
             rts: None,
             cts: None,
         }
@@ -202,15 +213,6 @@ impl SSHEncode for SSHConfig {
     fn enc(&self, s: &mut dyn SSHSink) -> WireResult<()> {
         println!("enc si");
         enc_signkey(&self.hostkey, s)?;
-
-        // enc_option(&self.console_pw, s)?;
-
-        // for k in self.console_keys.iter() {
-        //     enc_option(k, s)?;
-        // }
-
-        // self.console_noauth.enc(s)?;
-
         enc_option(&self.admin_pw, s)?;
 
         for k in self.admin_keys.iter() {

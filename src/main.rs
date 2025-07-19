@@ -25,7 +25,7 @@ use heapless::Vec;
 async fn main(spawner: Spawner) -> ! {
     cfg_if::cfg_if!(
         if #[cfg(feature = "esp32s2")] {
-            // TODO: This heap size will crash at runtime, we need to fix this
+            // TODO: This heap size will crash at runtime (only for the ESP32S2), we need to fix this
             // applying ideas from https://github.com/brainstorm/ssh-stamp/pull/41#issuecomment-2964775170
                 esp_alloc::heap_allocator!(size: 69 * 1024);
         } else {
@@ -107,7 +107,6 @@ async fn uart_task(
     buffer: &'static BufferedUart,
     uart_periph: UART1<'static>,
     uart_pins: &'static PinConfig,
-    // config: &'static SunsetMutex<SSHConfig>
 ) {
     // Hardware UART setup
     let uart_config = Config::default().with_rx(
@@ -116,11 +115,6 @@ async fn uart_task(
             .with_timeout(1)
     );
   
-    // let (rx_idx, tx_idx) = {
-    //     let guard = config.lock().await;
-    //     (guard.uart_rx_pin, guard.uart_tx_pin)
-    // };
-
     let mut uart_rx_pin = uart_pins.rx.lock().await;
     let mut uart_tx_pin = uart_pins.tx.lock().await;
     dbg!(&uart_rx_pin);
