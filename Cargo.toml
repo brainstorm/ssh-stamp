@@ -49,6 +49,7 @@ digest = { version = "0.10", default-features = false, features = ["rand_core", 
 embedded-storage-async = "0.4"
 portable-atomic = "1"
 esp-bootloader-esp-idf = "0.1"
+snafu = { version = "0.8.6", default-features = false }
 
 [profile.dev]
 # Rust debug is too slow.

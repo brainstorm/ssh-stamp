@@ -19,7 +19,7 @@ use ssh_stamp::{config::SSHConfig, espressif::{
 }, storage::Fl};
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
-use heapless::Vec;
+use ssh_stamp::config::PinConfig;
 
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) -> ! {
@@ -84,17 +84,22 @@ async fn main(spawner: Spawner) -> ! {
         }
     }
     // Grab UART1, typically not connected to dev board's TTL2USB IC nor builtin JTAG functionality
-    let uart1 = peripherals.UART1;
+    // let uart1 = peripherals.UART1;
+
+    let pin_config = {
+        let guard = config.lock().await;
+        guard.uart_pins.clone()
+    };
 
     // Potential pins to use for such UART, to be owned by uart_task.
     // TODO: Unsure if that's what was referred in the conversations below...
     static UART_PINS: StaticCell<PinConfig> = StaticCell::new();
     let uart_pins = UART_PINS.init({
-        PinConfig::default();
+        PinConfig::new(&mut peripherals, pin_config)
     });
 
     // Use the same config reference for UART task.
-    interrupt_spawner.spawn(uart_task(uart_buf, uart1, uart_pins)).unwrap();
+    interrupt_spawner.spawn(uart_task(uart_buf, uart_pins)).unwrap();
 
     accept_requests(tcp_stack, uart_buf).await;
 }
@@ -105,8 +110,8 @@ static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
 #[embassy_executor::task()]
 async fn uart_task(
     buffer: &'static BufferedUart,
-    uart_periph: UART1<'static>,
-    uart_pins: &'static PinConfig,
+    // uart_periph: UART1<'static>,
+    uart_pins: &'static PinConfig<'static>,
 ) {
     // Hardware UART setup
     let uart_config = Config::default().with_rx(
@@ -115,9 +120,9 @@ async fn uart_task(
             .with_timeout(1)
     );
   
-    let mut uart_rx_pin = uart_pins.rx.lock().await;
-    let mut uart_tx_pin = uart_pins.tx.lock().await;
-    dbg!(&uart_rx_pin);
+    // let mut uart_rx_pin = uart_pins.rx.lock().await;
+    // let mut uart_tx_pin = uart_pins.tx.lock().await;
+    // dbg!(&uart_rx_pin);
 
     let uart = Uart::new(uart_periph, uart_config)
         .unwrap()

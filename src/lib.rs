@@ -10,3 +10,4 @@ pub mod serial;
 pub mod serve;
 pub mod settings;
 pub mod storage;
+pub mod errors;

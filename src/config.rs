@@ -1,7 +1,7 @@
 use core::net::Ipv4Addr;
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 use esp_hal::gpio::AnyPin;
-use esp_hal::peripherals::{GPIO, GPIO0, GPIO1};
+use esp_hal::peripherals::Peripherals;
 use heapless::{String, Vec};
 
 use esp_println::println;
@@ -20,6 +20,7 @@ use sunset::{
 };
 use sunset_async::SunsetMutex;
 
+use crate::errors;
 use crate::settings::{DEFAULT_SSID, KEY_SLOTS};
 
 #[derive(Debug)]
@@ -42,42 +43,112 @@ pub struct SSHConfig {
     pub ip4_static: Option<StaticConfigV4>,
 
     /// UART
-    pub uart_pins: PinConfig,
+    pub uart_pins: SerdePinConfig,
 }
 
-#[derive(Debug)]
-pub struct PinConfig {
-    pub tx: SunsetMutex<AnyPin<'static>>,
-    pub rx: SunsetMutex<AnyPin<'static>>,
-    pub rts: Option<SunsetMutex<AnyPin<'static>>>,
-    pub cts: Option<SunsetMutex<AnyPin<'static>>>,
+#[derive(Debug, Clone)]
+pub struct SerdePinConfig {
+    pub tx: u8,
+    pub rx: u8,
+    pub rts: Option<u8>,
+    pub cts: Option<u8>,
 }
 
-impl PinConfig {
+impl Default for SerdePinConfig {
+    fn default() -> Self {
+        Self { 
+            tx: 10,
+            rx: 11,
+            // tx: env!("SSH_STAMP_TX_PIN").parse().unwrap(),
+            // rx: env!("SSH_STAMP_RX_PIN").parse().unwrap(),
+            rts: option_env!("SSH_STAMP_RTS").map(|s| s.parse().unwrap()),
+            cts: option_env!("SSH_STAMP_CTS").map(|s| s.parse().unwrap()),
+        }
+    }
+}
+
+pub struct PinConfig<'a> {
+    pub pin_config_inner: SerdePinConfig,
+    pub peripherals: &'a mut Peripherals,
+}
+
+impl<'a> PinConfig<'a> {
+    pub fn new(peripherals: &'a mut Peripherals, pin_config_inner: SerdePinConfig) -> Self {
+        Self {
+            pin_config_inner,
+            peripherals
+        }
+    }
+
+    pub fn tx(&mut self) -> errors::Result<SunsetMutex<AnyPin<'_>>> {
+        Ok(SunsetMutex::new(Self::resolve_pin(self.pin_config_inner.tx, self.peripherals)?))
+    }
+    
+    pub fn rx(&mut self) -> errors::Result<SunsetMutex<AnyPin<'_>>> {
+        Ok(SunsetMutex::new(Self::resolve_pin(self.pin_config_inner.rx, self.peripherals)?))
+    }
+
+    pub fn rts(&mut self) -> errors::Result<Option<SunsetMutex<AnyPin<'_>>>> {
+        self.pin_config_inner.rts.map(|rts| Ok(SunsetMutex::new(Self::resolve_pin(rts, self.peripherals)?))).transpose()
+    }
+
+    pub fn cts(&mut self) -> errors::Result<Option<SunsetMutex<AnyPin<'_>>>> {
+        self.pin_config_inner.cts.map(|cts| Ok(SunsetMutex::new(Self::resolve_pin(cts, self.peripherals)?))).transpose()
+    }
+
     /// Resolves a u8 pin number into an AnyPin GPIO type.
     /// Returns None if the pin number is invalid or unsupported.
-    pub fn resolve_pin(pin_num: u8) -> Option<AnyPin<'static>> {
+    pub fn resolve_pin(pin_num: u8, peripherals: &mut Peripherals) -> errors::Result<AnyPin<'_>> {
         match pin_num {
-            0 => Some(AnyPin::GPIO0),
-            // (...)
-            _ => None
+            0 => Ok(peripherals.GPIO0.reborrow().into()),
+            1 => Ok(peripherals.GPIO1.reborrow().into()),
+            2 => Ok(peripherals.GPIO2.reborrow().into()),
+            3 => Ok(peripherals.GPIO3.reborrow().into()),
+            4 => Ok(peripherals.GPIO4.reborrow().into()),
+            5 => Ok(peripherals.GPIO5.reborrow().into()),
+            6 => Ok(peripherals.GPIO6.reborrow().into()),
+            7 => Ok(peripherals.GPIO7.reborrow().into()),
+            8 => Ok(peripherals.GPIO8.reborrow().into()),
+            9 => Ok(peripherals.GPIO9.reborrow().into()),
+            10 => Ok(peripherals.GPIO10.reborrow().into()),
+            11 => Ok(peripherals.GPIO11.reborrow().into()),
+            12 => Ok(peripherals.GPIO12.reborrow().into()),
+            13 => Ok(peripherals.GPIO13.reborrow().into()),
+            14 => Ok(peripherals.GPIO14.reborrow().into()),
+            15 => Ok(peripherals.GPIO15.reborrow().into()),
+            16 => Ok(peripherals.GPIO16.reborrow().into()),
+            17 => Ok(peripherals.GPIO17.reborrow().into()),
+            18 => Ok(peripherals.GPIO18.reborrow().into()),
+            19 => Ok(peripherals.GPIO19.reborrow().into()),
+            20 => Ok(peripherals.GPIO20.reborrow().into()),
+            21 => Ok(peripherals.GPIO21.reborrow().into()),
+            22 => Ok(peripherals.GPIO22.reborrow().into()),
+            23 => Ok(peripherals.GPIO23.reborrow().into()),
+            24 => Ok(peripherals.GPIO24.reborrow().into()),
+            25 => Ok(peripherals.GPIO25.reborrow().into()),
+            26 => Ok(peripherals.GPIO26.reborrow().into()),
+            27 => Ok(peripherals.GPIO27.reborrow().into()),
+            28 => Ok(peripherals.GPIO28.reborrow().into()),
+            29 => Ok(peripherals.GPIO29.reborrow().into()),
+            30 => Ok(peripherals.GPIO30.reborrow().into()),
+            _ => Err(errors::Error::InvalidPin),
         }
     }
 }
 
-// TODO: Revisit this and compare them with esp-hal examples, see what they use for their HIL nowadays.
-impl Default for PinConfig {
-    fn default() -> Self {
-        let rx = SunsetMutex::new(PinConfig::resolve_pin(10).expect("Invalid RX pin"));
-        let tx = SunsetMutex::new(PinConfig::resolve_pin(11).expect("Invalid TX pin"));
-        PinConfig {
-            rx,
-            tx,
-            rts: None,
-            cts: None,
-        }
-    }
-}
+// // TODO: Revisit this and compare them with esp-hal examples, see what they use for their HIL nowadays.
+// impl Default for PinConfig {
+//     fn default() -> Self {
+//         let rx = SunsetMutex::new(PinConfig::resolve_pin(10).expect("Invalid RX pin"));
+//         let tx = SunsetMutex::new(PinConfig::resolve_pin(11).expect("Invalid TX pin"));
+//         PinConfig {
+//             rx,
+//             tx,
+//             rts: None,
+//             cts: None,
+//         }
+//     }
+// }
 
 impl SSHConfig {
     /// Bump this when the format changes
@@ -94,7 +165,7 @@ impl SSHConfig {
             option_env!("WIFI_PW").map(|s| s.try_into()).transpose().trap()?;
         let mac = random_mac()?;
 
-        let uart_pins = PinConfig::default();
+        let uart_pins = SerdePinConfig::default();
 
         Ok(SSHConfig {
             hostkey,
@@ -198,7 +269,7 @@ where
     .transpose()
 }
 
-fn dec_uart_pins<'de, S>(s: &mut S) -> WireResult<PinConfig>
+fn dec_uart_pins<'de, S>(s: &mut S) -> WireResult<SerdePinConfig>
 where
     S: SSHSource<'de>,
 {
@@ -206,7 +277,7 @@ where
     let rx = u8::dec(s)?;
     let rts = dec_option(s)?;
     let cts = dec_option(s)?;
-    Ok(PinConfig { tx, rx, rts, cts })
+    Ok(SerdePinConfig { tx, rx, rts, cts })
 }
 
 impl SSHEncode for SSHConfig {
