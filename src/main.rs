@@ -5,11 +5,10 @@ use core::marker::Sized;
 use esp_alloc as _;
 use esp_backtrace as _;
 use esp_hal::{
-    gpio::AnyPin, interrupt::{software::SoftwareInterruptControl, Priority}, peripherals::UART1, rng::Rng, timer::timg::TimerGroup, uart::{Config, RxConfig, Uart}
+    interrupt::{software::SoftwareInterruptControl, Priority}, peripherals::UART1, rng::Rng, timer::timg::TimerGroup, uart::{Config, RxConfig, Uart}
 };
 use esp_hal_embassy::InterruptExecutor;
 
-use esp_println::dbg;
 use esp_storage::FlashStorage;
 use embassy_executor::Spawner;
 use ssh_stamp::{config::SSHConfig, espressif::{
@@ -84,7 +83,7 @@ async fn main(spawner: Spawner) -> ! {
         }
     }
     // Grab UART1, typically not connected to dev board's TTL2USB IC nor builtin JTAG functionality
-    // let uart1 = peripherals.UART1;
+    let uart1 = peripherals.UART1;
 
     let pin_config = {
         let guard = config.lock().await;
@@ -92,14 +91,15 @@ async fn main(spawner: Spawner) -> ! {
     };
 
     // Potential pins to use for such UART, to be owned by uart_task.
-    // TODO: Unsure if that's what was referred in the conversations below...
-    static UART_PINS: StaticCell<PinConfig> = StaticCell::new();
+    static UART_PINS: StaticCell<SunsetMutex<PinConfig>> = StaticCell::new();
     let uart_pins = UART_PINS.init({
-        PinConfig::new(&mut peripherals, pin_config)
+        // TODO: There shouldn't be a new() method at all because that implies initializing all GPIO pins...
+        // instead we focus on having take() and give() on the config-defined pins.
+        PinConfig::new(pin_config)
     });
 
     // Use the same config reference for UART task.
-    interrupt_spawner.spawn(uart_task(uart_buf, uart_pins)).unwrap();
+    interrupt_spawner.spawn(uart_task(uart_buf, uart1, uart_pins)).unwrap();
 
     accept_requests(tcp_stack, uart_buf).await;
 }
@@ -110,7 +110,7 @@ static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
 #[embassy_executor::task()]
 async fn uart_task(
     buffer: &'static BufferedUart,
-    // uart_periph: UART1<'static>,
+    uart_periph: UART1<'static>,
     uart_pins: &'static PinConfig<'static>,
 ) {
     // Hardware UART setup
