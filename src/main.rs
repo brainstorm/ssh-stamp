@@ -35,7 +35,7 @@ async fn main(spawner: Spawner) -> ! {
     esp_println::logger::init_logger_from_env();
 
     // System init
-    let peripherals = esp_hal::init(esp_hal::Config::default());
+    let mut peripherals = esp_hal::init(esp_hal::Config::default());
     let mut rng = Rng::new(peripherals.RNG);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
 
@@ -82,10 +82,8 @@ async fn main(spawner: Spawner) -> ! {
             let interrupt_spawner = interrupt_executor.start(Priority::Priority10);
         }
     }
-    // Grab UART1, typically not connected to dev board's TTL2USB IC nor builtin JTAG functionality
-    let uart1 = peripherals.UART1;
 
-    let pin_config = {
+    let serde_pin_config = {
         let guard = config.lock().await;
         guard.uart_pins.clone()
     };
@@ -95,8 +93,16 @@ async fn main(spawner: Spawner) -> ! {
     let uart_pins = UART_PINS.init({
         // TODO: There shouldn't be a new() method at all because that implies initializing all GPIO pins...
         // instead we focus on having take() and give() on the config-defined pins.
-        PinConfig::new(pin_config)
+        let pin_config = PinConfig::new(serde_pin_config);
+        
+        pin_config.give_rx(&mut peripherals);
+        pin_config.give_tx(&mut peripherals);
+
+        SunsetMutex::new(pin_config)
     });
+
+    // Grab UART1, typically not connected to dev board's TTL2USB IC nor builtin JTAG functionality
+    let uart1 = peripherals.UART1;
 
     // Use the same config reference for UART task.
     interrupt_spawner.spawn(uart_task(uart_buf, uart1, uart_pins)).unwrap();
@@ -111,7 +117,7 @@ static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
 async fn uart_task(
     buffer: &'static BufferedUart,
     uart_periph: UART1<'static>,
-    uart_pins: &'static PinConfig<'static>,
+    uart_pins: &'static SunsetMutex<PinConfig<'static>>,
 ) {
     // Hardware UART setup
     let uart_config = Config::default().with_rx(
@@ -124,10 +130,16 @@ async fn uart_task(
     // let mut uart_tx_pin = uart_pins.tx.lock().await;
     // dbg!(&uart_rx_pin);
 
+    let (rx, tx) = {
+        let guard = uart_pins.lock().await;
+
+        (guard.rx(), guard.tx())
+    };
+
     let uart = Uart::new(uart_periph, uart_config)
         .unwrap()
-        .with_rx(uart_rx_pin.reborrow())
-        .with_tx(uart_tx_pin.reborrow())
+        .with_rx(rx)
+        .with_tx(tx)
         .into_async();
 
     // Run the main buffered TX/RX loop

@@ -1728,6 +1728,7 @@ dependencies = [
  "hex",
  "hmac",
  "log",
+ "paste",
  "portable-atomic",
  "sha2",
  "smoltcp",
