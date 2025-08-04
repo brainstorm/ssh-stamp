@@ -18,22 +18,9 @@ use sunset::{
     sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
     SignKey,
 };
-use sunset_async::SunsetMutex;
 
 use crate::errors;
 use crate::settings::{DEFAULT_SSID, KEY_SLOTS};
-
-macro_rules! generate_gpio_functions {
-    ($($n:expr),*) => {
-        $(
-            paste::paste! {
-                pub fn [<give_gpio $n>](&mut self, [<gpio $n>]: peripherals::[<GPIO $n>]<'static>) {
-                    self.[<gpio $n>] = Some([<gpio $n>]);
-                }
-            }
-        )*
-    };
-}
 
 #[derive(Debug)]
 pub struct SSHConfig {
@@ -79,71 +66,121 @@ impl Default for SerdePinConfig {
     }
 }
 
+pub struct GPIOConfig {
+    pub gpio10: peripherals::GPIO10<'static>,
+    pub gpio11: peripherals::GPIO11<'static>,
+}
+
 // TODO: Yikes, this struct and resolve_pin() need to be re-thought for the different ICs and dev boards?.. implementing a suitable
 // validation function for them and potentially writing a macro that adapts to each PAC (not all ICs have the same number
 // of pins).
-#[derive(Default)]
-pub struct PinConfig<'a> {
-    pub pin_config_inner: SerdePinConfig,
-    pub gpio0: Option<peripherals::GPIO0<'a>>,
-    pub gpio1: Option<peripherals::GPIO1<'a>>,
-    pub gpio2: Option<peripherals::GPIO2<'a>>,
-    pub gpio3: Option<peripherals::GPIO3<'a>>,
-    pub gpio4: Option<peripherals::GPIO4<'a>>,
-    pub gpio5: Option<peripherals::GPIO5<'a>>,
-    pub gpio6: Option<peripherals::GPIO6<'a>>,
-    pub gpio7: Option<peripherals::GPIO7<'a>>,
-    pub gpio8: Option<peripherals::GPIO8<'a>>,
-    pub gpio9: Option<peripherals::GPIO9<'a>>,
-    pub gpio10: Option<peripherals::GPIO10<'a>>,
-    pub gpio11: Option<peripherals::GPIO11<'a>>,
-    pub gpio12: Option<peripherals::GPIO12<'a>>,
-    pub gpio13: Option<peripherals::GPIO13<'a>>,
-    pub gpio14: Option<peripherals::GPIO14<'a>>,
-    pub gpio15: Option<peripherals::GPIO15<'a>>,
-    pub gpio16: Option<peripherals::GPIO16<'a>>,
-    pub gpio17: Option<peripherals::GPIO17<'a>>,
-    pub gpio18: Option<peripherals::GPIO18<'a>>,
-    pub gpio19: Option<peripherals::GPIO19<'a>>,
-    pub gpio20: Option<peripherals::GPIO20<'a>>,
-    pub gpio21: Option<peripherals::GPIO21<'a>>,
-    pub gpio22: Option<peripherals::GPIO22<'a>>,
-    pub gpio23: Option<peripherals::GPIO23<'a>>,
-    pub gpio24: Option<peripherals::GPIO24<'a>>,
-    pub gpio25: Option<peripherals::GPIO25<'a>>,
-    pub gpio26: Option<peripherals::GPIO26<'a>>,
-    pub gpio27: Option<peripherals::GPIO27<'a>>,
-    pub gpio28: Option<peripherals::GPIO28<'a>>,
-    pub gpio29: Option<peripherals::GPIO29<'a>>,
-    pub gpio30: Option<peripherals::GPIO30<'a>>,
+pub struct PinConfig {
+    pub tx: AnyPin<'static>,
+    pub rx: AnyPin<'static>,
+    // pub gpio0: Option<peripherals::GPIO0<'a>>,
+    // pub gpio1: Option<peripherals::GPIO1<'a>>,
+    // pub gpio2: Option<peripherals::GPIO2<'a>>,
+    // pub gpio3: Option<peripherals::GPIO3<'a>>,
+    // pub gpio4: Option<peripherals::GPIO4<'a>>,
+    // pub gpio5: Option<peripherals::GPIO5<'a>>,
+    // pub gpio6: Option<peripherals::GPIO6<'a>>,
+    // pub gpio7: Option<peripherals::GPIO7<'a>>,
+    // pub gpio8: Option<peripherals::GPIO8<'a>>,
+    // pub gpio9: Option<peripherals::GPIO9<'a>>,
+    // pub gpio10: Option<peripherals::GPIO10<'a>>,
+    // pub gpio11: Option<peripherals::GPIO11<'a>>,
+    // pub gpio12: Option<peripherals::GPIO12<'a>>,
+    // pub gpio13: Option<peripherals::GPIO13<'a>>,
+    // pub gpio14: Option<peripherals::GPIO14<'a>>,
+    // pub gpio15: Option<peripherals::GPIO15<'a>>,
+    // pub gpio16: Option<peripherals::GPIO16<'a>>,
+    // pub gpio17: Option<peripherals::GPIO17<'a>>,
+    // pub gpio18: Option<peripherals::GPIO18<'a>>,
+    // pub gpio19: Option<peripherals::GPIO19<'a>>,
+    // pub gpio20: Option<peripherals::GPIO20<'a>>,
+    // pub gpio21: Option<peripherals::GPIO21<'a>>,
+    // pub gpio22: Option<peripherals::GPIO22<'a>>,
+    // pub gpio23: Option<peripherals::GPIO23<'a>>,
+    // pub gpio24: Option<peripherals::GPIO24<'a>>,
+    // pub gpio25: Option<peripherals::GPIO25<'a>>,
+    // pub gpio26: Option<peripherals::GPIO26<'a>>,
+    // pub gpio27: Option<peripherals::GPIO27<'a>>,
+    // pub gpio28: Option<peripherals::GPIO28<'a>>,
+    // pub gpio29: Option<peripherals::GPIO29<'a>>,
+    // pub gpio30: Option<peripherals::GPIO30<'a>>,
 }
 
-impl<'a> PinConfig<'a> {
-    pub fn new(pin_config_inner: SerdePinConfig) -> Self {
+pub struct PinConfigAlt {
+    // pub gpio0: Option<AnyPin<'a>>,
+    // pub gpio1: Option<AnyPin<'a>>,
+    pub peripherals: peripherals::Peripherals,
+}
+
+impl PinConfigAlt {
+    pub fn new(peripherals: peripherals::Peripherals) -> Self {
         Self {
-            pin_config_inner,
-            ..Default::default()
+            // gpio0: Some(peripherals.GPIO0.into()),
+            // gpio1: Some(peripherals.GPIO1.into()),
+                        peripherals,
         }
     }
 
-    pub fn tx(&mut self) -> errors::Result<SunsetMutex<AnyPin<'_>>> {
-        Ok(SunsetMutex::new(self.take_pin(self.pin_config_inner.tx)?))
+    pub fn take_pin<'a>(&'a mut self, pin: u8) -> AnyPin<'a> {
+        match pin {
+            0 => self.peripherals.GPIO0.reborrow().into(),
+            1 => self.peripherals.GPIO1.reborrow().into(),
+            _ => panic!(),
+        }
     }
+
+    // pub fn give_pin(&'a mut self, peripherals: &'a mut peripherals::Peripherals, pin: u8) {
+    //     match pin {
+    //         0 => self.gpio0 = Some(peripherals.GPIO0.reborrow().into()),
+    //         1 => self.gpio1 = Some(peripherals.GPIO1.reborrow().into()),
+    //         _ => panic!(),
+    //     }
+    // }
+}
+
+impl PinConfig {
+    pub fn new(gpio_config: GPIOConfig, config_inner: SerdePinConfig) -> errors::Result<Self> {
+        if config_inner.rx == config_inner.tx {
+            return Err(errors::Error::InvalidPin);
+        }
+        
+        // SAFETY: Safe because moved in peripherals.
+        Ok(Self {
+            rx: match config_inner.rx {
+                10 => unsafe { gpio_config.gpio10.clone_unchecked().into() },
+                11 => unsafe { gpio_config.gpio11.clone_unchecked().into() },
+                _ => return Err(errors::Error::InvalidPin),
+            },
+            tx: match config_inner.tx {
+                10 => unsafe { gpio_config.gpio10.clone_unchecked().into() },
+                11 => unsafe { gpio_config.gpio11.clone_unchecked().into() },
+                _ => return Err(errors::Error::InvalidPin),
+            }
+        })
+    }
+
+    // pub fn tx(&mut self) -> errors::Result<SunsetMutex<AnyPin<'_>>> {
+    //     Ok(SunsetMutex::new(self.take_pin(self.pin_config_inner.tx)?))
+    // }
     
-    pub fn rx(&mut self) -> errors::Result<SunsetMutex<AnyPin<'_>>> {
-        Ok(SunsetMutex::new(self.take_pin(self.pin_config_inner.rx)?))
-    }
+    // pub fn rx(&mut self) -> errors::Result<SunsetMutex<AnyPin<'_>>> {
+    //     Ok(SunsetMutex::new(self.take_pin(self.pin_config_inner.rx)?))
+    // }
 
-    pub fn rts(&mut self) -> errors::Result<Option<SunsetMutex<AnyPin<'_>>>> {
-        self.pin_config_inner.rts.map(|rts| Ok(SunsetMutex::new(self.take_pin(rts)?))).transpose()
-    }
+    // pub fn rts(&mut self) -> errors::Result<Option<SunsetMutex<AnyPin<'_>>>> {
+    //     self.pin_config_inner.rts.map(|rts| Ok(SunsetMutex::new(self.take_pin(rts)?))).transpose()
+    // }
 
-    pub fn cts(&mut self) -> errors::Result<Option<SunsetMutex<AnyPin<'_>>>> {
-        self.pin_config_inner.cts.map(|cts| Ok(SunsetMutex::new(self.take_pin(cts)?))).transpose()
-    }
+    // pub fn cts(&mut self) -> errors::Result<Option<SunsetMutex<AnyPin<'_>>>> {
+    //     self.pin_config_inner.cts.map(|cts| Ok(SunsetMutex::new(self.take_pin(cts)?))).transpose()
+    // }
 
-    /// Resolves a u8 pin number into an AnyPin GPIO type.
-    /// Returns None if the pin number is invalid or unsupported.
+    // Resolves a u8 pin number into an AnyPin GPIO type.
+    // Returns None if the pin number is invalid or unsupported.
     // pub fn give_pin(&mut self, pin_num: u8, peripherals: &'a mut Peripherals) -> errors::Result<()> {
     //     match pin_num {
     //         0 => self.gpio0 = Some(peripherals.GPIO0.reborrow()),
@@ -182,122 +219,56 @@ impl<'a> PinConfig<'a> {
     //     Ok(())
     // }
 
-    generate_gpio_functions!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30);
-
-        /// Resolves a u8 pin number into an AnyPin GPIO type.
-    /// Returns None if the pin number is invalid or unsupported.
-    pub fn give_pins(&mut self, mut peripherals: peripherals::Peripherals) -> errors::Result<()> {
-        match self.pin_config_inner.rx {
-            0 => self.gpio0 = Some(unsafe { peripherals.GPIO0.clone_unchecked() }),
-            1 => self.gpio1 = Some(peripherals.GPIO1),
-            2 => self.gpio2 = Some(peripherals.GPIO2),
-            3 => self.gpio3 = Some(peripherals.GPIO3),
-            4 => self.gpio4 = Some(peripherals.GPIO4),
-            5 => self.gpio5 = Some(peripherals.GPIO5),
-            6 => self.gpio6 = Some(peripherals.GPIO6),
-            7 => self.gpio7 = Some(peripherals.GPIO7),
-            8 => self.gpio8 = Some(peripherals.GPIO8),
-            9 => self.gpio9 = Some(peripherals.GPIO9),
-            10 => self.gpio10 = Some(peripherals.GPIO10),
-            11 => self.gpio11 = Some(peripherals.GPIO11),
-            12 => self.gpio12 = Some(peripherals.GPIO12),
-            13 => self.gpio13 = Some(peripherals.GPIO13),
-            14 => self.gpio14 = Some(peripherals.GPIO14),
-            15 => self.gpio15 = Some(peripherals.GPIO15),
-            16 => self.gpio16 = Some(peripherals.GPIO16),
-            17 => self.gpio17 = Some(peripherals.GPIO17),
-            18 => self.gpio18 = Some(peripherals.GPIO18),
-            19 => self.gpio19 = Some(peripherals.GPIO19),
-            20 => self.gpio20 = Some(peripherals.GPIO20),
-            21 => self.gpio21 = Some(peripherals.GPIO21),
-            22 => self.gpio22 = Some(peripherals.GPIO22),
-            23 => self.gpio23 = Some(peripherals.GPIO23),
-            24 => self.gpio24 = Some(peripherals.GPIO24),
-            25 => self.gpio25 = Some(peripherals.GPIO25),
-            26 => self.gpio26 = Some(peripherals.GPIO26),
-            27 => self.gpio27 = Some(peripherals.GPIO27),
-            28 => self.gpio28 = Some(peripherals.GPIO28),
-            29 => self.gpio29 = Some(peripherals.GPIO29),
-            30 => self.gpio30 = Some(peripherals.GPIO30),
-            _ => return Err(errors::Error::InvalidPin),
-        };
-
-        match self.pin_config_inner.tx {
-            0 => self.gpio0 = Some(peripherals.GPIO0),
-            1 => self.gpio1 = Some(peripherals.GPIO1),
-            2 => self.gpio2 = Some(peripherals.GPIO2),
-            3 => self.gpio3 = Some(peripherals.GPIO3),
-            4 => self.gpio4 = Some(peripherals.GPIO4),
-            5 => self.gpio5 = Some(peripherals.GPIO5),
-            6 => self.gpio6 = Some(peripherals.GPIO6),
-            7 => self.gpio7 = Some(peripherals.GPIO7),
-            8 => self.gpio8 = Some(peripherals.GPIO8),
-            9 => self.gpio9 = Some(peripherals.GPIO9),
-            10 => self.gpio10 = Some(peripherals.GPIO10),
-            11 => self.gpio11 = Some(peripherals.GPIO11),
-            12 => self.gpio12 = Some(peripherals.GPIO12),
-            13 => self.gpio13 = Some(peripherals.GPIO13),
-            14 => self.gpio14 = Some(peripherals.GPIO14),
-            15 => self.gpio15 = Some(peripherals.GPIO15),
-            16 => self.gpio16 = Some(peripherals.GPIO16),
-            17 => self.gpio17 = Some(peripherals.GPIO17),
-            18 => self.gpio18 = Some(peripherals.GPIO18),
-            19 => self.gpio19 = Some(peripherals.GPIO19),
-            20 => self.gpio20 = Some(peripherals.GPIO20),
-            21 => self.gpio21 = Some(peripherals.GPIO21),
-            22 => self.gpio22 = Some(peripherals.GPIO22),
-            23 => self.gpio23 = Some(peripherals.GPIO23),
-            24 => self.gpio24 = Some(peripherals.GPIO24),
-            25 => self.gpio25 = Some(peripherals.GPIO25),
-            26 => self.gpio26 = Some(peripherals.GPIO26),
-            27 => self.gpio27 = Some(peripherals.GPIO27),
-            28 => self.gpio28 = Some(peripherals.GPIO28),
-            29 => self.gpio29 = Some(peripherals.GPIO29),
-            30 => self.gpio30 = Some(peripherals.GPIO30),
-            _ => return Err(errors::Error::InvalidPin),
-        };
-
-        Ok(())
-    }
+    // generate_gpio_functions!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30);
 
     /// Resolves a u8 pin number into an AnyPin GPIO type.
     /// Returns None if the pin number is invalid or unsupported.
-    pub fn take_pin(&mut self, pin_num: u8) -> errors::Result<AnyPin<'a>> {
-        match pin_num {
-            0 => self.gpio0.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            1 => self.gpio1.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            2 => self.gpio2.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            3 => self.gpio3.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            4 => self.gpio4.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            5 => self.gpio5.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            6 => self.gpio6.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            7 => self.gpio7.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            8 => self.gpio8.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            9 => self.gpio9.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            10 => self.gpio10.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            11 => self.gpio11.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            12 => self.gpio12.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            13 => self.gpio13.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            14 => self.gpio14.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            15 => self.gpio15.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            16 => self.gpio16.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            17 => self.gpio17.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            18 => self.gpio18.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            19 => self.gpio19.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            20 => self.gpio20.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            21 => self.gpio21.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            22 => self.gpio22.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            23 => self.gpio23.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            24 => self.gpio24.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            25 => self.gpio25.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            26 => self.gpio26.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            27 => self.gpio27.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            28 => self.gpio28.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            29 => self.gpio29.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
-            30 => self.gpio30.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    pub fn initialize_pin(peripherals: peripherals::Peripherals, pin_number: u8) -> errors::Result<AnyPin<'static>> {
+        match pin_number {
+            0 => Ok(peripherals.GPIO0.into()),
+
             _ => Err(errors::Error::InvalidPin),
         }
     }
+
+    // /// Resolves a u8 pin number into an AnyPin GPIO type.
+    // /// Returns None if the pin number is invalid or unsupported.
+    // pub fn take_pin(&mut self, pin_num: u8) -> errors::Result<AnyPin<'a>> {
+    //     match pin_num {
+    //         0 => self.gpio0.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         1 => self.gpio1.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         2 => self.gpio2.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         3 => self.gpio3.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         4 => self.gpio4.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         5 => self.gpio5.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         6 => self.gpio6.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         7 => self.gpio7.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         8 => self.gpio8.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         9 => self.gpio9.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         10 => self.gpio10.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         11 => self.gpio11.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         12 => self.gpio12.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         13 => self.gpio13.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         14 => self.gpio14.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         15 => self.gpio15.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         16 => self.gpio16.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         17 => self.gpio17.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         18 => self.gpio18.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         19 => self.gpio19.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         20 => self.gpio20.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         21 => self.gpio21.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         22 => self.gpio22.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         23 => self.gpio23.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         24 => self.gpio24.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         25 => self.gpio25.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         26 => self.gpio26.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         27 => self.gpio27.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         28 => self.gpio28.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         29 => self.gpio29.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         30 => self.gpio30.take().map(AnyPin::from).ok_or(errors::Error::InvalidPin),
+    //         _ => Err(errors::Error::InvalidPin),
+    //     }
+    // }
 }
 
 // // TODO: Revisit this and compare them with esp-hal examples, see what they use for their HIL nowadays.

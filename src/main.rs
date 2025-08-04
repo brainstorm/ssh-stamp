@@ -19,6 +19,9 @@ use ssh_stamp::{config::SSHConfig, espressif::{
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
 use ssh_stamp::config::PinConfig;
+use ssh_stamp::config::GPIOConfig;
+use embassy_sync::channel::{ Sender, Receiver, Channel };
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) -> ! {
@@ -35,7 +38,7 @@ async fn main(spawner: Spawner) -> ! {
     esp_println::logger::init_logger_from_env();
 
     // System init
-    let mut peripherals = esp_hal::init(esp_hal::Config::default());
+    let peripherals = esp_hal::init(esp_hal::Config::default());
     let mut rng = Rng::new(peripherals.RNG);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
 
@@ -89,23 +92,36 @@ async fn main(spawner: Spawner) -> ! {
     };
 
     // Potential pins to use for such UART, to be owned by uart_task.
-    static UART_PINS: StaticCell<SunsetMutex<PinConfig>> = StaticCell::new();
-    let uart_pins = UART_PINS.init({
-        // TODO: There shouldn't be a new() method at all because that implies initializing all GPIO pins...
-        // instead we focus on having take() and give() on the config-defined pins.
-        let pin_config = PinConfig::new(serde_pin_config);
+    // static UART_PINS: StaticCell<SunsetMutex<PinConfig>> = StaticCell::new();
+    // let uart_pins = UART_PINS.init({
+    //     // TODO: There shouldn't be a new() method at all because that implies initializing all GPIO pins...
+    //     // instead we focus on having take() and give() on the config-defined pins.
+    //     let pin_config = PinConfig::new(serde_pin_config);
         
-        pin_config.give_rx(&mut peripherals);
-        pin_config.give_tx(&mut peripherals);
+    //     pin_config.give_rx(&mut peripherals);
+    //     pin_config.give_tx(&mut peripherals);
 
-        SunsetMutex::new(pin_config)
+    //     SunsetMutex::new(pin_config)
+    // });
+
+    static CHANNEL: StaticCell<Channel::<CriticalSectionRawMutex, PinConfig, 1>> = StaticCell::new();
+    let channel = CHANNEL.init({
+        Channel::<CriticalSectionRawMutex, PinConfig, 1>::new()
     });
+    let sender = channel.sender();
+    let receiver = channel.receiver();
+
+    // Send first value for tasks.
+    sender.send(PinConfig::new(GPIOConfig {
+        gpio10: peripherals.GPIO10,
+        gpio11: peripherals.GPIO11,
+    }, serde_pin_config).unwrap()).await;
 
     // Grab UART1, typically not connected to dev board's TTL2USB IC nor builtin JTAG functionality
     let uart1 = peripherals.UART1;
 
     // Use the same config reference for UART task.
-    interrupt_spawner.spawn(uart_task(uart_buf, uart1, uart_pins)).unwrap();
+    interrupt_spawner.spawn(uart_task(uart_buf, uart1, sender, receiver)).unwrap();
 
     accept_requests(tcp_stack, uart_buf).await;
 }
@@ -117,7 +133,9 @@ static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
 async fn uart_task(
     buffer: &'static BufferedUart,
     uart_periph: UART1<'static>,
-    uart_pins: &'static SunsetMutex<PinConfig<'static>>,
+    sender: Sender<'static, CriticalSectionRawMutex, PinConfig, 1>,
+    receiver: Receiver<'static, CriticalSectionRawMutex, PinConfig, 1>,
+    // uart_pins: &'static SunsetMutex<PinConfig<'static>>,
 ) {
     // Hardware UART setup
     let uart_config = Config::default().with_rx(
@@ -125,23 +143,21 @@ async fn uart_task(
             .with_fifo_full_threshold(16)
             .with_timeout(1)
     );
-  
-    // let mut uart_rx_pin = uart_pins.rx.lock().await;
-    // let mut uart_tx_pin = uart_pins.tx.lock().await;
-    // dbg!(&uart_rx_pin);
 
-    let (rx, tx) = {
-        let guard = uart_pins.lock().await;
-
-        (guard.rx(), guard.tx())
-    };
+    // lock whole pin config.
+    let mut pin_config = receiver.receive().await;
 
     let uart = Uart::new(uart_periph, uart_config)
         .unwrap()
-        .with_rx(rx)
-        .with_tx(tx)
+        .with_rx(pin_config.rx.reborrow())
+        .with_tx(pin_config.tx.reborrow())
         .into_async();
 
     // Run the main buffered TX/RX loop
     buffer.run(uart).await;
+
+    // FIXME: This is NEVER reached since hte run above is an infinite loop.
+    // Each GPIO pins for UART (rx/tx/cts/rts) needs to be guarded by an individual lock/mechanism so that not all
+    // of them are taken with one task that runs forever.
+    sender.send(pin_config).await;
 }

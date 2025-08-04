@@ -1,6 +1,6 @@
 #![no_std]
 #![no_main]
-#![forbid(unsafe_code)]
+// #![forbid(unsafe_code)]
 #[deny(clippy::mem_forget)] // avoids any UB, forces use of Drop impl instead
 
 pub mod config;
