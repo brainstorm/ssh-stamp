@@ -5,7 +5,7 @@ use core::marker::Sized;
 use esp_alloc as _;
 use esp_backtrace as _;
 use esp_hal::{
-    interrupt::{software::SoftwareInterruptControl, Priority}, peripherals::UART1, rng::Rng, timer::timg::TimerGroup, uart::{Config, RxConfig, Uart}
+    gpio::Pin, interrupt::{software::SoftwareInterruptControl, Priority}, peripherals::UART1, rng::Rng, timer::timg::TimerGroup, uart::{Config, RxConfig, Uart}
 };
 use esp_hal_embassy::InterruptExecutor;
 
@@ -18,10 +18,8 @@ use ssh_stamp::{config::SSHConfig, espressif::{
 }, storage::Fl};
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
-use ssh_stamp::config::PinConfig;
 use ssh_stamp::config::GPIOConfig;
-use embassy_sync::channel::{ Sender, Receiver, Channel };
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use ssh_stamp::config::PinChannel;
 
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) -> ! {
@@ -104,24 +102,27 @@ async fn main(spawner: Spawner) -> ! {
     //     SunsetMutex::new(pin_config)
     // });
 
-    static CHANNEL: StaticCell<Channel::<CriticalSectionRawMutex, PinConfig, 1>> = StaticCell::new();
+    let gpios = GPIOConfig {
+        gpio10: Some(peripherals.GPIO10.degrade()),
+        gpio11: Some(peripherals.GPIO11.degrade()),
+    };
+    
+    static CHANNEL: StaticCell<PinChannel> = StaticCell::new();
     let channel = CHANNEL.init({
-        Channel::<CriticalSectionRawMutex, PinConfig, 1>::new()
+        PinChannel::new(serde_pin_config, gpios)
     });
-    let sender = channel.sender();
-    let receiver = channel.receiver();
 
     // Send first value for tasks.
-    sender.send(PinConfig::new(GPIOConfig {
-        gpio10: peripherals.GPIO10,
-        gpio11: peripherals.GPIO11,
-    }, serde_pin_config).unwrap()).await;
+    // sender.send(PinConfig::new(GPIOConfig {
+    //     gpio10: Some(peripherals.GPIO10.into()),
+    //     gpio11: Some(peripherals.GPIO11.into()),
+    // }, serde_pin_config).unwrap()).await;
 
     // Grab UART1, typically not connected to dev board's TTL2USB IC nor builtin JTAG functionality
     let uart1 = peripherals.UART1;
 
     // Use the same config reference for UART task.
-    interrupt_spawner.spawn(uart_task(uart_buf, uart1, sender, receiver)).unwrap();
+    interrupt_spawner.spawn(uart_task(uart_buf, uart1, channel)).unwrap();
 
     accept_requests(tcp_stack, uart_buf).await;
 }
@@ -133,8 +134,9 @@ static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
 async fn uart_task(
     buffer: &'static BufferedUart,
     uart_periph: UART1<'static>,
-    sender: Sender<'static, CriticalSectionRawMutex, PinConfig, 1>,
-    receiver: Receiver<'static, CriticalSectionRawMutex, PinConfig, 1>,
+    channel: &'static mut PinChannel,
+    // sender: Sender<'static, CriticalSectionRawMutex, PinConfig, 1>,
+    // receiver: Receiver<'static, CriticalSectionRawMutex, PinConfig, 1>,
     // uart_pins: &'static SunsetMutex<PinConfig<'static>>,
 ) {
     // Hardware UART setup
@@ -145,19 +147,33 @@ async fn uart_task(
     );
 
     // lock whole pin config.
-    let mut pin_config = receiver.receive().await;
+    // let mut pin_config = receiver.receive().await;
+
+    let mut rx = channel.recv_rx().await.unwrap();
+    let mut tx = channel.recv_tx().await.unwrap();
 
     let uart = Uart::new(uart_periph, uart_config)
         .unwrap()
-        .with_rx(pin_config.rx.reborrow())
-        .with_tx(pin_config.tx.reborrow())
+        .with_rx(rx.reborrow())
+        .with_tx(tx.reborrow())
         .into_async();
 
     // Run the main buffered TX/RX loop
     buffer.run(uart).await;
 
-    // FIXME: This is NEVER reached since hte run above is an infinite loop.
-    // Each GPIO pins for UART (rx/tx/cts/rts) needs to be guarded by an individual lock/mechanism so that not all
-    // of them are taken with one task that runs forever.
-    sender.send(pin_config).await;
+    channel.send_rx(rx).await.unwrap();
+    channel.send_tx(tx).await.unwrap();
+
+    // TODO: Better way
+
+    // channel.with_rx_and_tx(|rx, tx| async {
+    //     let uart = Uart::new(uart_periph, uart_config)
+    //         .unwrap()
+    //         .with_rx(rx.reborrow())
+    //         .with_tx(tx.reborrow())
+    //         .into_async();
+
+    //     // Run the main buffered TX/RX loop
+    //     buffer.run(uart).await;
+    // });
 }

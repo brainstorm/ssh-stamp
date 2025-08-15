@@ -18,6 +18,8 @@ use sunset::{
     sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
     SignKey,
 };
+use embassy_sync::channel::Channel;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 
 use crate::errors;
 use crate::settings::{DEFAULT_SSID, KEY_SLOTS};
@@ -67,9 +69,75 @@ impl Default for SerdePinConfig {
 }
 
 pub struct GPIOConfig {
-    pub gpio10: peripherals::GPIO10<'static>,
-    pub gpio11: peripherals::GPIO11<'static>,
+    pub gpio10: Option<AnyPin<'static>>,
+    pub gpio11: Option<AnyPin<'static>>,
 }
+
+pub struct PinChannel {
+    pub config: SerdePinConfig,
+    pub gpios: GPIOConfig,
+    pub tx: Channel::<CriticalSectionRawMutex, (), 1>,
+    pub rx: Channel::<CriticalSectionRawMutex, (), 1>,
+    // TODO: cts/rts pins
+}
+
+impl PinChannel {
+    pub fn new(config: SerdePinConfig, gpios: GPIOConfig) -> Self {
+        Self {
+            config,
+            gpios,
+            tx: Channel::<CriticalSectionRawMutex, (), 1>::new(),
+            rx: Channel::<CriticalSectionRawMutex, (), 1>::new(),
+        }
+    }
+
+    pub async fn recv_tx(&mut self) -> errors::Result<AnyPin<'static>> {
+        // tx needs to lock here.
+        self.tx.receive().await;
+
+        Ok(match self.config.tx {
+            10 => self.gpios.gpio10.take().ok_or_else(|| errors::Error::InvalidPin)?,
+            11 => self.gpios.gpio11.take().ok_or_else(|| errors::Error::InvalidPin)?,
+            _ => return Err(errors::Error::InvalidPin)
+        })
+    }
+
+    pub async fn send_tx(&mut self, pin: AnyPin<'static>) -> errors::Result<()> {
+        match self.config.tx {
+            10 => self.gpios.gpio10 = Some(pin),
+            11 => self.gpios.gpio11 = Some(pin),
+            _ => return Err(errors::Error::InvalidPin)
+        };
+
+        // tx lock needs to be released. 
+        self.tx.send(()).await;
+        Ok(())
+    }
+
+    pub async fn recv_rx(&mut self) -> errors::Result<AnyPin<'static>> {
+        // rx needs to lock here.
+        self.rx.receive().await;
+
+        Ok(match self.config.rx {
+            10 => self.gpios.gpio10.take().ok_or_else(|| errors::Error::InvalidPin)?,
+            11 => self.gpios.gpio11.take().ok_or_else(|| errors::Error::InvalidPin)?,
+            _ => return Err(errors::Error::InvalidPin)
+        })
+    }
+
+    pub async fn send_rx(&mut self, pin: AnyPin<'static>) -> errors::Result<()> {
+        match self.config.rx {
+            10 => self.gpios.gpio10 = Some(pin),
+            11 => self.gpios.gpio11 = Some(pin),
+            _ => return Err(errors::Error::InvalidPin)
+        };
+
+        // rx lock needs to be released. 
+        self.rx.send(()).await;
+        Ok(())
+    }
+}
+
 
 // TODO: Yikes, this struct and resolve_pin() need to be re-thought for the different ICs and dev boards?.. implementing a suitable
 // validation function for them and potentially writing a macro that adapts to each PAC (not all ICs have the same number
@@ -143,7 +211,7 @@ impl PinConfigAlt {
 }
 
 impl PinConfig {
-    pub fn new(gpio_config: GPIOConfig, config_inner: SerdePinConfig) -> errors::Result<Self> {
+    pub fn new(mut gpio_config: GPIOConfig, config_inner: SerdePinConfig) -> errors::Result<Self> {
         if config_inner.rx == config_inner.tx {
             return Err(errors::Error::InvalidPin);
         }
@@ -151,13 +219,13 @@ impl PinConfig {
         // SAFETY: Safe because moved in peripherals.
         Ok(Self {
             rx: match config_inner.rx {
-                10 => unsafe { gpio_config.gpio10.clone_unchecked().into() },
-                11 => unsafe { gpio_config.gpio11.clone_unchecked().into() },
+                10 =>  gpio_config.gpio10.take().unwrap().into(),
+                11 =>  gpio_config.gpio11.take().unwrap().into(),
                 _ => return Err(errors::Error::InvalidPin),
             },
             tx: match config_inner.tx {
-                10 => unsafe { gpio_config.gpio10.clone_unchecked().into() },
-                11 => unsafe { gpio_config.gpio11.clone_unchecked().into() },
+                10 => gpio_config.gpio10.take().unwrap().into(),
+                11 => gpio_config.gpio11.take().unwrap().into(),
                 _ => return Err(errors::Error::InvalidPin),
             }
         })
