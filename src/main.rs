@@ -112,12 +112,6 @@ async fn main(spawner: Spawner) -> ! {
         PinChannel::new(serde_pin_config, gpios)
     });
 
-    // Send first value for tasks.
-    // sender.send(PinConfig::new(GPIOConfig {
-    //     gpio10: Some(peripherals.GPIO10.into()),
-    //     gpio11: Some(peripherals.GPIO11.into()),
-    // }, serde_pin_config).unwrap()).await;
-
     // Grab UART1, typically not connected to dev board's TTL2USB IC nor builtin JTAG functionality
     let uart1 = peripherals.UART1;
 
@@ -135,9 +129,6 @@ async fn uart_task(
     buffer: &'static BufferedUart,
     uart_periph: UART1<'static>,
     channel: &'static mut PinChannel,
-    // sender: Sender<'static, CriticalSectionRawMutex, PinConfig, 1>,
-    // receiver: Receiver<'static, CriticalSectionRawMutex, PinConfig, 1>,
-    // uart_pins: &'static SunsetMutex<PinConfig<'static>>,
 ) {
     // Hardware UART setup
     let uart_config = Config::default().with_rx(
@@ -163,17 +154,4 @@ async fn uart_task(
 
     channel.send_rx(rx).await.unwrap();
     channel.send_tx(tx).await.unwrap();
-
-    // TODO: Better way
-
-    // channel.with_rx_and_tx(|rx, tx| async {
-    //     let uart = Uart::new(uart_periph, uart_config)
-    //         .unwrap()
-    //         .with_rx(rx.reborrow())
-    //         .with_tx(tx.reborrow())
-    //         .into_async();
-
-    //     // Run the main buffered TX/RX loop
-    //     buffer.run(uart).await;
-    // });
 }
