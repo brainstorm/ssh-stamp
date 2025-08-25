@@ -116,7 +116,7 @@ static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
 async fn uart_task(
     buffer: &'static BufferedUart,
     uart_periph: UART1<'static>,
-    channel: &'static mut PinChannel<'static>,
+    channel: &'static mut PinChannel,
 ) {
     // Hardware UART setup
     let uart_config = Config::default().with_rx(
@@ -137,7 +137,7 @@ async fn uart_task(
     // );
 
     // Sync pin config via channels
-    channel.with_channel(|rx, tx| async {
+    channel.with_channel(async |rx, tx| {
         let uart = Uart::new(uart_periph, uart_config)
             .unwrap()
             .with_rx(rx)
