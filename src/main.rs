@@ -89,18 +89,6 @@ async fn main(spawner: Spawner) -> ! {
         guard.uart_pins.clone()
     };
 
-    // Potential pins to use for such UART, to be owned by uart_task.
-    // static UART_PINS: StaticCell<SunsetMutex<PinConfig>> = StaticCell::new();
-    // let uart_pins = UART_PINS.init({
-    //     // TODO: There shouldn't be a new() method at all because that implies initializing all GPIO pins...
-    //     // instead we focus on having take() and give() on the config-defined pins.
-    //     let pin_config = PinConfig::new(serde_pin_config);
-        
-    //     pin_config.give_rx(&mut peripherals);
-    //     pin_config.give_tx(&mut peripherals);
-
-    //     SunsetMutex::new(pin_config)
-    // });
 
     let gpios = GPIOConfig {
         gpio10: Some(peripherals.GPIO10.degrade()),
@@ -111,12 +99,6 @@ async fn main(spawner: Spawner) -> ! {
     let channel = CHANNEL.init({
         PinChannel::new(serde_pin_config, gpios)
     });
-
-    // Send first value for tasks.
-    // sender.send(PinConfig::new(GPIOConfig {
-    //     gpio10: Some(peripherals.GPIO10.into()),
-    //     gpio11: Some(peripherals.GPIO11.into()),
-    // }, serde_pin_config).unwrap()).await;
 
     // Grab UART1, typically not connected to dev board's TTL2USB IC nor builtin JTAG functionality
     let uart1 = peripherals.UART1;
@@ -134,10 +116,7 @@ static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
 async fn uart_task(
     buffer: &'static BufferedUart,
     uart_periph: UART1<'static>,
-    channel: &'static mut PinChannel,
-    // sender: Sender<'static, CriticalSectionRawMutex, PinConfig, 1>,
-    // receiver: Receiver<'static, CriticalSectionRawMutex, PinConfig, 1>,
-    // uart_pins: &'static SunsetMutex<PinConfig<'static>>,
+    channel: &'static mut PinChannel<'static>,
 ) {
     // Hardware UART setup
     let uart_config = Config::default().with_rx(
@@ -146,34 +125,26 @@ async fn uart_task(
             .with_timeout(1)
     );
 
-    // lock whole pin config.
-    // let mut pin_config = receiver.receive().await;
-
-    let mut rx = channel.recv_rx().await.unwrap();
-    let mut tx = channel.recv_tx().await.unwrap();
-
-    let uart = Uart::new(uart_periph, uart_config)
-        .unwrap()
-        .with_rx(rx.reborrow())
-        .with_tx(tx.reborrow())
-        .into_async();
-
-    // Run the main buffered TX/RX loop
-    buffer.run(uart).await;
-
-    channel.send_rx(rx).await.unwrap();
-    channel.send_tx(tx).await.unwrap();
-
-    // TODO: Better way
-
-    // channel.with_rx_and_tx(|rx, tx| async {
+    // send_and_recv_channel!(
     //     let uart = Uart::new(uart_periph, uart_config)
     //         .unwrap()
-    //         .with_rx(rx.reborrow())
-    //         .with_tx(tx.reborrow())
+    //         .with_rx(rx)
+    //         .with_tx(tx)
     //         .into_async();
 
     //     // Run the main buffered TX/RX loop
     //     buffer.run(uart).await;
-    // });
+    // );
+
+    // Sync pin config via channels
+    channel.with_channel(|rx, tx| async {
+        let uart = Uart::new(uart_periph, uart_config)
+            .unwrap()
+            .with_rx(rx)
+            .with_tx(tx)
+            .into_async();
+
+        // Run the main buffered TX/RX loop
+        buffer.run(uart).await;
+    }).await.unwrap();
 }

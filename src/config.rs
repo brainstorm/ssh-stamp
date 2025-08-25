@@ -1,3 +1,4 @@
+use core::future::Future;
 use core::net::Ipv4Addr;
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 use esp_hal::gpio::AnyPin;
@@ -68,21 +69,53 @@ impl Default for SerdePinConfig {
     }
 }
 
-pub struct GPIOConfig {
-    pub gpio10: Option<AnyPin<'static>>,
-    pub gpio11: Option<AnyPin<'static>>,
+// pub type RxPin<'a> = AnyPin<'a>;
+// pub type TxPin<'a> = AnyPin<'a>;
+
+pub struct TxRxPin<'a> {
+    tx: Option<AnyPin<'a>>,
+    rx: Option<AnyPin<'a>>,
+    send_back: &'a mut PinChannel<'a>
 }
 
-pub struct PinChannel {
+
+impl<'a> Drop for TxRxPin<'a> {
+    fn drop(&mut self) {
+        let tx = self.tx.take().unwrap();
+        let rx = self.rx.take().unwrap();
+
+        self.send_back.try_send_tx(tx).unwrap();
+        self.send_back.try_send_rx(rx).unwrap();
+    }
+}
+
+pub struct RxPin<'a> {
+    pin: Option<AnyPin<'a>>,
+    send_back: &'a mut PinChannel<'a>
+}
+
+impl<'a> Drop for RxPin<'a> {
+    fn drop(&mut self) {
+        let pin = self.pin.take().unwrap();
+        self.send_back.try_send_rx(pin).unwrap();
+    }
+}
+
+pub struct GPIOConfig<'a> {
+    pub gpio10: Option<AnyPin<'a>>,
+    pub gpio11: Option<AnyPin<'a>>,
+}
+
+pub struct PinChannel<'a> {
     pub config: SerdePinConfig,
-    pub gpios: GPIOConfig,
+    pub gpios: GPIOConfig<'a>,
     pub tx: Channel::<CriticalSectionRawMutex, (), 1>,
     pub rx: Channel::<CriticalSectionRawMutex, (), 1>,
     // TODO: cts/rts pins
 }
 
-impl PinChannel {
-    pub fn new(config: SerdePinConfig, gpios: GPIOConfig) -> Self {
+impl<'a> PinChannel<'a> {
+    pub fn new(config: SerdePinConfig, gpios: GPIOConfig<'a>) -> Self {
         Self {
             config,
             gpios,
@@ -91,7 +124,7 @@ impl PinChannel {
         }
     }
 
-    pub async fn recv_tx(&mut self) -> errors::Result<AnyPin<'static>> {
+    pub async fn recv_tx(&mut self) -> errors::Result<AnyPin<'a>> {
         // tx needs to lock here.
         self.tx.receive().await;
 
@@ -102,7 +135,7 @@ impl PinChannel {
         })
     }
 
-    pub async fn send_tx(&mut self, pin: AnyPin<'static>) -> errors::Result<()> {
+    pub async fn send_tx(&mut self, pin: AnyPin<'a>) -> errors::Result<()> {
         match self.config.tx {
             10 => self.gpios.gpio10 = Some(pin),
             11 => self.gpios.gpio11 = Some(pin),
@@ -114,7 +147,19 @@ impl PinChannel {
         Ok(())
     }
 
-    pub async fn recv_rx(&mut self) -> errors::Result<AnyPin<'static>> {
+    pub fn try_send_tx(&mut self, pin: AnyPin<'a>) -> errors::Result<()> {
+        match self.config.tx {
+            10 => self.gpios.gpio10 = Some(pin),
+            11 => self.gpios.gpio11 = Some(pin),
+            _ => return Err(errors::Error::InvalidPin)
+        };
+
+        // tx lock needs to be released. 
+        self.tx.try_send(()).unwrap();
+        Ok(())
+    }
+
+    pub async fn recv_rx(&mut self) -> errors::Result<AnyPin<'a>> {
         // rx needs to lock here.
         self.rx.receive().await;
 
@@ -125,7 +170,7 @@ impl PinChannel {
         })
     }
 
-    pub async fn send_rx(&mut self, pin: AnyPin<'static>) -> errors::Result<()> {
+    pub async fn send_rx(&mut self, pin: AnyPin<'a>) -> errors::Result<()> {
         match self.config.rx {
             10 => self.gpios.gpio10 = Some(pin),
             11 => self.gpios.gpio11 = Some(pin),
@@ -134,6 +179,32 @@ impl PinChannel {
 
         // rx lock needs to be released. 
         self.rx.send(()).await;
+        Ok(())
+    }
+
+    pub fn try_send_rx(&mut self, pin: AnyPin<'a>) -> errors::Result<()> {
+        match self.config.rx {
+            10 => self.gpios.gpio10 = Some(pin),
+            11 => self.gpios.gpio11 = Some(pin),
+            _ => return Err(errors::Error::InvalidPin)
+        };
+
+        // rx lock needs to be released. 
+        self.rx.try_send(()).unwrap();
+        Ok(())
+    }
+
+    pub async fn with_channel<F, Fut>(&'a mut self, f: F) -> errors::Result<()> 
+    where F: FnOnce(TxRxPin) -> Fut,
+          Fut: Future<Output = ()> {
+        let rx = self.recv_rx().await?;
+        let tx = self.recv_tx().await?;
+
+        f(TxRxPin { tx: Some(tx), rx: Some(rx), send_back: self }).await;
+
+        // self.send_rx(rx).await.unwrap();
+        // self.send_tx(tx).await.unwrap();
+
         Ok(())
     }
 }
@@ -167,37 +238,37 @@ impl PinConfigAlt {
     }
 }
 
-impl PinConfig {
-    pub fn new(mut gpio_config: GPIOConfig, config_inner: SerdePinConfig) -> errors::Result<Self> {
-        if config_inner.rx == config_inner.tx {
-            return Err(errors::Error::InvalidPin);
-        }
+// impl PinConfig {
+//     pub fn new(mut gpio_config: GPIOConfig, config_inner: SerdePinConfig) -> errors::Result<Self> {
+//         if config_inner.rx == config_inner.tx {
+//             return Err(errors::Error::InvalidPin);
+//         }
         
-        // SAFETY: Safe because moved in peripherals.
-        Ok(Self {
-            rx: match config_inner.rx {
-                10 =>  gpio_config.gpio10.take().unwrap().into(),
-                11 =>  gpio_config.gpio11.take().unwrap().into(),
-                _ => return Err(errors::Error::InvalidPin),
-            },
-            tx: match config_inner.tx {
-                10 => gpio_config.gpio10.take().unwrap().into(),
-                11 => gpio_config.gpio11.take().unwrap().into(),
-                _ => return Err(errors::Error::InvalidPin),
-            }
-        })
-    }
+//         // SAFETY: Safe because moved in peripherals.
+//         Ok(Self {
+//             rx: match config_inner.rx {
+//                 10 =>  gpio_config.gpio10.take().unwrap().into(),
+//                 11 =>  gpio_config.gpio11.take().unwrap().into(),
+//                 _ => return Err(errors::Error::InvalidPin),
+//             },
+//             tx: match config_inner.tx {
+//                 10 => gpio_config.gpio10.take().unwrap().into(),
+//                 11 => gpio_config.gpio11.take().unwrap().into(),
+//                 _ => return Err(errors::Error::InvalidPin),
+//             }
+//         })
+//     }
 
-    /// Resolves a u8 pin number into an AnyPin GPIO type.
-    /// Returns None if the pin number is invalid or unsupported.
-    pub fn initialize_pin(peripherals: peripherals::Peripherals, pin_number: u8) -> errors::Result<AnyPin<'static>> {
-        match pin_number {
-            0 => Ok(peripherals.GPIO0.into()),
+//     /// Resolves a u8 pin number into an AnyPin GPIO type.
+//     /// Returns None if the pin number is invalid or unsupported.
+//     pub fn initialize_pin(peripherals: peripherals::Peripherals, pin_number: u8) -> errors::Result<AnyPin<'static>> {
+//         match pin_number {
+//             0 => Ok(peripherals.GPIO0.into()),
 
-            _ => Err(errors::Error::InvalidPin),
-        }
-    }
-}
+//             _ => Err(errors::Error::InvalidPin),
+//         }
+//     }
+// }
 
 impl SSHConfig {
     /// Bump this when the format changes
