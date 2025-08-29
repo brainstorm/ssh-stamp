@@ -4,7 +4,7 @@ use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals;
 use heapless::{String, Vec};
 
-use esp_println::println;
+use esp_println::{dbg, println};
 
 use bcrypt;
 use hmac::{Hmac, Mac};
@@ -93,7 +93,7 @@ impl PinChannel {
 
     pub async fn recv_tx(&mut self) -> errors::Result<AnyPin<'static>> {
         // tx needs to lock here.
-        self.tx.receive().await;
+        //self.tx.receive().await;
 
         Ok(match self.config.tx {
             10 => self.gpios.gpio10.take().ok_or_else(|| errors::Error::InvalidPin)?,
@@ -115,14 +115,18 @@ impl PinChannel {
     }
 
     pub async fn recv_rx(&mut self) -> errors::Result<AnyPin<'static>> {
-        // rx needs to lock here.
-        self.rx.receive().await;
-
-        Ok(match self.config.rx {
+        let res = Ok(match self.config.rx {
             10 => self.gpios.gpio10.take().ok_or_else(|| errors::Error::InvalidPin)?,
             11 => self.gpios.gpio11.take().ok_or_else(|| errors::Error::InvalidPin)?,
             _ => return Err(errors::Error::InvalidPin)
-        })
+        });
+        dbg!("recv_rx: no channel receive");
+        // rx needs to lock here.
+        // dbg!("recv_rx: before rx.receive.await");
+        // self.rx.receive().await;
+        // dbg!("recv_rx: after rx.receive.await");
+
+        res
     }
 
     pub async fn send_rx(&mut self, pin: AnyPin<'static>) -> errors::Result<()> {
@@ -139,11 +143,15 @@ impl PinChannel {
 
     pub async fn with_channel<F>(&mut self, f: F) -> errors::Result<()> 
     where F: for<'a> AsyncFnOnce(AnyPin<'a>, AnyPin<'a>) {
+        dbg!("inner: with_channel begin, recv_rx call");
         let mut rx = self.recv_rx().await?;
+        dbg!("inner: with_channel recv_tx call");
         let mut tx = self.recv_tx().await?;
 
+        dbg!("inner: with_channel f-reborrow");
         f(rx.reborrow(), tx.reborrow()).await;
 
+        dbg!("inner: with_channel, before send{rx/tx}");
         self.send_rx(rx).await.unwrap();
         self.send_tx(tx).await.unwrap();
 

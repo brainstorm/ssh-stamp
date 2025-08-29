@@ -9,6 +9,7 @@ use esp_hal::{
 };
 use esp_hal_embassy::InterruptExecutor;
 
+use esp_println::dbg;
 use esp_storage::FlashStorage;
 use embassy_executor::Spawner;
 use ssh_stamp::{config::SSHConfig, espressif::{
@@ -118,6 +119,7 @@ async fn uart_task(
     uart_periph: UART1<'static>,
     channel: &'static mut PinChannel,
 ) {
+    dbg!("spawning UART task...");
     // Hardware UART setup
     let uart_config = Config::default().with_rx(
         RxConfig::default()
@@ -125,19 +127,10 @@ async fn uart_task(
             .with_timeout(1)
     );
 
-    // send_and_recv_channel!(
-    //     let uart = Uart::new(uart_periph, uart_config)
-    //         .unwrap()
-    //         .with_rx(rx)
-    //         .with_tx(tx)
-    //         .into_async();
-
-    //     // Run the main buffered TX/RX loop
-    //     buffer.run(uart).await;
-    // );
-
+    dbg!("before with_channel");
     // Sync pin config via channels
     channel.with_channel(async |rx, tx| {
+        dbg!("into with_channel");
         let uart = Uart::new(uart_periph, uart_config)
             .unwrap()
             .with_rx(rx)
@@ -145,6 +138,8 @@ async fn uart_task(
             .into_async();
 
         // Run the main buffered TX/RX loop
+        dbg!("before buffer_run");
         buffer.run(uart).await;
+        dbg!("after buffer_run");
     }).await.unwrap();
 }

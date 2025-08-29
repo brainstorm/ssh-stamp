@@ -31,7 +31,7 @@ async fn connection_loop(
     loop {
         let mut ph = ProgressHolder::new();
         let ev = serv.progress(&mut ph).await?;
-        dbg!(&ev);
+        //dbg!(&ev);
         #[allow(unreachable_patterns)]
         match ev {
             ServEvent::SessionShell(a) => {
