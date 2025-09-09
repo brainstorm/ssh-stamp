@@ -91,14 +91,14 @@ async fn main(spawner: Spawner) -> ! {
     };
 
 
-    let gpios = GPIOConfig {
+    let available_gpios = GPIOConfig {
         gpio10: Some(peripherals.GPIO10.degrade()),
         gpio11: Some(peripherals.GPIO11.degrade()),
     };
     
     static CHANNEL: StaticCell<PinChannel> = StaticCell::new();
     let channel = CHANNEL.init({
-        PinChannel::new(serde_pin_config, gpios)
+        PinChannel::new(serde_pin_config, available_gpios)
     });
 
     // Grab UART1, typically not connected to dev board's TTL2USB IC nor builtin JTAG functionality
