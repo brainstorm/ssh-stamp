@@ -81,6 +81,9 @@ async fn connection_loop(
             ServEvent::Defunct | ServEvent::SessionShell(_) => {
                 println!("Expected caller to handle event");
                 error::BadUsage.fail()?
+            }
+            ServEvent::Environment(_) => {
+                // TODO: Logic to serialise/validate env vars?
             },
             _ => ()
         };
