@@ -11,6 +11,7 @@ use embedded_storage::nor_flash::NorFlash;
 use sunset::error::Error;
 use sunset::sshwire;
 use sunset::sshwire::OwnOrBorrow;
+use sunset::sshwire::SSHDecode;
 use sunset_sshwire_derive::*;
 
 use crate::config::SSHConfig;
