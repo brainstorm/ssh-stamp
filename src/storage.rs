@@ -11,7 +11,6 @@ use embedded_storage::nor_flash::NorFlash;
 use sunset::error::Error;
 use sunset::sshwire;
 use sunset::sshwire::OwnOrBorrow;
-use sunset::sshwire::SSHDecode;
 use sunset_sshwire_derive::*;
 
 use crate::config::SSHConfig;
@@ -121,5 +120,39 @@ pub async fn save(fl: &mut Fl, config: &SSHConfig) -> Result<(), Error> {
         .map_err(|_| Error::msg("flash write error"))?;
 
     println!("flash save done");
+    Ok(())
+}
+
+/// Alternative function demonstrating how to properly handle the SSHSource trait bound issue
+/// This shows the correct way to call FlashConfig::dec if needed
+fn parse_flash_config_from_buffer(buf: &[u8]) -> Result<FlashConfig<'_>, Error> {
+    // CORRECT: Use sshwire::read_ssh which handles the SSHSource trait implementation
+    let config: FlashConfig = sshwire::read_ssh(buf, None)?;
+    
+    // If someone was trying to do this (WRONG):
+    // let config: FlashConfig = FlashConfig::dec(&mut buf)?; // ERROR: [u8]: SSHSource<'_> not satisfied
+    
+    // The fix is to use sshwire::read_ssh instead of calling dec directly
+    // sshwire::read_ssh internally creates a DecodeBytes struct that implements SSHSource
+    
+    Ok(config)
+}
+
+/// Example function demonstrating the proper way to use FlashConfig::dec
+/// The key insight is that SSHSource is implemented for DecodeBytes, not raw slices
+#[cfg(test)]
+fn demonstrate_sshsource_usage() -> Result<(), Error> {
+    let _buf = [0u8; 100];
+    
+    // WRONG: This causes the error "the trait bound `[u8]: SSHSource<'_>` is not satisfied"  
+    // let s: FlashConfig = FlashConfig::dec(&mut buf)?; 
+    
+    // CORRECT APPROACH 1: Use sshwire::read_ssh (recommended)
+    // let s: FlashConfig = sshwire::read_ssh(&buf, None)?;
+    
+    // CORRECT APPROACH 2: If you must use FlashConfig::dec directly, 
+    // you need to create a proper SSHSource implementation
+    // This is internal to sunset crate, so usually you should use read_ssh
+    
     Ok(())
 }
