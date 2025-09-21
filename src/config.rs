@@ -4,7 +4,7 @@ use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals;
 use heapless::{String, Vec};
 
-use esp_println::{dbg, println};
+use esp_println::dbg;
 
 use bcrypt;
 use hmac::{Hmac, Mac};
@@ -262,6 +262,10 @@ impl SSHConfig {
             false
         }
     }
+
+    // pub fn config_change(&mut self, conf: SSHConfig) -> Result<()> {
+    //      ServEvent::ConfigChange();
+    // }
 }
 
 fn random_mac() -> Result<[u8; 6]> {
@@ -352,7 +356,6 @@ where
 
 impl SSHEncode for SSHConfig {
     fn enc(&self, s: &mut dyn SSHSink) -> WireResult<()> {
-        println!("enc si");
         enc_signkey(&self.hostkey, s)?;
         enc_option(&self.admin_pw, s)?;
 

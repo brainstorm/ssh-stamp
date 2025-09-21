@@ -1730,6 +1730,7 @@ dependencies = [
  "log",
  "paste",
  "portable-atomic",
+ "pretty-hex",
  "sha2",
  "smoltcp",
  "snafu",

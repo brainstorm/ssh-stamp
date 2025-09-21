@@ -2,6 +2,7 @@ use esp_println::{println, dbg};
 use esp_storage::FlashStorage;
 use embedded_storage::ReadStorage;
 
+use pretty_hex::PrettyHex;
 use sha2::Digest;
 
 use core::borrow::Borrow;
@@ -9,15 +10,15 @@ use core::borrow::Borrow;
 use embedded_storage::nor_flash::NorFlash;
 
 use sunset::error::Error;
-use sunset::sshwire;
-use sunset::sshwire::OwnOrBorrow;
+use sunset::sshwire::{self, OwnOrBorrow};
 use sunset_sshwire_derive::*;
 
 use crate::config::SSHConfig;
 
-// TODO: Adapt those for Espressif targets...
-pub const CONFIG_AREA_SIZE: usize = 460;
-const CONFIG_OFFSET: u32 = 0x110000;
+pub const CONFIG_VERSION_SIZE: usize = 4;
+pub const CONFIG_HASH_SIZE: usize = 32;
+pub const CONFIG_AREA_SIZE: usize = 8192;
+pub const CONFIG_OFFSET: usize = 0x9000;
 
 pub struct Fl {
     flash: FlashStorage,
@@ -42,10 +43,13 @@ struct FlashConfig<'a> {
 }
 
 impl FlashConfig<'_> {
-    const BUF_SIZE: usize = 4 + CONFIG_AREA_SIZE + 32;
+    const BUF_SIZE: usize = CONFIG_VERSION_SIZE + CONFIG_AREA_SIZE + CONFIG_HASH_SIZE;
 }
-const _: () =
-    assert!(FlashConfig::BUF_SIZE % 4 == 0, "flash reads must be a multiple of 4");
+
+// TODO: Does not match esp_storage assumptions about SECTOR_SIZE alignment? 
+//
+// const _: () =
+//     assert!(FlashConfig::BUF_SIZE % 4 == 0, "flash reads must be a multiple of 4");
 
 fn config_hash(config: &SSHConfig) -> Result<[u8; 32], Error> {
     let mut h = sha2::Sha256::new();
@@ -68,30 +72,30 @@ pub async fn load_or_create(flash: &mut Fl) -> Result<SSHConfig, Error> {
 
 pub async fn create(flash: &mut Fl) -> Result<SSHConfig, Error> {
     let c = SSHConfig::new()?;
-    if let Err(_) = save(flash, &c).await {
-        println!("Error writing config");
-    }
+    save(flash, &c).await?;
+ 
     Ok(c)
 }
 
 pub async fn load(fl: &mut Fl) -> Result<SSHConfig, Error> {
-    fl.flash.read(CONFIG_OFFSET, &mut fl.buf).map_err(|_e| {
+    fl.flash.read(CONFIG_OFFSET as u32, &mut fl.buf).map_err(|_e| {
         dbg!("flash read error 0x{CONFIG_OFFSET:x} {e:?}");
         Error::msg("flash error")
     })?;
 
-    let s: FlashConfig = sshwire::read_ssh(&fl.buf, None)?;
+    let flash_config: FlashConfig = sshwire::read_ssh(&fl.buf, None)
+        .map_err(|_| Error::msg("failed to decode flash config"))?;
 
-    if s.version != SSHConfig::CURRENT_VERSION {
+    if flash_config.version != SSHConfig::CURRENT_VERSION {
         return Err(Error::msg("wrong config version"));
     }
 
-    let calc_hash = config_hash(s.config.borrow())?;
-    if calc_hash != s.hash {
+    let calc_hash = config_hash(flash_config.config.borrow())?;
+    if calc_hash != flash_config.hash {
         return Err(Error::msg("bad config hash"));
     }
 
-    if let OwnOrBorrow::Own(c) = s.config {
+    if let OwnOrBorrow::Own(c) = flash_config.config {
         Ok(c)
     } else {
         // OK panic - OwnOrBorrow always decodes to Own variant
@@ -108,16 +112,18 @@ pub async fn save(fl: &mut Fl, config: &SSHConfig) -> Result<(), Error> {
     let l = sshwire::write_ssh(&mut fl.buf, &sc)?;
     let buf = &fl.buf[..l];
 
-    dbg!("flash erase");
-    fl.flash
-    // TODO: Adapt 4096, ERASE_SIZE in rp, what's in Espressif?
-        .erase(CONFIG_OFFSET, CONFIG_OFFSET + 4096 as u32)
-        .map_err(|_| Error::msg("flash erase error"))?;
+    dbg!(&buf.hex_dump());
 
-    dbg!("flash write");
     fl.flash
-        .write(CONFIG_OFFSET, &buf)
-        .map_err(|_| Error::msg("flash write error"))?;
+        //.erase(CONFIG_OFFSET as u32, (CONFIG_OFFSET + CONFIG_AREA_SIZE + 32) as u32)
+        .erase(CONFIG_OFFSET as u32, (CONFIG_OFFSET + CONFIG_AREA_SIZE) as u32).unwrap();
+        //.map_err(|_| Error::msg("flash erase error"))?;
+
+    // TODO: Add padding to &buf to satisfy underlying nor_flash alignment requirements (4096-aligned SECTOR_SIZE)
+
+    fl.flash
+        .write(CONFIG_OFFSET as u32, &buf).unwrap();
+        //.map_err(|_| Error::msg("flash write error"))?;
 
     println!("flash save done");
     Ok(())

@@ -54,6 +54,7 @@ portable-atomic = "1"
 esp-bootloader-esp-idf = "0.1"
 snafu = { version = "0.8.6", default-features = false }
 paste = "1"
+pretty-hex = { version = "0.4", default-features = false }
 
 [profile.dev]
 # Rust debug is too slow.
