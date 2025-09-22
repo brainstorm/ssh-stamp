@@ -1,10 +1,10 @@
 use core::net::Ipv4Addr;
-use embassy_net::{Ipv4Cidr, StaticConfigV4};
+use embassy_net::{Ipv4Cidr, StaticConfigV4, StaticConfigV6};
 use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals;
 use heapless::{String, Vec};
 
-use esp_println::println;
+use esp_println::dbg;
 
 use bcrypt;
 use hmac::{Hmac, Mac};
@@ -41,7 +41,8 @@ pub struct SSHConfig {
     /// Only intended purpose I see for keeping it here is for spoofing?
     pub mac: [u8; 6],
     /// `None` for DHCP
-    pub ip4_static: Option<StaticConfigV4>,
+    pub ipv4_static: Option<StaticConfigV4>,
+    pub ipv6_static: Option<StaticConfigV6>,
     /// UART
     pub uart_pins: SerdePinConfig,
 }
@@ -93,7 +94,7 @@ impl PinChannel {
 
     pub async fn recv_tx(&mut self) -> errors::Result<AnyPin<'static>> {
         // tx needs to lock here.
-        self.tx.receive().await;
+        //self.tx.receive().await;
 
         Ok(match self.config.tx {
             10 => self.gpios.gpio10.take().ok_or_else(|| errors::Error::InvalidPin)?,
@@ -115,14 +116,18 @@ impl PinChannel {
     }
 
     pub async fn recv_rx(&mut self) -> errors::Result<AnyPin<'static>> {
-        // rx needs to lock here.
-        self.rx.receive().await;
-
-        Ok(match self.config.rx {
+        let res = Ok(match self.config.rx {
             10 => self.gpios.gpio10.take().ok_or_else(|| errors::Error::InvalidPin)?,
             11 => self.gpios.gpio11.take().ok_or_else(|| errors::Error::InvalidPin)?,
             _ => return Err(errors::Error::InvalidPin)
-        })
+        });
+        dbg!("recv_rx: no channel receive");
+        // rx needs to lock here.
+        // dbg!("recv_rx: before rx.receive.await");
+        // self.rx.receive().await;
+        // dbg!("recv_rx: after rx.receive.await");
+
+        res
     }
 
     pub async fn send_rx(&mut self, pin: AnyPin<'static>) -> errors::Result<()> {
@@ -134,6 +139,23 @@ impl PinChannel {
 
         // rx lock needs to be released. 
         self.rx.send(()).await;
+        Ok(())
+    }
+
+    pub async fn with_channel<F>(&mut self, f: F) -> errors::Result<()> 
+    where F: for<'a> AsyncFnOnce(AnyPin<'a>, AnyPin<'a>) {
+        dbg!("inner: with_channel begin, recv_rx call");
+        let mut rx = self.recv_rx().await?;
+        dbg!("inner: with_channel recv_tx call");
+        let mut tx = self.recv_tx().await?;
+
+        dbg!("inner: with_channel f-reborrow");
+        f(rx.reborrow(), tx.reborrow()).await;
+
+        dbg!("inner: with_channel, before send{rx/tx}");
+        self.send_rx(rx).await.unwrap();
+        self.send_tx(tx).await.unwrap();
+
         Ok(())
     }
 }
@@ -224,7 +246,8 @@ impl SSHConfig {
             wifi_ssid,
             wifi_pw,
             mac,
-            ip4_static: None,
+            ipv4_static: None,
+            ipv6_static: None,
             uart_pins,
         })
     }
@@ -241,6 +264,10 @@ impl SSHConfig {
             false
         }
     }
+
+    // pub fn config_change(&mut self, conf: SSHConfig) -> Result<()> {
+    //      ServEvent::ConfigChange();
+    // }
 }
 
 fn random_mac() -> Result<[u8; 6]> {
@@ -282,7 +309,7 @@ where
     bool::dec(s)?.then(|| SSHDecode::dec(s)).transpose()
 }
 
-fn enc_ip4config(v: &Option<StaticConfigV4>, s: &mut dyn SSHSink) -> WireResult<()> {
+fn enc_ipv4_config(v: &Option<StaticConfigV4>, s: &mut dyn SSHSink) -> WireResult<()> {
     v.is_some().enc(s)?;
     if let Some(v) = v {
         v.address.address().to_bits().enc(s)?;
@@ -294,7 +321,7 @@ fn enc_ip4config(v: &Option<StaticConfigV4>, s: &mut dyn SSHSink) -> WireResult<
     Ok(())
 }
 
-fn dec_ip4config<'de, S>(s: &mut S) -> WireResult<Option<StaticConfigV4>>
+fn dec_ipv4_config<'de, S>(s: &mut S) -> WireResult<Option<StaticConfigV4>>
 where
     S: SSHSource<'de>,
 {
@@ -331,7 +358,6 @@ where
 
 impl SSHEncode for SSHConfig {
     fn enc(&self, s: &mut dyn SSHSink) -> WireResult<()> {
-        println!("enc si");
         enc_signkey(&self.hostkey, s)?;
         enc_option(&self.admin_pw, s)?;
 
@@ -344,7 +370,7 @@ impl SSHEncode for SSHConfig {
 
         self.mac.enc(s)?;
 
-        enc_ip4config(&self.ip4_static, s)?;
+        enc_ipv4_config(&self.ipv4_static, s)?;
 
         Ok(())
     }
@@ -369,9 +395,10 @@ impl<'de> SSHDecode<'de> for SSHConfig {
 
         let mac = SSHDecode::dec(s)?;
 
-        let ip4_static = dec_ip4config(s)?;
+        let ipv4_static = dec_ipv4_config(s)?;
+        let ipv6_static = None; // TODO: Decode ipv6_config
 
-        // Decode password_authentication (missing in original code)
+        // Decode password_authentication
         let password_authentication = SSHDecode::dec(s)?;
 
         let uart_pins = dec_uart_pins(s)?;
@@ -384,7 +411,8 @@ impl<'de> SSHDecode<'de> for SSHConfig {
             wifi_ssid,
             wifi_pw,
             mac,
-            ip4_static,
+            ipv4_static,
+            ipv6_static,
             uart_pins,
         })
     }

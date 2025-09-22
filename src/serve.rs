@@ -31,7 +31,7 @@ async fn connection_loop(
     loop {
         let mut ph = ProgressHolder::new();
         let ev = serv.progress(&mut ph).await?;
-        dbg!(&ev);
+        //dbg!(&ev);
         #[allow(unreachable_patterns)]
         match ev {
             ServEvent::SessionShell(a) => {
@@ -72,16 +72,24 @@ async fn connection_loop(
                     }
                 }
             }
+            ServEvent::Environment(a) => {
+                // TODO: Logic to serialise/validate env vars? I.e:
+                // config.validate(a)
+                // config.save(a)
+                // SSHConfig c = a.validate(); // Checks the input variable, sanitizes, assigns a target subsystem
+                // a.config_change(c)?;
+                a.succeed()?; // FIXME: Not just succeed...
+            },
             ServEvent::SessionPty(a) => {
                 a.succeed()?;
-            }
+            },
             ServEvent::SessionExec(a) => {
                 a.fail()?;
-            }
+            },
             ServEvent::Defunct | ServEvent::SessionShell(_) => {
                 println!("Expected caller to handle event");
                 error::BadUsage.fail()?
-            },
+            }
             _ => ()
         };
     }
