@@ -1,5 +1,6 @@
 use core::net::Ipv4Addr;
-use embassy_net::{Ipv4Cidr, StaticConfigV4, StaticConfigV6};
+use core::net::Ipv6Addr;
+use embassy_net::{Ipv4Cidr, Ipv6Cidr, StaticConfigV4, StaticConfigV6};
 use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals;
 use heapless::{String, Vec};
@@ -25,7 +26,7 @@ use crate::errors;
 use crate::settings::{DEFAULT_SSID, KEY_SLOTS};
 
 #[derive(Debug)]
-pub struct SSHConfig {
+pub struct SSHStampConfig {
     pub hostkey: SignKey,
 
     pub password_authentication: bool,
@@ -221,7 +222,7 @@ impl PinConfig {
     }
 }
 
-impl SSHConfig {
+impl SSHStampConfig {
     /// Bump this when the format changes
     pub const CURRENT_VERSION: u8 = 6;
 
@@ -238,7 +239,7 @@ impl SSHConfig {
 
         let uart_pins = SerdePinConfig::default();
 
-        Ok(SSHConfig {
+        Ok(SSHStampConfig {
             hostkey,
             password_authentication: true,
             admin_pw: None,
@@ -321,6 +322,17 @@ fn enc_ipv4_config(v: &Option<StaticConfigV4>, s: &mut dyn SSHSink) -> WireResul
     Ok(())
 }
 
+fn enc_ipv6_config(v: &Option<StaticConfigV6>, s: &mut dyn SSHSink) -> WireResult<()> {
+    v.is_some().enc(s)?;
+    if let Some(v) = v {
+        v.address.address().to_bits().enc(s)?;
+        v.address.prefix_len().enc(s)?;
+        let gw = v.gateway.map(|a| a.to_bits());
+        enc_option(&gw, s)?;
+    }
+    Ok(())
+}
+
 fn dec_ipv4_config<'de, S>(s: &mut S) -> WireResult<Option<StaticConfigV4>>
 where
     S: SSHSource<'de>,
@@ -345,6 +357,30 @@ where
     .transpose()
 }
 
+fn dec_ipv6_config<'de, S>(s: &mut S) -> WireResult<Option<StaticConfigV6>>
+where
+    S: SSHSource<'de>,
+{
+    let opt = bool::dec(s)?;
+    opt.then(|| {
+        let ad: u128 = SSHDecode::dec(s)?;
+        let ad = Ipv6Addr::from_bits(ad);
+        let prefix = SSHDecode::dec(s)?;
+        if prefix > 32 {
+            // embassy panics, so test it here
+            return Err(WireError::PacketWrong);
+        }
+        let gw: Option<u128> = dec_option(s)?;
+        let gateway = gw.map(|gw| Ipv6Addr::from_bits(gw));
+        Ok(StaticConfigV6 {
+            address: Ipv6Cidr::new(ad, prefix),
+            gateway,
+            dns_servers: Vec::new(),
+        })
+    })
+    .transpose()
+}
+
 fn dec_uart_pins<'de, S>(s: &mut S) -> WireResult<SerdePinConfig>
 where
     S: SSHSource<'de>,
@@ -356,7 +392,7 @@ where
     Ok(SerdePinConfig { tx, rx, rts, cts })
 }
 
-impl SSHEncode for SSHConfig {
+impl SSHEncode for SSHStampConfig {
     fn enc(&self, s: &mut dyn SSHSink) -> WireResult<()> {
         enc_signkey(&self.hostkey, s)?;
         enc_option(&self.admin_pw, s)?;
@@ -371,12 +407,13 @@ impl SSHEncode for SSHConfig {
         self.mac.enc(s)?;
 
         enc_ipv4_config(&self.ipv4_static, s)?;
+        enc_ipv6_config(&self.ipv6_static, s)?;
 
         Ok(())
     }
 }
 
-impl<'de> SSHDecode<'de> for SSHConfig {
+impl<'de> SSHDecode<'de> for SSHStampConfig {
     fn dec<S>(s: &mut S) -> WireResult<Self>
     where
         S: SSHSource<'de>,
@@ -394,9 +431,10 @@ impl<'de> SSHDecode<'de> for SSHConfig {
         let wifi_pw = dec_option(s)?;
 
         let mac = SSHDecode::dec(s)?;
+        //let _padding = [0u8; 3]; // ignore padding
 
         let ipv4_static = dec_ipv4_config(s)?;
-        let ipv6_static = None; // TODO: Decode ipv6_config
+        let ipv6_static = dec_ipv6_config(s)?;
 
         // Decode password_authentication
         let password_authentication = SSHDecode::dec(s)?;

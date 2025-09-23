@@ -16,7 +16,7 @@ use crate::errors::Error as SSHStampError;
 use sunset::sshwire::{self, OwnOrBorrow};
 use sunset_sshwire_derive::*;
 
-use crate::config::SSHConfig;
+use crate::config::SSHStampConfig;
 
 pub const CONFIG_VERSION_SIZE: usize = 4;
 pub const CONFIG_HASH_SIZE: usize = 32;
@@ -40,8 +40,7 @@ impl<'a> Fl {
 #[derive(SSHEncode, SSHDecode)]
 struct FlashConfig<'a> {
     version: u8,
-    config: OwnOrBorrow<'a, SSHConfig>,
-    // _pad: [u8; 4],   // example padding you may have missed
+    config: OwnOrBorrow<'a, SSHStampConfig>,
     /// sha256 hash of config
     hash: [u8; 32],
 }
@@ -73,14 +72,14 @@ impl FlashConfig<'_> {
     }
 }
 
-fn config_hash(config: &SSHConfig) -> Result<[u8; 32], SunsetError> {
+fn config_hash(config: &SSHStampConfig) -> Result<[u8; 32], SunsetError> {
     let mut h = sha2::Sha256::new();
     sshwire::hash_ser(&mut h, config)?;
     Ok(h.finalize().into())
 }
 
 /// Loads a SSHConfig at startup. Good for persisting hostkeys.
-pub async fn load_or_create(flash: &mut Fl) -> Result<SSHConfig, SunsetError> {
+pub async fn load_or_create(flash: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
     match load(flash).await {
         Ok(c) => {
             println!("Good existing config");
@@ -92,14 +91,14 @@ pub async fn load_or_create(flash: &mut Fl) -> Result<SSHConfig, SunsetError> {
     create(flash).await
 }
 
-pub async fn create(flash: &mut Fl) -> Result<SSHConfig, SunsetError> {
-    let c = SSHConfig::new()?;
+pub async fn create(flash: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
+    let c = SSHStampConfig::new()?;
     save(flash, &c).await?;
  
     Ok(c)
 }
 
-pub async fn load(fl: &mut Fl) -> Result<SSHConfig, SunsetError> {
+pub async fn load(fl: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
     fl.flash.read(CONFIG_OFFSET as u32, &mut fl.buf).map_err(|_e| {
         dbg!("flash read error 0x{CONFIG_OFFSET:x} {e:?}");
         SunsetError::msg("flash error")
@@ -108,7 +107,7 @@ pub async fn load(fl: &mut Fl) -> Result<SSHConfig, SunsetError> {
     let flash_config: FlashConfig = sshwire::read_ssh(&fl.buf, None).unwrap();
 //        .map_err(|_| SunsetError::msg("failed to decode flash config"))?;
 
-    if flash_config.version != SSHConfig::CURRENT_VERSION {
+    if flash_config.version != SSHStampConfig::CURRENT_VERSION {
         return Err(SunsetError::msg("wrong config version"));
     }
 
@@ -129,11 +128,10 @@ pub async fn load(fl: &mut Fl) -> Result<SSHConfig, SunsetError> {
     }
 }
 
-pub async fn save(fl: &mut Fl, config: &SSHConfig) -> Result<(), SunsetError> {
+pub async fn save(fl: &mut Fl, config: &SSHStampConfig) -> Result<(), SunsetError> {
     let sc = FlashConfig {
-        version: SSHConfig::CURRENT_VERSION,
+        version: SSHStampConfig::CURRENT_VERSION,
         config: OwnOrBorrow::Borrow(&config),
-        // _pad: [0u8; 4],
         hash: config_hash(&config)?,
     };
 

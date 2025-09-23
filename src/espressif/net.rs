@@ -26,7 +26,7 @@ use edge_dhcp::{
 use edge_nal::UdpBind;
 use edge_nal_embassy::{Udp, UdpBuffers};
 
-use crate::config::SSHConfig;
+use crate::config::SSHStampConfig;
 
 use super::buffered_uart::BufferedUart;
 
@@ -45,7 +45,7 @@ pub async fn if_up(
     wifi_controller: EspWifiController<'static>,
     wifi: WIFI<'static>,
     rng: &mut Rng,
-    config: &'static SunsetMutex<SSHConfig>
+    config: &'static SunsetMutex<SSHStampConfig>
 ) -> Result<Stack<'static>, sunset::Error> {
     let wifi_init = &*mk_static!(EspWifiController<'static>, wifi_controller);
     let (controller, interfaces) = esp_wifi::wifi::new(wifi_init, wifi).unwrap();
@@ -129,7 +129,7 @@ pub async fn accept_requests(stack: Stack<'static>, uart: &BufferedUart) -> ! {
 }
 
 #[embassy_executor::task]
-async fn wifi_up(mut controller: WifiController<'static>, config: &'static SunsetMutex<SSHConfig>) {
+async fn wifi_up(mut controller: WifiController<'static>, config: &'static SunsetMutex<SSHStampConfig>) {
     println!("Device capabilities: {:?}", controller.capabilities());
 
     let wifi_ssid = {

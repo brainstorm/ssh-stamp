@@ -12,7 +12,7 @@ use esp_hal_embassy::InterruptExecutor;
 use esp_println::dbg;
 use esp_storage::FlashStorage;
 use embassy_executor::Spawner;
-use ssh_stamp::{config::SSHConfig, espressif::{
+use ssh_stamp::{config::SSHStampConfig, espressif::{
     buffered_uart::BufferedUart,
     net::{accept_requests, if_up},
     rng,
@@ -61,7 +61,7 @@ async fn main(spawner: Spawner) -> ! {
     static FLASH: StaticCell<SunsetMutex<Fl>> = StaticCell::new();
     let _flash = FLASH.init(SunsetMutex::new(flash));
 
-    static CONFIG: StaticCell<SunsetMutex<SSHConfig>> = StaticCell::new();
+    static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
     let config = CONFIG.init(SunsetMutex::new(config.unwrap()));
 
     let wifi_controller = esp_wifi::init(timg0.timer0, rng, peripherals.RADIO_CLK).unwrap();
