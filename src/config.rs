@@ -1,6 +1,9 @@
 use core::net::Ipv4Addr;
+#[cfg(feature = "ipv6")]
 use core::net::Ipv6Addr;
-use embassy_net::{Ipv4Cidr, Ipv6Cidr, StaticConfigV4, StaticConfigV6};
+#[cfg(feature = "ipv6")]
+use embassy_net::{Ipv6Cidr, StaticConfigV6};
+use embassy_net::{Ipv4Cidr, StaticConfigV4};
 use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals;
 use heapless::{String, Vec};
@@ -43,6 +46,7 @@ pub struct SSHStampConfig {
     pub mac: [u8; 6],
     /// `None` for DHCP
     pub ipv4_static: Option<StaticConfigV4>,
+    #[cfg(feature = "ipv6")]
     pub ipv6_static: Option<StaticConfigV6>,
     /// UART
     pub uart_pins: SerdePinConfig,
@@ -248,6 +252,7 @@ impl SSHStampConfig {
             wifi_pw,
             mac,
             ipv4_static: None,
+            #[cfg(feature = "ipv6")]
             ipv6_static: None,
             uart_pins,
         })
@@ -322,6 +327,7 @@ fn enc_ipv4_config(v: &Option<StaticConfigV4>, s: &mut dyn SSHSink) -> WireResul
     Ok(())
 }
 
+#[cfg(feature = "ipv6")]
 fn enc_ipv6_config(v: &Option<StaticConfigV6>, s: &mut dyn SSHSink) -> WireResult<()> {
     v.is_some().enc(s)?;
     if let Some(v) = v {
@@ -357,6 +363,7 @@ where
     .transpose()
 }
 
+#[cfg(feature = "ipv6")]
 fn dec_ipv6_config<'de, S>(s: &mut S) -> WireResult<Option<StaticConfigV6>>
 where
     S: SSHSource<'de>,
@@ -407,6 +414,7 @@ impl SSHEncode for SSHStampConfig {
         self.mac.enc(s)?;
 
         enc_ipv4_config(&self.ipv4_static, s)?;
+        #[cfg(feature = "ipv6")]
         enc_ipv6_config(&self.ipv6_static, s)?;
 
         Ok(())
@@ -434,6 +442,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         //let _padding = [0u8; 3]; // ignore padding
 
         let ipv4_static = dec_ipv4_config(s)?;
+        #[cfg(feature = "ipv6")]
         let ipv6_static = dec_ipv6_config(s)?;
 
         // Decode password_authentication
@@ -450,6 +459,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
             wifi_pw,
             mac,
             ipv4_static,
+            #[cfg(feature = "ipv6")]
             ipv6_static,
             uart_pins,
         })

@@ -81,6 +81,7 @@ opt-level = "s"
 opt-level = "s"
 
 [features]
+ipv6 = []
 default = ["esp32c6"]
 # MCU options
 esp32 = [
