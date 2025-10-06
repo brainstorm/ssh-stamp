@@ -38,7 +38,7 @@ pub struct SSHStampConfig {
 
     /// WiFi
     pub wifi_ssid: String<32>,
-    pub wifi_pw: Option<String<63>>,
+    pub wifi_pw: Option<String<63>>, // TODO: Why not 64?
 
     /// Networking
     /// TODO: Populate this field from esp's hardware info or just refer it from HAL?
@@ -319,6 +319,7 @@ fn enc_ipv4_config(v: &Option<StaticConfigV4>, s: &mut dyn SSHSink) -> WireResul
     v.is_some().enc(s)?;
     if let Some(v) = v {
         v.address.address().to_bits().enc(s)?;
+        dbg!("enc_ipv4_config: prefix", &v.address.prefix_len());
         v.address.prefix_len().enc(s)?;
         // to u32
         let gw = v.gateway.map(|a| a.to_bits());
@@ -346,10 +347,13 @@ where
     let opt = bool::dec(s)?;
     opt.then(|| {
         let ad: u32 = SSHDecode::dec(s)?;
+        dbg!("dec_ipv4_config: address bits", &ad);
         let ad = Ipv4Addr::from_bits(ad);
-        let prefix = SSHDecode::dec(s)?;
+        dbg!("dec_ipv4_config: address", &ad);
+        let prefix: u8 = SSHDecode::dec(s)?;
+        dbg!("dec_ipv4_config: prefix", &prefix);
         if prefix > 32 {
-            // emabassy panics, so test it here
+            // embassy panics, so test it here
             return Err(WireError::PacketWrong);
         }
         let gw: Option<u32> = dec_option(s)?;
@@ -427,6 +431,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         S: SSHSource<'de>,
     {
         let hostkey = dec_signkey(s)?;
+        dbg!("Hostkey: ", &hostkey);
 
         let admin_pw = dec_option(s)?;
 
@@ -439,7 +444,6 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         let wifi_pw = dec_option(s)?;
 
         let mac = SSHDecode::dec(s)?;
-        //let _padding = [0u8; 3]; // ignore padding
 
         let ipv4_static = dec_ipv4_config(s)?;
         #[cfg(feature = "ipv6")]
