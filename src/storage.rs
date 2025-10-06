@@ -106,15 +106,17 @@ pub async fn load(fl: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
     })?;
 
     if fl.buf[0] != SSHStampConfig::CURRENT_VERSION {
+        dbg!("Wrong config version pre-read_ssh decode: {}", fl.buf[0]);
         return Err(SunsetError::msg("Wrong config version"));
     }
 
-    dbg!("Marko's flash: {}", &fl.buf.hex_dump());
+    //dbg!("Marko's flash: {}", &fl.buf.hex_dump());
 
     let flash_config: FlashConfig = sshwire::read_ssh(&fl.buf, None).unwrap();
 //        .map_err(|_| SunsetError::msg("failed to decode flash config"))?;
 
     if flash_config.version != SSHStampConfig::CURRENT_VERSION {
+        dbg!("wrong config version on decode: {}", flash_config.version);
         return Err(SunsetError::msg("wrong config version"));
     }
 
@@ -149,12 +151,12 @@ pub async fn save(fl: &mut Fl, config: &SSHStampConfig) -> Result<(), SunsetErro
 
     dbg!(CONFIG_OFFSET + FlashConfig::BUF_SIZE);
 
-    dbg!("Erasing flash");
-    fl.flash
-        .erase(CONFIG_OFFSET as u32, (CONFIG_OFFSET + FlashConfig::BUF_SIZE + 4060) as u32).unwrap();
+//    dbg!("Erasing flash");
+//    fl.flash
+//        .erase(CONFIG_OFFSET as u32, (CONFIG_OFFSET + FlashConfig::BUF_SIZE + 4060) as u32).unwrap();
 
-    // fl.flash
-    //     .write(CONFIG_OFFSET as u32, &fl.buf).unwrap();
+    fl.flash
+         .write(CONFIG_OFFSET as u32, &fl.buf).unwrap();
 
     println!("flash save done");
     Ok(())
