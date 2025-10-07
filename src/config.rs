@@ -24,6 +24,7 @@ use sunset::{
 };
 use embassy_sync::channel::Channel;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use sunset_sshwire_derive::SSHEncode;
 
 use crate::errors;
 use crate::settings::{DEFAULT_SSID, KEY_SLOTS};
@@ -52,7 +53,7 @@ pub struct SSHStampConfig {
     pub uart_pins: SerdePinConfig,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, SSHEncode)]
 pub struct SerdePinConfig {
     pub tx: u8,
     pub rx: u8,
@@ -63,14 +64,26 @@ pub struct SerdePinConfig {
 impl Default for SerdePinConfig {
     fn default() -> Self {
         Self { 
+            // TODO: This env comes from SSH env events/packets, not from system's std::env / core::env (if any)... so it shouldn't be unsafe()
             tx: 10,
             rx: 11,
-            // TODO: This env comes from SSH env events/packets, not from system's std::env / core::env (if any)... so it shouldn't be unsafe()
-            // tx: env!("SSH_STAMP_TX_PIN").parse().unwrap(),
-            // rx: env!("SSH_STAMP_RX_PIN").parse().unwrap(),
-            rts: option_env!("SSH_STAMP_RTS").map(|s| s.parse().unwrap()),
-            cts: option_env!("SSH_STAMP_CTS").map(|s| s.parse().unwrap()),
+            rts: None,
+            cts: None
         }
+    }
+}
+
+impl<'de> SSHDecode<'de> for SerdePinConfig {
+    fn dec<S>(s: &mut S) -> WireResult<Self>
+    where
+        S: SSHSource<'de>,
+    {
+        let tx = u8::dec(s)?;
+        let rx = u8::dec(s)?;
+        // TODO: Decoding Options is problematic since encode only writes them if they exist
+        let rts = dec_option(s)?;
+        let cts = dec_option(s)?;
+        Ok(SerdePinConfig { tx, rx, rts, cts })
     }
 }
 
@@ -277,10 +290,11 @@ impl SSHStampConfig {
 }
 
 fn random_mac() -> Result<[u8; 6]> {
-    let mut mac = [0u8; 6];
-    sunset::random::fill_random(&mut mac)?;
-    // unicast, locally administered
-    mac[0] = (mac[0] & 0xfc) | 0x02;
+    // let mut mac = [0u8; 6];
+    // sunset::random::fill_random(&mut mac)?;
+    // // unicast, locally administered
+    // mac[0] = (mac[0] & 0xfc) | 0x02;
+    let mac = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06]; // TODO: Temporary fixed MAC for testing
     Ok(mac)
 }
 
@@ -347,11 +361,8 @@ where
     let opt = bool::dec(s)?;
     opt.then(|| {
         let ad: u32 = SSHDecode::dec(s)?;
-        dbg!("dec_ipv4_config: address bits", &ad);
         let ad = Ipv4Addr::from_bits(ad);
-        dbg!("dec_ipv4_config: address", &ad);
         let prefix: u8 = SSHDecode::dec(s)?;
-        dbg!("dec_ipv4_config: prefix", &prefix);
         if prefix > 32 {
             // embassy panics, so test it here
             return Err(WireError::PacketWrong);
@@ -392,20 +403,21 @@ where
     .transpose()
 }
 
-fn dec_uart_pins<'de, S>(s: &mut S) -> WireResult<SerdePinConfig>
-where
-    S: SSHSource<'de>,
-{
-    let tx = u8::dec(s)?;
-    let rx = u8::dec(s)?;
-    let rts = dec_option(s)?;
-    let cts = dec_option(s)?;
-    Ok(SerdePinConfig { tx, rx, rts, cts })
-}
+// fn dec_uart_pins<'de, S>(s: &mut S) -> WireResult<SerdePinConfig>
+// where
+//     S: SSHSource<'de>,
+// {
+//     let tx = u8::dec(s)?;
+//     let rx = u8::dec(s)?;
+//     let rts = dec_option(s)?;
+//     let cts = dec_option(s)?;
+//     Ok(SerdePinConfig { tx, rx, rts, cts })
+// }
 
 impl SSHEncode for SSHStampConfig {
     fn enc(&self, s: &mut dyn SSHSink) -> WireResult<()> {
         enc_signkey(&self.hostkey, s)?;
+        self.password_authentication.enc(s)?;
         enc_option(&self.admin_pw, s)?;
 
         for k in self.admin_keys.iter() {
@@ -421,6 +433,9 @@ impl SSHEncode for SSHStampConfig {
         #[cfg(feature = "ipv6")]
         enc_ipv6_config(&self.ipv6_static, s)?;
 
+        // Encode PinConfig
+        self.uart_pins.enc(s)?;
+
         Ok(())
     }
 }
@@ -430,9 +445,13 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
     where
         S: SSHSource<'de>,
     {
+
         let hostkey = dec_signkey(s)?;
         dbg!("Hostkey: ", &hostkey);
 
+        dbg!(s.remaining());
+        let password_authentication = SSHDecode::dec(s)?;
+        dbg!(s.remaining());
         let admin_pw = dec_option(s)?;
 
         let mut admin_keys = [None, None, None];
@@ -440,6 +459,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
             *k = dec_option(s)?;
         }
 
+        dbg!(s.remaining());
         let wifi_ssid = SSHDecode::dec(s)?;
         let wifi_pw = dec_option(s)?;
 
@@ -449,10 +469,9 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         #[cfg(feature = "ipv6")]
         let ipv6_static = dec_ipv6_config(s)?;
 
-        // Decode password_authentication
-        let password_authentication = SSHDecode::dec(s)?;
-
-        let uart_pins = dec_uart_pins(s)?;
+        // Not supported by sshwire-derive nor virtue (no Option<u8> support)
+        // let uart_pins = SSHDecode::dec(s)?;
+        let uart_pins = SSHDecode::dec(s)?;
 
         Ok(Self {
             hostkey,

@@ -55,11 +55,11 @@ async fn main(spawner: Spawner) -> ! {
     }
 
     // Read SSH configuration from Flash (if it exists)
-    let mut flash = Fl::new(FlashStorage::new());
-    let config = ssh_stamp::storage::load_or_create(&mut flash).await;
+    let mut flash_storage = Fl::new(FlashStorage::new());
+    let config = ssh_stamp::storage::load_or_create(&mut flash_storage).await;
 
     static FLASH: StaticCell<SunsetMutex<Fl>> = StaticCell::new();
-    let _flash = FLASH.init(SunsetMutex::new(flash));
+    let _flash = FLASH.init(SunsetMutex::new(flash_storage));
 
     static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
     let config = CONFIG.init(SunsetMutex::new(config.unwrap()));

@@ -46,7 +46,7 @@ struct FlashConfig<'a> {
 }
 
 impl FlashConfig<'_> {
-    const BUF_SIZE: usize = CONFIG_VERSION_SIZE + CONFIG_AREA_SIZE + CONFIG_HASH_SIZE;
+    const BUF_SIZE: usize = 460; // Must be enough to hold the whole config
 
     // TODO: Rework Error mapping with esp_storage errors
     /// Finds the NVS partitions and retrieves information about it.
@@ -110,7 +110,7 @@ pub async fn load(fl: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
         return Err(SunsetError::msg("Wrong config version"));
     }
 
-    //dbg!("Marko's flash: {}", &fl.buf.hex_dump());
+    dbg!("Marko's flash: {}", &fl.buf.hex_dump());
 
     let flash_config: FlashConfig = sshwire::read_ssh(&fl.buf, None).unwrap();
 //        .map_err(|_| SunsetError::msg("failed to decode flash config"))?;
@@ -146,17 +146,20 @@ pub async fn save(fl: &mut Fl, config: &SSHStampConfig) -> Result<(), SunsetErro
 
     FlashConfig::find_config_partition().unwrap();
 
-    let _l = sshwire::write_ssh(&mut fl.buf, &sc)?;
-    // let buf = &fl.buf[..l];
+    let l = sshwire::write_ssh(&mut fl.buf, &sc)?;
+    let buf = &fl.buf[..l];
 
     dbg!(CONFIG_OFFSET + FlashConfig::BUF_SIZE);
 
-//    dbg!("Erasing flash");
-//    fl.flash
-//        .erase(CONFIG_OFFSET as u32, (CONFIG_OFFSET + FlashConfig::BUF_SIZE + 4060) as u32).unwrap();
+    dbg!("Erasing flash");
+
+    assert!(CONFIG_AREA_SIZE > FlashConfig::BUF_SIZE);
 
     fl.flash
-         .write(CONFIG_OFFSET as u32, &fl.buf).unwrap();
+         .erase(CONFIG_OFFSET as u32, (CONFIG_OFFSET + CONFIG_AREA_SIZE) as u32).unwrap();
+
+    fl.flash
+         .write(CONFIG_OFFSET as u32, &buf).unwrap();
 
     println!("flash save done");
     Ok(())
