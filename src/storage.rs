@@ -93,7 +93,7 @@ pub async fn load_or_create(flash: &mut Fl) -> Result<SSHStampConfig, SunsetErro
 
 pub async fn create(flash: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
     let c = SSHStampConfig::new()?;
-    dbg!("New config being serialised: ", &c);
+    //dbg!("New config being serialised: ", &c);
     save(flash, &c).await?;
  
     Ok(c)
@@ -110,7 +110,7 @@ pub async fn load(fl: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
         return Err(SunsetError::msg("Wrong config version"));
     }
 
-    dbg!("Marko's flash: {}", &fl.buf.hex_dump());
+    dbg!("Loaded flash: {}", &fl.buf.hex_dump());
 
     let flash_config: FlashConfig = sshwire::read_ssh(&fl.buf, None).unwrap();
 //        .map_err(|_| SunsetError::msg("failed to decode flash config"))?;
@@ -120,7 +120,7 @@ pub async fn load(fl: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
         return Err(SunsetError::msg("wrong config version"));
     }
 
-    let calc_hash = config_hash(flash_config.config.borrow())?;
+    let calc_hash = config_hash(&flash_config.config.borrow()).unwrap();
     
     dbg!(&calc_hash.hex_dump());
     dbg!(&flash_config.hash.hex_dump());
@@ -146,8 +146,11 @@ pub async fn save(fl: &mut Fl, config: &SSHStampConfig) -> Result<(), SunsetErro
 
     FlashConfig::find_config_partition().unwrap();
 
+//   dbg!("Saving config: ", &config);
+    dbg!("Before write_ssh, with hash: ", &sc.hash.hex_dump());
     let l = sshwire::write_ssh(&mut fl.buf, &sc)?;
     let buf = &fl.buf[..l];
+    dbg!("Saved flash (after write_ssh): {}", &buf.hex_dump());
 
     dbg!(CONFIG_OFFSET + FlashConfig::BUF_SIZE);
 
@@ -159,7 +162,7 @@ pub async fn save(fl: &mut Fl, config: &SSHStampConfig) -> Result<(), SunsetErro
          .erase(CONFIG_OFFSET as u32, (CONFIG_OFFSET + CONFIG_AREA_SIZE) as u32).unwrap();
 
     fl.flash
-         .write(CONFIG_OFFSET as u32, &buf).unwrap();
+         .write(CONFIG_OFFSET as u32, &fl.buf).unwrap();
 
     println!("flash save done");
     Ok(())

@@ -4,8 +4,9 @@ build-esp32c2 = "build --release --target riscv32imc-unknown-none-elf --features
 build-esp32c3 = "build --release --target riscv32imc-unknown-none-elf --features esp32c3"
 # Available but not supported by esp-hal (yet).
 #build-esp32c5 = "build --release --target riscv32imac-unknown-none-elf --features esp32c5"
-#build-esp32c6 = "build --release --target riscv32imac-unknown-none-elf --features esp32c6"
-build-esp32c6 = "build --target riscv32imac-unknown-none-elf --features esp32c6"
+build-esp32c6 = "build --release --target riscv32imac-unknown-none-elf --features esp32c6"
+# Debug build (too big for target and probe-rs doesn't work anyway)
+#build-esp32c6 = "build --target riscv32imac-unknown-none-elf --features esp32c6"
 build-esp32s2 = "build --profile esp32s2 --target xtensa-esp32s2-none-elf --features esp32s2"
 build-esp32s3 = "build --release --target xtensa-esp32s3-none-elf --features esp32s3"
 
@@ -14,8 +15,9 @@ run-esp32c2 = "run --release --target riscv32imc-unknown-none-elf --features esp
 run-esp32c3 = "run --release --target riscv32imc-unknown-none-elf --features esp32c3"
 # Available but not supported by esp-hal (yet).
 #run-esp32c5 = "run --release --target riscv32imac-unknown-none-elf --features esp32c5"
-#run-esp32c6 = "run --release --target riscv32imac-unknown-none-elf --features esp32c6"
-run-esp32c6 = "run --target riscv32imac-unknown-none-elf --features esp32c6"
+run-esp32c6 = "run --release --target riscv32imac-unknown-none-elf --features esp32c6"
+# Debug build (too big for target and probe-rs doesn't work anyway)
+#run-esp32c6 = "run --target riscv32imac-unknown-none-elf --features esp32c6"
 run-esp32s2 = "run --profile esp32s2 --target xtensa-esp32s2-none-elf --features esp32s2"
 run-esp32s3 = "run --release --target xtensa-esp32s3-none-elf --features esp32s3"
 
