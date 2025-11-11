@@ -178,7 +178,6 @@ impl PinChannel {
             11 => self.gpios.gpio11.take().ok_or_else(|| errors::Error::InvalidPin)?,
             _ => return Err(errors::Error::InvalidPin)
         });
-        dbg!("recv_rx: no channel receive");
         // rx needs to lock here.
         // dbg!("recv_rx: before rx.receive.await");
         // self.rx.receive().await;
@@ -201,15 +200,11 @@ impl PinChannel {
 
     pub async fn with_channel<F>(&mut self, f: F) -> errors::Result<()> 
     where F: for<'a> AsyncFnOnce(AnyPin<'a>, AnyPin<'a>) {
-        dbg!("inner: with_channel begin, recv_rx call");
         let mut rx = self.recv_rx().await?;
-        dbg!("inner: with_channel recv_tx call");
         let mut tx = self.recv_tx().await?;
 
-        dbg!("inner: with_channel f-reborrow");
         f(rx.reborrow(), tx.reborrow()).await;
 
-        dbg!("inner: with_channel, before send{rx/tx}");
         self.send_rx(rx).await.unwrap();
         self.send_tx(tx).await.unwrap();
 
@@ -330,11 +325,10 @@ impl SSHStampConfig {
 }
 
 fn random_mac() -> Result<[u8; 6]> {
-    // let mut mac = [0u8; 6];
-    // sunset::random::fill_random(&mut mac)?;
-    // // unicast, locally administered
-    // mac[0] = (mac[0] & 0xfc) | 0x02;
-    let mac = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06]; // TODO: Temporary fixed MAC for testing
+    let mut mac = [0u8; 6];
+    sunset::random::fill_random(&mut mac)?;
+    // unicast, locally administered
+    mac[0] = (mac[0] & 0xfc) | 0x02;
     Ok(mac)
 }
 
@@ -488,7 +482,6 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
     {
 
         let hostkey = dec_signkey(s)?;
-        dbg!("Hostkey: ", &hostkey);
 
         // Authentication 
         let password_authentication = SSHDecode::dec(s)?;

@@ -105,10 +105,7 @@ pub async fn load(fl: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
         SunsetError::msg("flash error")
     })?;
 
-    dbg!("Loaded flash: {}", &fl.buf.hex_dump());
-
-    let flash_config: FlashConfig = sshwire::read_ssh(&fl.buf, None).unwrap();
-//        .map_err(|_| SunsetError::msg("failed to decode flash config"))?;
+    let flash_config: FlashConfig = sshwire::read_ssh(&fl.buf, None).map_err(|_| SunsetError::msg("failed to decode flash config"))?;
 
     if flash_config.version != SSHStampConfig::CURRENT_VERSION {
         dbg!("wrong config version on decode: {}", flash_config.version);
@@ -117,9 +114,6 @@ pub async fn load(fl: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
 
     let calc_hash = config_hash(flash_config.config.borrow()).unwrap();
     
-    dbg!(&calc_hash.hex_dump());
-    dbg!(&flash_config.hash.hex_dump());
-
     if calc_hash != flash_config.hash {
         return Err(SunsetError::msg("bad config hash"));
     }

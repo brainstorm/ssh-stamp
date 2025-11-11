@@ -54,8 +54,9 @@ async fn main(spawner: Spawner) -> ! {
        }
     }
 
+    // TODO: Migrate this function/test to embedded-test.
     // Quick roundtrip test for SSHStampConfig
-    ssh_stamp::config::roundtrip_config();
+    // ssh_stamp::config::roundtrip_config();
 
     // Read SSH configuration from Flash (if it exists)
     let mut flash_storage = Fl::new(FlashStorage::new());
@@ -122,7 +123,7 @@ async fn uart_task(
     uart_periph: UART1<'static>,
     channel: &'static mut PinChannel,
 ) {
-    dbg!("spawning UART task...");
+    dbg!("Spawning UART task...");
     // Hardware UART setup
     let uart_config = Config::default().with_rx(
         RxConfig::default()
@@ -130,10 +131,8 @@ async fn uart_task(
             .with_timeout(1)
     );
 
-    dbg!("before with_channel");
     // Sync pin config via channels
     channel.with_channel(async |rx, tx| {
-        dbg!("into with_channel");
         let uart = Uart::new(uart_periph, uart_config)
             .unwrap()
             .with_rx(rx)
@@ -141,8 +140,6 @@ async fn uart_task(
             .into_async();
 
         // Run the main buffered TX/RX loop
-        dbg!("before buffer_run");
         buffer.run(uart).await;
-        dbg!("after buffer_run");
     }).await.unwrap();
 }
