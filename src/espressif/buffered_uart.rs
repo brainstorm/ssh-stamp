@@ -51,6 +51,7 @@ impl BufferedUart {
             let rd_from = async {
                 loop {
                     let n = uart_rx.read_async(&mut uart_rx_buf).await.unwrap();
+
                     let mut rx_slice = &uart_rx_buf[..n];
 
                     // Write rx_slice to 'inward' pipe, dropping bytes rather than blocking if

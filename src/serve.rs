@@ -13,15 +13,22 @@ use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 
+use embedded_io_async::Read;
 use heapless::String;
 use sunset::{error, ChanHandle, ServEvent, SignKey};
 use sunset_async::{ProgressHolder, SSHServer};
 
 use esp_println::{dbg, println};
 
+enum SessionType {
+	Bridge(ChanHandle),
+	Env(ChanHandle),
+	Sftp(ChanHandle),
+}
+
 async fn connection_loop(
     serv: &SSHServer<'_>,
-    chan_pipe: &Channel<NoopRawMutex, ChanHandle, 1>,
+    chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
 ) -> Result<(), sunset::Error> {
     let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
     let mut session: Option<ChanHandle> = None;
@@ -36,9 +43,11 @@ async fn connection_loop(
         match ev {
             ServEvent::SessionShell(a) => {
                 if let Some(ch) = session.take() {
+                    debug_assert!(ch.num() == a.channel());
+
                     a.succeed()?;
                     dbg!("We got shell");
-                    let _ = chan_pipe.try_send(ch);
+                    let _ = chan_pipe.try_send(SessionType::Bridge(ch));
                 } else {
                     a.fail()?;
                 }
@@ -70,19 +79,36 @@ async fn connection_loop(
                     }
                 }
             }
+            ServEvent::Environment(a) => {
+                // TODO: Logic to serialise/validate env vars? I.e:
+                // config.validate(a)
+                // config.save(a)
+                // SSHConfig c = a.validate(); // Checks the input variable, sanitizes, assigns a target subsystem
+                // a.config_change(c)?;
+
+                // Obtain the current session channel handle and use it to get stdio.
+                //  if let Some(ch) = session.take() {
+                //     debug_assert!(ch.num() == a.channel());
+
+                //     a.succeed()?;
+                //     let _ = chan_pipe.try_send(SessionType::Env(ch));
+                // } else {
+                //     a.fail()?;
+                // }
+                a.succeed()?;
+            },
             ServEvent::SessionPty(a) => {
                 a.succeed()?;
-            }
+            },
             ServEvent::SessionExec(a) => {
                 a.fail()?;
-            }
+            },
             ServEvent::Defunct | ServEvent::SessionShell(_) => {
                 println!("Expected caller to handle event");
                 error::BadUsage.fail()?
             }
-            ServEvent::PollAgain => (),
-            ServEvent::SessionSubsystem(_) => (),
-        }
+            _ => ()
+        };
     }
 }
 
@@ -97,7 +123,7 @@ pub(crate) async fn handle_ssh_client(
     let ssh_server = SSHServer::new(&mut inbuf, &mut outbuf);
     let (mut rsock, mut wsock) = stream.split();
 
-    let chan_pipe = Channel::<NoopRawMutex, ChanHandle, 1>::new();
+    let chan_pipe = Channel::<NoopRawMutex, SessionType, 1>::new();
 
     println!("Calling connection_loop from handle_ssh_client");
     let conn_loop = connection_loop(&ssh_server, &chan_pipe);
@@ -105,11 +131,32 @@ pub(crate) async fn handle_ssh_client(
     let server = ssh_server.run(&mut rsock, &mut wsock);
 
     println!("Setting up serial bridge");
+
+    // TODO: Maybe loop forever here and/or handle disconnection/terminations gracefully?
     let bridge = async {
-        let ch = chan_pipe.receive().await;
-        let stdio = ssh_server.stdio(ch).await?;
-        let stdio2 = stdio.clone();
-        serial_bridge(stdio, stdio2, uart).await
+        let session_type = chan_pipe.receive().await;
+            
+        match session_type {
+            SessionType::Bridge(ch) => {
+                let stdio = ssh_server.stdio(ch).await?;
+                let stdio2 = stdio.clone();
+                serial_bridge(stdio, stdio2, uart).await?
+            },
+            SessionType::Env(ch) => {
+                // Handle environment variable session
+                let mut stdio = ssh_server.stdio(ch).await?;
+                let mut buf = [0u8; 256];
+                dbg!("Waiting to read ENV session data");
+                let n = stdio.read(&mut buf).await?;
+                dbg!("Got ENV session");
+                dbg!("Name/Value of ENV is: ", &buf[..n]);
+            },
+            SessionType::Sftp(_ch) => {
+                // Handle SFTP session
+                todo!()
+            },
+        };
+        Ok(())
     };
 
     println!("Main select() in handle_ssh_client()");
