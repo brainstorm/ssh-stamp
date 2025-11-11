@@ -54,6 +54,9 @@ async fn main(spawner: Spawner) -> ! {
        }
     }
 
+    // Quick roundtrip test for SSHStampConfig
+    ssh_stamp::config::roundtrip_config();
+
     // Read SSH configuration from Flash (if it exists)
     let mut flash_storage = Fl::new(FlashStorage::new());
     let config = ssh_stamp::storage::load_or_create(&mut flash_storage).await;

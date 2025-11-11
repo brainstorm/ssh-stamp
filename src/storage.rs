@@ -93,8 +93,8 @@ pub async fn load_or_create(flash: &mut Fl) -> Result<SSHStampConfig, SunsetErro
 
 pub async fn create(flash: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
     let c = SSHStampConfig::new()?;
-    //dbg!("New config being serialised: ", &c);
     save(flash, &c).await?;
+    dbg!("Created new config: ", &c);
  
     Ok(c)
 }
@@ -104,11 +104,6 @@ pub async fn load(fl: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
         dbg!("flash read error 0x{CONFIG_OFFSET:x} {e:?}");
         SunsetError::msg("flash error")
     })?;
-
-    if fl.buf[0] != SSHStampConfig::CURRENT_VERSION {
-        dbg!("Wrong config version pre-read_ssh decode: {}", fl.buf[0]);
-        return Err(SunsetError::msg("Wrong config version"));
-    }
 
     dbg!("Loaded flash: {}", &fl.buf.hex_dump());
 
@@ -120,7 +115,7 @@ pub async fn load(fl: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
         return Err(SunsetError::msg("wrong config version"));
     }
 
-    let calc_hash = config_hash(&flash_config.config.borrow()).unwrap();
+    let calc_hash = config_hash(flash_config.config.borrow()).unwrap();
     
     dbg!(&calc_hash.hex_dump());
     dbg!(&flash_config.hash.hex_dump());

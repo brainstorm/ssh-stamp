@@ -16,7 +16,7 @@ use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
 use sunset::packets::Ed25519PubKey;
-use sunset::{KeyType, Result};
+use sunset::{sshwire, KeyType, Result};
 use sunset::{
     sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
     SignKey,
@@ -27,8 +27,9 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use crate::errors;
 use crate::settings::{DEFAULT_SSID, KEY_SLOTS};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct SSHStampConfig {
+    //pub first_boot: bool,
     pub hostkey: SignKey,
 
     /// Authentication
@@ -52,7 +53,7 @@ pub struct SSHStampConfig {
     pub uart_pins: SerdePinConfig,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SerdePinConfig {
     pub tx: u8,
     pub rx: u8,
@@ -107,9 +108,9 @@ impl<'de> SSHDecode<'de> for SerdePinConfig {
     {
         // Decoding Options is problematic since encode only writes them if they exist.
         let mut pin_config = SerdePinConfig::default();
-        pin_config.rx = u8::dec(s)?;
         pin_config.tx = u8::dec(s)?;
-     
+        pin_config.rx = u8::dec(s)?;
+
         // Decode flags to know which options are present
         //let flags = u8::dec(s)?;
 
@@ -605,4 +606,14 @@ impl<'de> SSHDecode<'de> for PwHash {
         let cost = u8::dec(s)?;
         Ok(PwHash { salt, hash, cost })
     }
+}
+
+pub fn roundtrip_config() {
+    // default config
+    let c1 = SSHStampConfig::new().unwrap();
+    let mut buf = [0u8; 1000];
+    let l = sshwire::write_ssh(&mut buf, &c1).unwrap();
+    let v = &buf[..l];
+    let c2: SSHStampConfig = sshwire::read_ssh(v, None).unwrap();
+    assert_eq!(c1, c2);
 }
