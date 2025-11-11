@@ -15,10 +15,9 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
-use sunset::error::TrapBug;
+use sunset::packets::Ed25519PubKey;
 use sunset::{KeyType, Result};
 use sunset::{
-    packets::Ed25519PubKey,
     sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
     SignKey,
 };
@@ -32,6 +31,7 @@ use crate::settings::{DEFAULT_SSID, KEY_SLOTS};
 pub struct SSHStampConfig {
     pub hostkey: SignKey,
 
+    /// Authentication
     pub password_authentication: bool,
     pub admin_pw: Option<PwHash>,
     pub admin_keys: [Option<Ed25519PubKey>; KEY_SLOTS],
@@ -286,11 +286,12 @@ impl SSHStampConfig {
     /// Will only fail on RNG failure.
     pub fn new() -> Result<Self> {
         let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
-        let wifi_ssid: String<32> =
-            option_env!("WIFI_SSID").unwrap_or(DEFAULT_SSID).try_into().trap()?;
-        let wifi_pw: Option<String<63>> =
-            option_env!("WIFI_PW").map(|s| s.try_into()).transpose().trap()?;
+        
+        // TODO: Those env events come from system's std::env / core::env (if any)... so it shouldn't be unsafe()
+        let wifi_ssid_str = String::try_from(DEFAULT_SSID).unwrap();
+        let wifi_ssid: String<32> = wifi_ssid_str.into();
         let mac = random_mac()?;
+        let wifi_pw = None;
 
         let uart_pins = SerdePinConfig::default();
 
@@ -455,6 +456,8 @@ where
 impl SSHEncode for SSHStampConfig {
     fn enc(&self, s: &mut dyn SSHSink) -> WireResult<()> {
         enc_signkey(&self.hostkey, s)?;
+
+        // Authentication
         self.password_authentication.enc(s)?;
         enc_option(&self.admin_pw, s)?;
 
@@ -486,10 +489,10 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         let hostkey = dec_signkey(s)?;
         dbg!("Hostkey: ", &hostkey);
 
+        // Authentication 
         let password_authentication = SSHDecode::dec(s)?;
         let admin_pw = dec_option(s)?;
-
-        let mut admin_keys = [None, None, None];
+        let mut admin_keys = [None; KEY_SLOTS];
         for k in admin_keys.iter_mut() {
             *k = dec_option(s)?;
         }
