@@ -14,7 +14,6 @@ use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 
-use embedded_io_async::Read;
 use heapless::String;
 use sunset::{error, ChanHandle, ServEvent, SignKey};
 use sunset_async::{ProgressHolder, SSHServer};
@@ -23,8 +22,7 @@ use esp_println::{dbg, println};
 
 enum SessionType {
     Bridge(ChanHandle),
-    Env(ChanHandle),
-    Sftp(ChanHandle),
+    //Sftp(ChanHandle),
 }
 
 async fn connection_loop(
@@ -119,6 +117,8 @@ async fn connection_loop(
                     }
                 }
 
+                
+
                 // config.save(a): Potentially an optional special environment variable SAVE_CONFIG=1
                 // that serialises current config to flash
 
@@ -169,19 +169,10 @@ pub(crate) async fn handle_ssh_client(
                 let stdio2 = stdio.clone();
                 serial_bridge(stdio, stdio2, uart).await?
             }
-            SessionType::Env(ch) => {
-                // Handle environment variable session
-                let mut stdio = ssh_server.stdio(ch).await?;
-                let mut buf = [0u8; 256];
-                dbg!("Waiting to read ENV session data");
-                let n = stdio.read(&mut buf).await?;
-                dbg!("Got ENV session");
-                dbg!("Name/Value of ENV is: ", &buf[..n]);
-            }
-            SessionType::Sftp(_ch) => {
-                // Handle SFTP session
-                todo!()
-            }
+            // SessionType::Sftp(_ch) => {
+            //     // Handle SFTP session
+            //     todo!()
+            // }
         };
         Ok(())
     };
