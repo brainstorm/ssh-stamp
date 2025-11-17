@@ -2,6 +2,8 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channe
 use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals;
 use sunset::sshwire::{ SSHDecode, SSHEncode, SSHSink, SSHSource, WireResult };
+use static_cell::StaticCell;
+use sunset_async::SunsetMutex;
 
 use crate::{config::{dec_option, enc_option}, errors};
 
@@ -185,11 +187,47 @@ impl PinChannel {
 
         Ok(())
     }
+
+    // Update the runtime config's TX pin number. This only changes the
+    // u8 config; actual AnyPin movement happens when the uart task next
+    // reacquires pins via recv_tx/recv_rx.
+    pub fn set_tx_pin(&mut self, tx: u8) -> errors::Result<()> {
+        if tx == self.config.rx {
+            return Err(errors::Error::InvalidPin);
+        }
+        match tx {
+            10 | 11 => {
+                self.config.tx = tx;
+                Ok(())
+            }
+            _ => Err(errors::Error::InvalidPin),
+        }
+    }
+
+    pub fn set_rx_pin(&mut self, rx: u8) -> errors::Result<()> {
+        if rx == self.config.tx {
+            return Err(errors::Error::InvalidPin);
+        }
+        match rx {
+            10 | 11 => {
+                self.config.rx = rx;
+                Ok(())
+            }
+            _ => Err(errors::Error::InvalidPin),
+        }
+    }
 }
 
-// TODO: This struct and resolve_pin() need to be re-thought for the different ICs and dev boards?.. implementing a suitable
-// validation function for them and potentially writing a macro that adapts to each PAC (not all ICs have the same number
-// of pins).
+// Global PinChannel holder: initialize from main() and access from other modules.
+// We keep a StaticCell but avoid any unsafe global pointer; callers receive
+// the &'static SunsetMutex returned by init_global_channel and must retain it.
+static GLOBAL_PIN_CHANNEL: StaticCell<SunsetMutex<PinChannel>> = StaticCell::new();
+
+pub fn init_global_channel(ch: PinChannel) -> &'static SunsetMutex<PinChannel> {
+    // Initialize the StaticCell and return the &'static reference.
+    GLOBAL_PIN_CHANNEL.init(SunsetMutex::new(ch))
+}
+
 pub struct PinConfig {
     pub tx: AnyPin<'static>,
     pub rx: AnyPin<'static>,

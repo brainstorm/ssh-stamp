@@ -98,7 +98,11 @@ pub async fn if_up(
     Ok(ap_stack)
 }
 
-pub async fn accept_requests(stack: Stack<'static>, uart: &BufferedUart) -> ! {
+pub async fn accept_requests(
+    stack: Stack<'static>,
+    uart: &BufferedUart,
+    pin_channel_ref: &'static sunset_async::SunsetMutex<crate::pins::PinChannel>,
+) -> ! {
     let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
     let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
 
@@ -119,7 +123,7 @@ pub async fn accept_requests(stack: Stack<'static>, uart: &BufferedUart) -> ! {
         }
 
         println!("Connected, port 22");
-        match crate::serve::handle_ssh_client(&mut socket, uart).await {
+        match crate::serve::handle_ssh_client(&mut socket, uart, pin_channel_ref).await {
             Ok(_) => (),
             Err(e) => {
                 println!("SSH client fatal error: {}", e);

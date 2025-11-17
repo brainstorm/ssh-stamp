@@ -17,6 +17,7 @@ use esp_hal_embassy::InterruptExecutor;
 use embassy_executor::Spawner;
 use esp_println::dbg;
 use esp_storage::FlashStorage;
+use ssh_stamp::pins;
 use ssh_stamp::pins::GPIOConfig;
 use ssh_stamp::pins::PinChannel;
 use ssh_stamp::{
@@ -108,18 +109,26 @@ async fn main(spawner: Spawner) -> ! {
         gpio11: Some(peripherals.GPIO11.degrade()),
     };
 
-    static CHANNEL: StaticCell<PinChannel> = StaticCell::new();
-    let channel = CHANNEL.init(PinChannel::new(serde_pin_config, available_gpios));
+    // Initialize the global pin channel and keep the &'static reference so we can
+    // pass it to tasks that need to mutate pins (no unsafe globals).
+    let pin_channel_ref = pins::init_global_channel(PinChannel::new(
+        serde_pin_config,
+        available_gpios,
+    ));
 
     // Grab UART1, typically not connected to dev board's TTL2USB IC nor builtin JTAG functionality
     let uart1 = peripherals.UART1;
 
     // Use the same config reference for UART task.
+    // Pass pin_channel_ref into the UART task so it can acquire/release pins.
     interrupt_spawner
-        .spawn(uart_task(uart_buf, uart1, channel))
+        .spawn(uart_task(uart_buf, uart1, pin_channel_ref))
         .unwrap();
 
-    accept_requests(tcp_stack, uart_buf).await;
+    // Pass pin_channel_ref into accept_requests (so SSH handlers can use it).
+    // NOTE: accept_requests signature must accept this arg; if it doesn't,
+    // thread the reference into whatever code spawns handle_ssh_client.
+    accept_requests(tcp_stack, uart_buf, pin_channel_ref).await;
 }
 
 static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();
@@ -129,7 +138,7 @@ static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
 async fn uart_task(
     buffer: &'static BufferedUart,
     uart_periph: UART1<'static>,
-    channel: &'static mut PinChannel,
+    pin_channel_ref: &'static SunsetMutex<PinChannel>,
 ) {
     dbg!("Spawning UART task...");
     // Hardware UART setup
@@ -139,8 +148,11 @@ async fn uart_task(
             .with_timeout(1),
     );
 
+    // Use the pinned reference passed in from main.
+    let mut pin_chan = pin_channel_ref.lock().await;
+
     // Sync pin config via channels
-    channel
+    pin_chan
         .with_channel(async |rx, tx| {
             let uart = Uart::new(uart_periph, uart_config)
                 .unwrap()

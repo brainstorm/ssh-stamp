@@ -2,7 +2,7 @@ use core::option::Option::{self, None, Some};
 use core::result::Result;
 use core::writeln;
 
-use crate::pins::{PinChannel, SerdePinConfig};
+use crate::pins::PinChannel;
 use crate::espressif::buffered_uart::BufferedUart;
 use crate::keys;
 use crate::serial::serial_bridge;
@@ -13,6 +13,7 @@ use embassy_net::tcp::TcpSocket;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
+use sunset_async::SunsetMutex;
 
 use heapless::String;
 use sunset::{error, ChanHandle, ServEvent, SignKey};
@@ -28,6 +29,7 @@ enum SessionType {
 async fn connection_loop(
     serv: &SSHServer<'_>,
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
+    pin_channel_ref: &'static SunsetMutex<PinChannel>,
 ) -> Result<(), sunset::Error> {
     let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
     let mut session: Option<ChanHandle> = None;
@@ -83,7 +85,6 @@ async fn connection_loop(
                 dbg!(a.name()?);
                 dbg!(a.value()?);
 
-                let mut uart_pins = PinChannel::new(SerdePinConfig::new(), Default::default());
                 // TODO: Logic to serialise/validate env vars? I.e:
                 // a.name.validate(); // Checks the input variable, sanitizes, assigns a target subsystem
                 //
@@ -98,26 +99,39 @@ async fn connection_loop(
                     }
                     // If the env var is UART_TX_PIN or UART_RX_PIN
                     "UART_TX_PIN" => {
-                        let tx = a.value()?; 
-                        // Update PinChannel with new TX pin
-                        dbg!("Updating UART TX pin to ", a.value()?);
-                        uart_pins
-                            .with_channel(async |_, tx| {
-                                dbg!("Setting new TX pin in PinChannel to: ", tx);
-                            })
-                            .await
-                            .unwrap();
+                        let val = a.value()?;
+                        dbg!("Updating UART TX pin to ", val);
+                        if let Ok(pin_num) = val.parse::<u8>() {
+                            let mut ch = pin_channel_ref.lock().await;
+                            if ch.set_tx_pin(pin_num).is_err() {
+                                dbg!("Failed to update TX pin");
+                            } else {
+                                dbg!("TX pin updated");
+                            }
+                        } else {
+                            dbg!("Invalid TX pin value");
+                        }
                     }
                     "UART_RX_PIN" => {
-                        // Update PinChannel with new RX pin
-                        dbg!("Updating UART RX pin to ", a.value()?);
+                        let val = a.value()?;
+                        dbg!("Updating UART RX pin to ", val);
+                        if let Ok(pin_num) = val.parse::<u8>() {
+                            let mut ch = pin_channel_ref.lock().await;
+                            if ch.set_rx_pin(pin_num).is_err() {
+                                dbg!("Failed to update RX pin");
+                            } else {
+                                dbg!("RX pin updated");
+                            }
+                        } else {
+                            dbg!("Invalid RX pin value");
+                        }
                     }
                     _ => {
                         dbg!("Unknown/unsupported ENV var");
                     }
                 }
 
-                
+
 
                 // config.save(a): Potentially an optional special environment variable SAVE_CONFIG=1
                 // that serialises current config to flash
@@ -142,6 +156,7 @@ async fn connection_loop(
 pub(crate) async fn handle_ssh_client(
     stream: &mut TcpSocket<'_>,
     uart: &BufferedUart,
+    pin_channel_ref: &'static SunsetMutex<PinChannel>,
 ) -> Result<(), sunset::Error> {
     // Spawn network tasks to handle incoming connections with demo_common::session()
     let mut inbuf = [0u8; 4096];
@@ -153,7 +168,7 @@ pub(crate) async fn handle_ssh_client(
     let chan_pipe = Channel::<NoopRawMutex, SessionType, 1>::new();
 
     println!("Calling connection_loop from handle_ssh_client");
-    let conn_loop = connection_loop(&ssh_server, &chan_pipe);
+    let conn_loop = connection_loop(&ssh_server, &chan_pipe, pin_channel_ref);
     println!("Running server from handle_ssh_client()");
     let server = ssh_server.run(&mut rsock, &mut wsock);
 
