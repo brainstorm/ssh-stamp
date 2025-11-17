@@ -1,5 +1,5 @@
-use snafu::Snafu;
 use core::result;
+use snafu::Snafu;
 
 pub type Result<T> = result::Result<T, Error>;
 

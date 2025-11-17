@@ -2,6 +2,7 @@ use core::option::Option::{self, None, Some};
 use core::result::Result;
 use core::writeln;
 
+use crate::pins::{PinChannel, SerdePinConfig};
 use crate::espressif::buffered_uart::BufferedUart;
 use crate::keys;
 use crate::serial::serial_bridge;
@@ -21,9 +22,9 @@ use sunset_async::{ProgressHolder, SSHServer};
 use esp_println::{dbg, println};
 
 enum SessionType {
-	Bridge(ChanHandle),
-	Env(ChanHandle),
-	Sftp(ChanHandle),
+    Bridge(ChanHandle),
+    Env(ChanHandle),
+    Sftp(ChanHandle),
 }
 
 async fn connection_loop(
@@ -80,34 +81,60 @@ async fn connection_loop(
                 }
             }
             ServEvent::Environment(a) => {
+                dbg!("Got ENV request");
+                dbg!(a.name()?);
+                dbg!(a.value()?);
+
+                let mut uart_pins = PinChannel::new(SerdePinConfig::new(), Default::default());
                 // TODO: Logic to serialise/validate env vars? I.e:
-                // config.validate(a)
-                // config.save(a)
-                // SSHConfig c = a.validate(); // Checks the input variable, sanitizes, assigns a target subsystem
-                // a.config_change(c)?;
+                // a.name.validate(); // Checks the input variable, sanitizes, assigns a target subsystem
+                //
+                // config.change(c): Apply the config change to the relevant subsystem.
+                // i.e: if UART_TX_PIN or UART_RX_PIN, we update the PinChannel with with_channel() to change pins live.
+                match a.name()? {
+                    "SAVE_CONFIG" => {
+                        if a.value()? == "1" {
+                            dbg!("Triggering config save...");
+                            todo!("Implement config save to flash");
+                        }
+                    }
+                    // If the env var is UART_TX_PIN or UART_RX_PIN
+                    "UART_TX_PIN" => {
+                        let tx = a.value()?; 
+                        // Update PinChannel with new TX pin
+                        dbg!("Updating UART TX pin to ", a.value()?);
+                        uart_pins
+                            .with_channel(async |_, tx| {
+                                dbg!("Setting new TX pin in PinChannel to: ", tx);
+                            })
+                            .await
+                            .unwrap();
+                    }
+                    "UART_RX_PIN" => {
+                        // Update PinChannel with new RX pin
+                        dbg!("Updating UART RX pin to ", a.value()?);
+                    }
+                    _ => {
+                        dbg!("Unknown/unsupported ENV var");
+                    }
+                }
 
-                // Obtain the current session channel handle and use it to get stdio.
-                //  if let Some(ch) = session.take() {
-                //     debug_assert!(ch.num() == a.channel());
+                // config.save(a): Potentially an optional special environment variable SAVE_CONFIG=1
+                // that serialises current config to flash
 
-                //     a.succeed()?;
-                //     let _ = chan_pipe.try_send(SessionType::Env(ch));
-                // } else {
-                //     a.fail()?;
-                // }
                 a.succeed()?;
-            },
+            }
             ServEvent::SessionPty(a) => {
                 a.succeed()?;
-            },
+            }
             ServEvent::SessionExec(a) => {
                 a.fail()?;
-            },
+            }
             ServEvent::Defunct | ServEvent::SessionShell(_) => {
                 println!("Expected caller to handle event");
                 error::BadUsage.fail()?
             }
-            _ => ()
+            _ => (),
         };
     }
 }
@@ -135,13 +162,13 @@ pub(crate) async fn handle_ssh_client(
     // TODO: Maybe loop forever here and/or handle disconnection/terminations gracefully?
     let bridge = async {
         let session_type = chan_pipe.receive().await;
-            
+
         match session_type {
             SessionType::Bridge(ch) => {
                 let stdio = ssh_server.stdio(ch).await?;
                 let stdio2 = stdio.clone();
                 serial_bridge(stdio, stdio2, uart).await?
-            },
+            }
             SessionType::Env(ch) => {
                 // Handle environment variable session
                 let mut stdio = ssh_server.stdio(ch).await?;
@@ -150,11 +177,11 @@ pub(crate) async fn handle_ssh_client(
                 let n = stdio.read(&mut buf).await?;
                 dbg!("Got ENV session");
                 dbg!("Name/Value of ENV is: ", &buf[..n]);
-            },
+            }
             SessionType::Sftp(_ch) => {
                 // Handle SFTP session
                 todo!()
-            },
+            }
         };
         Ok(())
     };

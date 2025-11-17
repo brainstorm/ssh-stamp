@@ -45,7 +45,7 @@ pub async fn if_up(
     wifi_controller: EspWifiController<'static>,
     wifi: WIFI<'static>,
     rng: &mut Rng,
-    config: &'static SunsetMutex<SSHStampConfig>
+    config: &'static SunsetMutex<SSHStampConfig>,
 ) -> Result<Stack<'static>, sunset::Error> {
     let wifi_init = &*mk_static!(EspWifiController<'static>, wifi_controller);
     let (controller, interfaces) = esp_wifi::wifi::new(wifi_init, wifi).unwrap();
@@ -60,7 +60,7 @@ pub async fn if_up(
     //         embassy_net::Config::dhcpv4(Default::default())
     //     }
     // };
-    
+
     let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(gw_ip_addr_ipv4, 24),
         gateway: Some(gw_ip_addr_ipv4),
@@ -129,7 +129,10 @@ pub async fn accept_requests(stack: Stack<'static>, uart: &BufferedUart) -> ! {
 }
 
 #[embassy_executor::task]
-async fn wifi_up(mut controller: WifiController<'static>, config: &'static SunsetMutex<SSHStampConfig>) {
+async fn wifi_up(
+    mut controller: WifiController<'static>,
+    config: &'static SunsetMutex<SSHStampConfig>,
+) {
     println!("Device capabilities: {:?}", controller.capabilities());
 
     let wifi_ssid = {

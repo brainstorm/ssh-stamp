@@ -6,7 +6,7 @@
 pub(crate) const DEFAULT_SSID: &str = "ssh-stamp";
 //pub(crate) const SSH_SERVER_ID: &str = "SSH-2.0-ssh-stamp-0.1";
 pub(crate) const KEY_SLOTS: usize = 1; // TODO: Document whether this a "reasonable default"? Justify why?
-//pub(crate) const PASSWORD_AUTHENTICATION: bool = true;
+                                       //pub(crate) const PASSWORD_AUTHENTICATION: bool = true;
 
 // UART settings
 //pub(crate) const BAUD_RATE: u32 = 115200;

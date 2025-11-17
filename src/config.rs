@@ -1,11 +1,9 @@
 use core::net::Ipv4Addr;
 #[cfg(feature = "ipv6")]
 use core::net::Ipv6Addr;
+use embassy_net::{Ipv4Cidr, StaticConfigV4};
 #[cfg(feature = "ipv6")]
 use embassy_net::{Ipv6Cidr, StaticConfigV6};
-use embassy_net::{Ipv4Cidr, StaticConfigV4};
-use esp_hal::gpio::AnyPin;
-use esp_hal::peripherals;
 use heapless::{String, Vec};
 
 use esp_println::dbg;
@@ -21,10 +19,8 @@ use sunset::{
     sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
     SignKey,
 };
-use embassy_sync::channel::Channel;
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 
-use crate::errors;
+use crate::pins::SerdePinConfig;
 use crate::settings::{DEFAULT_SSID, KEY_SLOTS};
 
 #[derive(Debug, PartialEq)]
@@ -53,226 +49,6 @@ pub struct SSHStampConfig {
     pub uart_pins: SerdePinConfig,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct SerdePinConfig {
-    pub tx: u8,
-    pub rx: u8,
-    pub rts: Option<u8>,
-    pub cts: Option<u8>,
-}
-// impl SerdePinConfig {
-//     // During encoding flags will be prepended to the options fields to only deserialise if they exist.
-//     pub(crate) fn flags (&self) -> u8 {
-//         let mut flags = 0u8;
-//         if self.rts.is_some() {
-//             flags |= SerdePinConfigOptions::RtsPresent as u8;
-//         }
-//         if self.cts.is_some() {
-//             flags |= SerdePinConfigOptions::CtsPresent as u8;
-//         }
-//         flags
-//     }
-// }
-
-// enum SerdePinConfigOptions {
-//     RtsPresent = 1,
-//     CtsPresent = 2,
-// }
-
-impl Default for SerdePinConfig {
-    fn default() -> Self {
-        Self { 
-            // TODO: This env comes from SSH env events/packets, not from system's std::env / core::env (if any)... so it shouldn't be unsafe()
-            tx: 10,
-            rx: 11,
-            rts: None,
-            cts: None
-        }
-    }
-}
-
-impl SSHEncode for SerdePinConfig {
-    fn enc(&self, s: &mut dyn SSHSink) -> WireResult<()> {
-        self.tx.enc(s)?;
-        self.rx.enc(s)?;
-        //self.flags().enc(s)?;
-        enc_option(&self.rts, s)?;
-        enc_option(&self.cts, s)
-    }
-}
-
-impl<'de> SSHDecode<'de> for SerdePinConfig {
-    fn dec<S>(s: &mut S) -> WireResult<Self>
-    where
-        S: SSHSource<'de>,
-    {
-        // Decoding Options is problematic since encode only writes them if they exist.
-        let mut pin_config = SerdePinConfig::default();
-        pin_config.tx = u8::dec(s)?;
-        pin_config.rx = u8::dec(s)?;
-
-        // Decode flags to know which options are present
-        //let flags = u8::dec(s)?;
-
-        //if flags & (SerdePinConfigOptions::RtsPresent as u8) != 0 {
-        pin_config.rts = dec_option(s)?;
-        //}
-
-        //if flags & (SerdePinConfigOptions::CtsPresent as u8) != 0 {
-        pin_config.cts = dec_option(s)?;
-        //}
-
-        Ok(pin_config)
-    }
-}
-
-pub struct GPIOConfig {
-    pub gpio10: Option<AnyPin<'static>>,
-    pub gpio11: Option<AnyPin<'static>>,
-}
-
-pub struct PinChannel {
-    pub config: SerdePinConfig,
-    pub gpios: GPIOConfig,
-    pub tx: Channel::<CriticalSectionRawMutex, (), 1>,
-    pub rx: Channel::<CriticalSectionRawMutex, (), 1>,
-    // TODO: cts/rts pins
-}
-
-impl PinChannel {
-    pub fn new(config: SerdePinConfig, gpios: GPIOConfig) -> Self {
-        Self {
-            config,
-            gpios,
-            tx: Channel::<CriticalSectionRawMutex, (), 1>::new(),
-            rx: Channel::<CriticalSectionRawMutex, (), 1>::new(),
-        }
-    }
-
-    pub async fn recv_tx(&mut self) -> errors::Result<AnyPin<'static>> {
-        // tx needs to lock here.
-        //self.tx.receive().await;
-
-        Ok(match self.config.tx {
-            10 => self.gpios.gpio10.take().ok_or_else(|| errors::Error::InvalidPin)?,
-            11 => self.gpios.gpio11.take().ok_or_else(|| errors::Error::InvalidPin)?,
-            _ => return Err(errors::Error::InvalidPin)
-        })
-    }
-
-    pub async fn send_tx(&mut self, pin: AnyPin<'static>) -> errors::Result<()> {
-        match self.config.tx {
-            10 => self.gpios.gpio10 = Some(pin),
-            11 => self.gpios.gpio11 = Some(pin),
-            _ => return Err(errors::Error::InvalidPin)
-        };
-
-        // tx lock needs to be released. 
-        self.tx.send(()).await;
-        Ok(())
-    }
-
-    pub async fn recv_rx(&mut self) -> errors::Result<AnyPin<'static>> {
-        let res = Ok(match self.config.rx {
-            10 => self.gpios.gpio10.take().ok_or_else(|| errors::Error::InvalidPin)?,
-            11 => self.gpios.gpio11.take().ok_or_else(|| errors::Error::InvalidPin)?,
-            _ => return Err(errors::Error::InvalidPin)
-        });
-        // rx needs to lock here.
-        // dbg!("recv_rx: before rx.receive.await");
-        // self.rx.receive().await;
-        // dbg!("recv_rx: after rx.receive.await");
-
-        res
-    }
-
-    pub async fn send_rx(&mut self, pin: AnyPin<'static>) -> errors::Result<()> {
-        match self.config.rx {
-            10 => self.gpios.gpio10 = Some(pin),
-            11 => self.gpios.gpio11 = Some(pin),
-            _ => return Err(errors::Error::InvalidPin)
-        };
-
-        // rx lock needs to be released. 
-        self.rx.send(()).await;
-        Ok(())
-    }
-
-    pub async fn with_channel<F>(&mut self, f: F) -> errors::Result<()> 
-    where F: for<'a> AsyncFnOnce(AnyPin<'a>, AnyPin<'a>) {
-        let mut rx = self.recv_rx().await?;
-        let mut tx = self.recv_tx().await?;
-
-        f(rx.reborrow(), tx.reborrow()).await;
-
-        self.send_rx(rx).await.unwrap();
-        self.send_tx(tx).await.unwrap();
-
-        Ok(())
-    }
-}
-
-
-// TODO: This struct and resolve_pin() need to be re-thought for the different ICs and dev boards?.. implementing a suitable
-// validation function for them and potentially writing a macro that adapts to each PAC (not all ICs have the same number
-// of pins).
-pub struct PinConfig {
-    pub tx: AnyPin<'static>,
-    pub rx: AnyPin<'static>,
-}
-
-pub struct PinConfigAlt {
-    pub peripherals: peripherals::Peripherals,
-}
-
-impl PinConfigAlt {
-    pub fn new(peripherals: peripherals::Peripherals) -> Self {
-        Self {
-            peripherals,
-        }
-    }
-
-    pub fn take_pin<'a>(&'a mut self, pin: u8) -> AnyPin<'a> {
-        match pin {
-            0 => self.peripherals.GPIO0.reborrow().into(),
-            1 => self.peripherals.GPIO1.reborrow().into(),
-            _ => panic!(),
-        }
-    }
-}
-
-impl PinConfig {
-    pub fn new(mut gpio_config: GPIOConfig, config_inner: SerdePinConfig) -> errors::Result<Self> {
-        if config_inner.rx == config_inner.tx {
-            return Err(errors::Error::InvalidPin);
-        }
-        
-        // SAFETY: Safe because moved in peripherals.
-        Ok(Self {
-            rx: match config_inner.rx {
-                10 =>  gpio_config.gpio10.take().unwrap().into(),
-                11 =>  gpio_config.gpio11.take().unwrap().into(),
-                _ => return Err(errors::Error::InvalidPin),
-            },
-            tx: match config_inner.tx {
-                10 => gpio_config.gpio10.take().unwrap().into(),
-                11 => gpio_config.gpio11.take().unwrap().into(),
-                _ => return Err(errors::Error::InvalidPin),
-            }
-        })
-    }
-
-    /// Resolves a u8 pin number into an AnyPin GPIO type.
-    /// Returns None if the pin number is invalid or unsupported.
-    pub fn initialize_pin(peripherals: peripherals::Peripherals, pin_number: u8) -> errors::Result<AnyPin<'static>> {
-        match pin_number {
-            0 => Ok(peripherals.GPIO0.into()),
-
-            _ => Err(errors::Error::InvalidPin),
-        }
-    }
-}
-
 impl SSHStampConfig {
     /// Bump this when the format changes
     pub const CURRENT_VERSION: u8 = 6;
@@ -282,7 +58,7 @@ impl SSHStampConfig {
     /// Will only fail on RNG failure.
     pub fn new() -> Result<Self> {
         let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
-        
+
         // TODO: Those env events come from system's std::env / core::env (if any)... so it shouldn't be unsafe()
         let wifi_ssid_str = String::try_from(DEFAULT_SSID).unwrap();
         let wifi_ssid: String<32> = wifi_ssid_str.into();
@@ -351,12 +127,12 @@ where
 }
 
 // encode Option<T> as a bool then maybe a value
-fn enc_option<T: SSHEncode>(v: &Option<T>, s: &mut dyn SSHSink) -> WireResult<()> {
+pub(crate) fn enc_option<T: SSHEncode>(v: &Option<T>, s: &mut dyn SSHSink) -> WireResult<()> {
     v.is_some().enc(s)?;
     v.enc(s)
 }
 
-fn dec_option<'de, S, T: SSHDecode<'de>>(s: &mut S) -> WireResult<Option<T>>
+pub(crate) fn dec_option<'de, S, T: SSHDecode<'de>>(s: &mut S) -> WireResult<Option<T>>
 where
     S: SSHSource<'de>,
 {
@@ -437,17 +213,6 @@ where
     .transpose()
 }
 
-// fn dec_uart_pins<'de, S>(s: &mut S) -> WireResult<SerdePinConfig>
-// where
-//     S: SSHSource<'de>,
-// {
-//     let tx = u8::dec(s)?;
-//     let rx = u8::dec(s)?;
-//     let rts = dec_option(s)?;
-//     let cts = dec_option(s)?;
-//     Ok(SerdePinConfig { tx, rx, rts, cts })
-// }
-
 impl SSHEncode for SSHStampConfig {
     fn enc(&self, s: &mut dyn SSHSink) -> WireResult<()> {
         enc_signkey(&self.hostkey, s)?;
@@ -480,10 +245,9 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
     where
         S: SSHSource<'de>,
     {
-
         let hostkey = dec_signkey(s)?;
 
-        // Authentication 
+        // Authentication
         let password_authentication = SSHDecode::dec(s)?;
         let admin_pw = dec_option(s)?;
         let mut admin_keys = [None; KEY_SLOTS];

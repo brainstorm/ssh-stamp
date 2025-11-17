@@ -5,22 +5,31 @@ use core::marker::Sized;
 use esp_alloc as _;
 use esp_backtrace as _;
 use esp_hal::{
-    gpio::Pin, interrupt::{software::SoftwareInterruptControl, Priority}, peripherals::UART1, rng::Rng, timer::timg::TimerGroup, uart::{Config, RxConfig, Uart}
+    gpio::Pin,
+    interrupt::{software::SoftwareInterruptControl, Priority},
+    peripherals::UART1,
+    rng::Rng,
+    timer::timg::TimerGroup,
+    uart::{Config, RxConfig, Uart},
 };
 use esp_hal_embassy::InterruptExecutor;
 
+use embassy_executor::Spawner;
 use esp_println::dbg;
 use esp_storage::FlashStorage;
-use embassy_executor::Spawner;
-use ssh_stamp::{config::SSHStampConfig, espressif::{
-    buffered_uart::BufferedUart,
-    net::{accept_requests, if_up},
-    rng,
-}, storage::Fl};
+use ssh_stamp::pins::GPIOConfig;
+use ssh_stamp::pins::PinChannel;
+use ssh_stamp::{
+    config::SSHStampConfig,
+    espressif::{
+        buffered_uart::BufferedUart,
+        net::{accept_requests, if_up},
+        rng,
+    },
+    storage::Fl,
+};
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
-use ssh_stamp::config::GPIOConfig;
-use ssh_stamp::config::PinChannel;
 
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) -> ! {
@@ -94,22 +103,21 @@ async fn main(spawner: Spawner) -> ! {
         guard.uart_pins.clone()
     };
 
-
     let available_gpios = GPIOConfig {
         gpio10: Some(peripherals.GPIO10.degrade()),
         gpio11: Some(peripherals.GPIO11.degrade()),
     };
-    
+
     static CHANNEL: StaticCell<PinChannel> = StaticCell::new();
-    let channel = CHANNEL.init({
-        PinChannel::new(serde_pin_config, available_gpios)
-    });
+    let channel = CHANNEL.init(PinChannel::new(serde_pin_config, available_gpios));
 
     // Grab UART1, typically not connected to dev board's TTL2USB IC nor builtin JTAG functionality
     let uart1 = peripherals.UART1;
 
     // Use the same config reference for UART task.
-    interrupt_spawner.spawn(uart_task(uart_buf, uart1, channel)).unwrap();
+    interrupt_spawner
+        .spawn(uart_task(uart_buf, uart1, channel))
+        .unwrap();
 
     accept_requests(tcp_stack, uart_buf).await;
 }
@@ -128,18 +136,21 @@ async fn uart_task(
     let uart_config = Config::default().with_rx(
         RxConfig::default()
             .with_fifo_full_threshold(16)
-            .with_timeout(1)
+            .with_timeout(1),
     );
 
     // Sync pin config via channels
-    channel.with_channel(async |rx, tx| {
-        let uart = Uart::new(uart_periph, uart_config)
-            .unwrap()
-            .with_rx(rx)
-            .with_tx(tx)
-            .into_async();
+    channel
+        .with_channel(async |rx, tx| {
+            let uart = Uart::new(uart_periph, uart_config)
+                .unwrap()
+                .with_rx(rx)
+                .with_tx(tx)
+                .into_async();
 
-        // Run the main buffered TX/RX loop
-        buffer.run(uart).await;
-    }).await.unwrap();
+            // Run the main buffered TX/RX loop
+            buffer.run(uart).await;
+        })
+        .await
+        .unwrap();
 }
