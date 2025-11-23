@@ -4,7 +4,7 @@ use core::net::Ipv6Addr;
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 #[cfg(feature = "ipv6")]
 use embassy_net::{Ipv6Cidr, StaticConfigV6};
-use heapless::{String, Vec};
+use heapless::{String};
 
 use esp_println::dbg;
 
@@ -34,8 +34,8 @@ pub struct SSHStampConfig {
     pub admin_keys: [Option<Ed25519PubKey>; KEY_SLOTS],
 
     /// WiFi
-    pub wifi_ssid: String<32>,
-    pub wifi_pw: Option<String<63>>, // TODO: Why not 64?
+    pub wifi_ssid: &'static str,
+    pub wifi_pw: Option<String<63>>,
 
     /// Networking
     /// TODO: Populate this field from esp's hardware info or just refer it from HAL?
@@ -60,8 +60,7 @@ impl SSHStampConfig {
         let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
 
         // TODO: Those env events come from system's std::env / core::env (if any)... so it shouldn't be unsafe()
-        let wifi_ssid_str = String::try_from(DEFAULT_SSID).unwrap();
-        let wifi_ssid: String<32> = wifi_ssid_str.into();
+        let wifi_ssid=  DEFAULT_SSID;
         let mac = random_mac()?;
         let wifi_pw = None;
 
@@ -93,6 +92,12 @@ impl SSHStampConfig {
         } else {
             false
         }
+    }
+
+    pub(crate) fn default_ssid() -> String<32> {
+        let mut s = String::<32>::new();
+        s.push_str(DEFAULT_SSID).unwrap();
+        s
     }
 
     // pub fn config_change(&mut self, conf: SSHConfig) -> Result<()> {
@@ -182,7 +187,7 @@ where
         Ok(StaticConfigV4 {
             address: Ipv4Cidr::new(ad, prefix),
             gateway,
-            dns_servers: Vec::new(),
+            dns_servers: Default::default(),
         })
     })
     .transpose()
@@ -225,7 +230,7 @@ impl SSHEncode for SSHStampConfig {
             enc_option(k, s)?;
         }
 
-        self.wifi_ssid.as_str().enc(s)?;
+        self.wifi_ssid.enc(s)?;
         enc_option(&self.wifi_pw, s)?;
         self.mac.enc(s)?;
 

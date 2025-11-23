@@ -6,14 +6,15 @@ use embassy_net::{tcp::TcpSocket, Stack, StackResources};
 use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, StaticConfigV4};
 use embassy_time::{Duration, Timer};
 
+use esp_hal::clock::CpuClock;
 use esp_hal::peripherals::WIFI;
 
 use esp_hal::rng::Rng;
 use esp_println::{dbg, println};
 
-use esp_wifi::wifi::{AccessPointConfiguration, Configuration, WifiController, WifiDevice};
-use esp_wifi::wifi::{WifiEvent, WifiState};
-use esp_wifi::EspWifiController;
+use esp_radio::wifi::{AccessPointConfig, ModeConfig, WifiController, WifiDevice};
+use esp_radio::wifi::{WifiEvent, WifiApState};
+use heapless::String;
 use sunset_async::SunsetMutex;
 
 use core::net::SocketAddrV4;
@@ -27,6 +28,7 @@ use edge_nal::UdpBind;
 use edge_nal_embassy::{Udp, UdpBuffers};
 
 use crate::config::SSHStampConfig;
+use crate::settings::{self, DEFAULT_SSID};
 
 use super::buffered_uart::BufferedUart;
 
@@ -42,15 +44,21 @@ macro_rules! mk_static {
 
 pub async fn if_up(
     spawner: Spawner,
-    wifi_controller: EspWifiController<'static>,
+    wifi_controller: WifiController<'static>,
     wifi: WIFI<'static>,
     rng: &mut Rng,
     config: &'static SunsetMutex<SSHStampConfig>,
 ) -> Result<Stack<'static>, sunset::Error> {
-    let wifi_init = &*mk_static!(EspWifiController<'static>, wifi_controller);
-    let (controller, interfaces) = esp_wifi::wifi::new(wifi_init, wifi).unwrap();
+    let hal_config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+    let wifi_init = &*mk_static!(WifiController<'static>, wifi_controller);
+    let (controller, interfaces) = esp_radio::wifi::new(wifi.reborrow(), hal_config).unwrap();
 
-    let gw_ip_addr_ipv4 = Ipv4Addr::from_str("192.168.0.1").expect("failed to parse gateway ip");
+    let ap_config =
+        ModeConfig::AccessPoint(AccessPointConfig::default().with_ssid(DEFAULT_SSID.into()));
+    let res = controller.set_config(&ap_config);
+    println!("wifi_set_configuration returned {:?}", res);
+
+    let gw_ip_addr_ipv4 = settings::DEFAULT_IP.clone();
 
     // let _gw_ip_addr = {
     //     let guard = config.lock().await;
@@ -144,21 +152,17 @@ async fn wifi_up(
         guard.wifi_ssid.clone()
         // drop guard
     };
-    // TODO: No wifi password(s) yet...
-    //let wifi_password = config.lock().await.wifi_pw;
 
     loop {
-        if esp_wifi::wifi::wifi_state() == WifiState::ApStarted {
+        if esp_radio::wifi::ap_state() == WifiApState::Started {
             // wait until we're no longer connected
             controller.wait_for_event(WifiEvent::ApStop).await;
             Timer::after(Duration::from_millis(5000)).await
         }
         if !matches!(controller.is_started(), Ok(true)) {
-            let client_config = Configuration::AccessPoint(AccessPointConfiguration {
-                ssid: wifi_ssid.to_ascii_lowercase(),
-                ..Default::default()
-            });
-            controller.set_configuration(&client_config).unwrap();
+            let ssid_string = String::<63>::from_str(wifi_ssid).unwrap().to_ascii_lowercase();
+            let client_config = ModeConfig::AccessPoint(AccessPointConfig::default().with_ssid(ssid_string));
+            controller.set_config(&client_config).unwrap();
             println!("Starting wifi");
             controller.start_async().await.unwrap();
             println!("Wifi started!");

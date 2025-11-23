@@ -2,6 +2,7 @@
 #![no_main]
 
 use core::marker::Sized;
+use embassy_embedded_hal::flash;
 use esp_alloc as _;
 use esp_backtrace as _;
 use esp_hal::{
@@ -48,8 +49,26 @@ async fn main(spawner: Spawner) -> ! {
 
     // System init
     let peripherals = esp_hal::init(esp_hal::Config::default());
-    let mut rng = Rng::new(peripherals.RNG);
+    let mut rng = Rng::new();
     let timg0 = TimerGroup::new(peripherals.TIMG0);
+
+    // Set event handlers for wifi before init to avoid missing any.
+    let mut connections = 0u32;
+    _ = event::ApStart::replace_handler(|_| println!("ap start event"));
+    event::ApStaConnected::update_handler(move |event| {
+        connections += 1;
+        esp_println::println!("connected {}, mac: {:?}", connections, event.mac());
+    });
+    event::ApStaConnected::update_handler(|event| {
+        esp_println::println!("connected aid: {}", event.aid());
+    });
+    event::ApStaDisconnected::update_handler(|event| {
+        println!(
+            "disconnected mac: {:?}, reason: {:?}",
+            event.mac(),
+            event.reason()
+        );
+    });
 
     rng::register_custom_rng(rng);
 
@@ -64,12 +83,8 @@ async fn main(spawner: Spawner) -> ! {
        }
     }
 
-    // TODO: Migrate this function/test to embedded-test.
-    // Quick roundtrip test for SSHStampConfig
-    // ssh_stamp::config::roundtrip_config();
-
     // Read SSH configuration from Flash (if it exists)
-    let mut flash_storage = Fl::new(FlashStorage::new());
+    let mut flash_storage = Fl::new(FlashStorage::new(flash::Flash::new()));
     let config = ssh_stamp::storage::load_or_create(&mut flash_storage).await;
 
     static FLASH: StaticCell<SunsetMutex<Fl>> = StaticCell::new();
@@ -81,7 +96,6 @@ async fn main(spawner: Spawner) -> ! {
     let wifi_controller = esp_wifi::init(timg0.timer0, rng, peripherals.RADIO_CLK).unwrap();
 
     // Bring up the network interface and start accepting SSH connections.
-    // Clone the reference to config to avoid borrow checker issues.
     let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng, config)
         .await
         .unwrap();

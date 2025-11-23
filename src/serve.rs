@@ -1,6 +1,5 @@
 use core::option::Option::{self, None, Some};
 use core::result::Result;
-use core::writeln;
 
 use crate::pins::PinChannel;
 use crate::espressif::buffered_uart::BufferedUart;
@@ -80,7 +79,7 @@ async fn connection_loop(
                     }
                 }
             }
-            ServEvent::Environment(a) => {
+            ServEvent::SessionEnv(a) => {
                 dbg!("Got ENV request");
                 dbg!(a.name()?);
                 dbg!(a.value()?);

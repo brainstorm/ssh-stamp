@@ -23,15 +23,15 @@ pub const CONFIG_HASH_SIZE: usize = 32;
 pub const CONFIG_AREA_SIZE: usize = 4096;
 pub const CONFIG_OFFSET: usize = 0x9000;
 
-pub struct Fl {
-    flash: FlashStorage,
+pub struct Fl<'a> {
+    flash: FlashStorage<'a>,
     // Only a single task can write to flash at a time,
     // keeping a buffer here saves duplicated buffer space in each task.
     buf: [u8; FlashConfig::BUF_SIZE],
 }
 
-impl<'a> Fl {
-    pub fn new(flash: FlashStorage) -> Self {
+impl<'a> Fl<'a> {
+    pub fn new(flash: FlashStorage<'a>) -> Self {
         Self {
             flash,
             buf: [0u8; FlashConfig::BUF_SIZE],
@@ -53,12 +53,11 @@ impl FlashConfig<'_> {
 
     // TODO: Rework Error mapping with esp_storage errors
     /// Finds the NVS partitions and retrieves information about it.
-    pub fn find_config_partition() -> Result<(), SSHStampError> {
-        let mut flash = FlashStorage::new();
+    pub fn find_config_partition(flash: &mut FlashStorage<'_>) -> Result<(), SSHStampError> {
         println!("Flash size = {} bytes", flash.capacity());
 
         let mut pt_mem = [0u8; partitions::PARTITION_TABLE_MAX_LEN];
-        let pt = partitions::read_partition_table(&mut flash, &mut pt_mem).unwrap();
+        let pt = partitions::read_partition_table(flash, &mut pt_mem).unwrap();
         let nvs = pt
             .find_partition(partitions::PartitionType::Data(
                 partitions::DataPartitionSubType::Nvs,
@@ -66,7 +65,7 @@ impl FlashConfig<'_> {
             .unwrap()
             .unwrap();
 
-        let nvs_partition = nvs.as_embedded_storage(&mut flash);
+        let nvs_partition = nvs.as_embedded_storage(flash);
 
         println!("NVS partition size = {}", nvs_partition.capacity());
         println!("NVS partition offset = 0x{:x}", nvs.offset());
@@ -82,7 +81,7 @@ fn config_hash(config: &SSHStampConfig) -> Result<[u8; 32], SunsetError> {
 }
 
 /// Loads a SSHConfig at startup. Good for persisting hostkeys.
-pub async fn load_or_create(flash: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
+pub async fn load_or_create(flash: &mut Fl<'_>) -> Result<SSHStampConfig, SunsetError> {
     match load(flash).await {
         Ok(c) => {
             println!("Good existing config");
@@ -94,7 +93,7 @@ pub async fn load_or_create(flash: &mut Fl) -> Result<SSHStampConfig, SunsetErro
     create(flash).await
 }
 
-pub async fn create(flash: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
+pub async fn create(flash: &mut Fl<'_>) -> Result<SSHStampConfig, SunsetError> {
     let c = SSHStampConfig::new()?;
     save(flash, &c).await?;
     dbg!("Created new config: ", &c);
@@ -102,7 +101,7 @@ pub async fn create(flash: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
     Ok(c)
 }
 
-pub async fn load(fl: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
+pub async fn load(fl: &mut Fl<'_>) -> Result<SSHStampConfig, SunsetError> {
     fl.flash
         .read(CONFIG_OFFSET as u32, &mut fl.buf)
         .map_err(|_e| {
@@ -132,19 +131,18 @@ pub async fn load(fl: &mut Fl) -> Result<SSHStampConfig, SunsetError> {
     }
 }
 
-pub async fn save(fl: &mut Fl, config: &SSHStampConfig) -> Result<(), SunsetError> {
+pub async fn save(fl: &mut Fl<'_>, config: &SSHStampConfig) -> Result<(), SunsetError> {
     let sc = FlashConfig {
         version: SSHStampConfig::CURRENT_VERSION,
         config: OwnOrBorrow::Borrow(&config),
         hash: config_hash(&config)?,
     };
 
-    FlashConfig::find_config_partition().unwrap();
+    FlashConfig::find_config_partition(&mut fl.flash).unwrap();
 
     //   dbg!("Saving config: ", &config);
     dbg!("Before write_ssh, with hash: ", &sc.hash.hex_dump());
-    let l = sshwire::write_ssh(&mut fl.buf, &sc)?;
-    let buf = &fl.buf[..l];
+    let buf = &fl.buf[..];
     dbg!("Saved flash (after write_ssh): {}", &buf.hex_dump());
 
     dbg!(CONFIG_OFFSET + FlashConfig::BUF_SIZE);
