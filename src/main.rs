@@ -1,6 +1,10 @@
 #![no_std]
 #![no_main]
 
+// SPDX-FileCopyrightText: 2025 Roman Valls, 2025
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use core::marker::Sized;
 use esp_alloc as _;
 use esp_backtrace as _;

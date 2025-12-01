@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Roman Valls, 2025
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use core::cell::RefCell;
 
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;

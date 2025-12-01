@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025 Roman Valls, 2025
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 [alias]
 build-esp32   = "build --release --target xtensa-esp32-none-elf --features esp32"
 build-esp32c2 = "build --release --target riscv32imc-unknown-none-elf --features esp32c2"
