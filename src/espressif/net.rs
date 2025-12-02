@@ -1,5 +1,6 @@
 use core::net::Ipv4Addr;
-use core::str::FromStr;
+
+use edge_dhcp::io;
 
 use embassy_executor::Spawner;
 use embassy_net::{tcp::TcpSocket, Stack, StackResources};
@@ -7,22 +8,20 @@ use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, StaticConfigV4};
 use embassy_time::{Duration, Timer};
 
 use esp_hal::clock::CpuClock;
-use esp_hal::peripherals::WIFI;
 
+use esp_hal::peripherals::{self, WIFI};
 use esp_hal::rng::Rng;
 use esp_println::{dbg, println};
 
 use esp_radio::wifi::{AccessPointConfig, ModeConfig, WifiController, WifiDevice};
 use esp_radio::wifi::{WifiEvent, WifiApState};
-use heapless::String;
 use sunset_async::SunsetMutex;
 
 use core::net::SocketAddrV4;
-use edge_dhcp;
 
 use edge_dhcp::{
-    io::{self, DEFAULT_SERVER_PORT},
     server::{Server, ServerOptions},
+    io::DEFAULT_SERVER_PORT,
 };
 use edge_nal::UdpBind;
 use edge_nal_embassy::{Udp, UdpBuffers};
@@ -51,7 +50,8 @@ pub async fn if_up(
 ) -> Result<Stack<'static>, sunset::Error> {
     let hal_config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let wifi_init = &*mk_static!(WifiController<'static>, wifi_controller);
-    let (controller, interfaces) = esp_radio::wifi::new(wifi.reborrow(), hal_config).unwrap();
+    let (mut controller, interfaces) =
+        esp_radio::wifi::new(wifi, wifi_init, hal_config).unwrap();
 
     let ap_config =
         ModeConfig::AccessPoint(AccessPointConfig::default().with_ssid(DEFAULT_SSID.into()));
@@ -147,12 +147,6 @@ async fn wifi_up(
 ) {
     println!("Device capabilities: {:?}", controller.capabilities());
 
-    let wifi_ssid = {
-        let guard = config.lock().await;
-        guard.wifi_ssid.clone()
-        // drop guard
-    };
-
     loop {
         if esp_radio::wifi::ap_state() == WifiApState::Started {
             // wait until we're no longer connected
@@ -160,8 +154,7 @@ async fn wifi_up(
             Timer::after(Duration::from_millis(5000)).await
         }
         if !matches!(controller.is_started(), Ok(true)) {
-            let ssid_string = String::<63>::from_str(wifi_ssid).unwrap().to_ascii_lowercase();
-            let client_config = ModeConfig::AccessPoint(AccessPointConfig::default().with_ssid(ssid_string));
+            let client_config = ModeConfig::AccessPoint(AccessPointConfig::default());
             controller.set_config(&client_config).unwrap();
             println!("Starting wifi");
             controller.start_async().await.unwrap();

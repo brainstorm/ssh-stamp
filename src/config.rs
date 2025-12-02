@@ -34,7 +34,7 @@ pub struct SSHStampConfig {
     pub admin_keys: [Option<Ed25519PubKey>; KEY_SLOTS],
 
     /// WiFi
-    pub wifi_ssid: &'static str,
+    pub wifi_ssid: String<32>,
     pub wifi_pw: Option<String<63>>,
 
     /// Networking
@@ -60,7 +60,7 @@ impl SSHStampConfig {
         let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
 
         // TODO: Those env events come from system's std::env / core::env (if any)... so it shouldn't be unsafe()
-        let wifi_ssid=  DEFAULT_SSID;
+        let wifi_ssid=  Self::default_ssid();
         let mac = random_mac()?;
         let wifi_pw = None;
 

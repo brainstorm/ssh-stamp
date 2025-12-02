@@ -12,7 +12,6 @@ embassy-executor = { version = "0.9"}
 embassy-net = { version = "0.7", features = ["tcp", "udp", "dhcpv4", "medium-ethernet"] }
 smoltcp = { version = "0.12", default-features = false, features = ["medium-ethernet", "socket-raw"]}
 embassy-time = { version = "0.5" }
-embedded-io-async = "0.7"
 esp-alloc = "0.9"
 esp-backtrace = { version = "0.18", features = [
     "panic-handler",
@@ -26,19 +25,20 @@ hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { version = "2", features = ["nightly"] }
 ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
-sunset = { git = "https://github.com/mkj/sunset", rev = "e05ffb6", default-features = false, features = ["openssh-key", "embedded-io"]}
-sunset-async = { git = "https://github.com/mkj/sunset", rev = "e05ffb6", default-features = false, features = ["multi-thread"]}
-sunset-sshwire-derive = { git = "https://github.com/mkj/sunset", rev = "e05ffb6", default-features = false }
-# sunset = { path = "../sunset", default-features = false, features = ["openssh-key", "embedded-io"]}
-# sunset-async = { path = "../sunset/async", default-features = false, features = ["multi-thread"]}
-# sunset-sshwire-derive = { path = "../sunset/sshwire-derive", default-features = false }
+# sunset = { git = "https://github.com/mkj/sunset", rev = "e05ffb6", default-features = false, features = ["openssh-key", "embedded-io"]}
+# sunset-async = { git = "https://github.com/mkj/sunset", rev = "e05ffb6", default-features = false, features = ["multi-thread"]}
+# sunset-sshwire-derive = { git = "https://github.com/mkj/sunset", rev = "e05ffb6", default-features = false }
+sunset = { path = "../sunset", default-features = false, features = ["openssh-key", "embedded-io"]}
+sunset-async = { path = "../sunset/async", default-features = false, features = ["multi-thread"]}
+sunset-sshwire-derive = { path = "../sunset/sshwire-derive", default-features = false }
 getrandom = { version = "0.2.10", features = ["custom"] }
 embassy-sync = "0.7"
 heapless = "0.9"
 embassy-futures = "0.1"
-edge-dhcp = "0.6"
+#edge-dhcp = "0.6"
+edge-dhcp = { path = "../edge-net/edge-dhcp", default-features = false, features = ["io"]}
 edge-nal = "0.5"
-edge-nal-embassy = "0.6"
+edge-nal-embassy = "0.7"
 #sequential-storage = { version = "4", features = ["heapless"] }
 esp-storage = { version = "0.8" }
 embedded-storage = "0.3"
@@ -55,6 +55,7 @@ snafu = { version = "0.8", default-features = false }
 paste = "1"
 pretty-hex = { version = "0.4", default-features = false }
 esp-rom-sys = { version = "0.1" }
+embedded-io-async = { version = "0.7", default-features = false }
 
 [profile.dev]
 # Rust debug is too slow.

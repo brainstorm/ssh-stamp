@@ -318,16 +318,22 @@ dependencies = [
 [[package]]
 name = "edge-dhcp"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2ccd3a181a33c710e07c3f04623d7a11e9969b1e44a7276ead7873b049720cb"
 dependencies = [
- "edge-nal",
+ "edge-nal 0.5.0",
  "edge-raw",
  "embassy-futures",
- "embassy-time 0.4.0",
- "heapless 0.8.0",
+ "embassy-time 0.5.0",
+ "heapless 0.9.2",
  "num_enum",
  "rand_core 0.6.4",
+]
+
+[[package]]
+name = "edge-nal"
+version = "0.5.0"
+dependencies = [
+ "embassy-time 0.5.0",
+ "embedded-io-async 0.7.0",
 ]
 
 [[package]]
@@ -342,11 +348,11 @@ dependencies = [
 
 [[package]]
 name = "edge-nal-embassy"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "252f89adf4f0016631977bec3ba50d768263a3a9fa9f023b4087088a619568ce"
+checksum = "fb09ea0c604bbcb694ecf9cf6596bc5f59bbb5360b68c3e471b61ae9a55a8533"
 dependencies = [
- "edge-nal",
+ "edge-nal 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "embassy-futures",
  "embassy-net",
  "embedded-io-async 0.6.1",
@@ -356,8 +362,6 @@ dependencies = [
 [[package]]
 name = "edge-raw"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6207c84e9bc8df8ef3c155196df290f2a51f010bd60c2e78366e51979988bdb5"
 
 [[package]]
 name = "embassy-embedded-hal"
@@ -1287,9 +1291,9 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
-version = "0.7.4"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a973b4e44ce6cad84ce69d797acf9a044532e4184c4f267913d1b546a0727b7a"
+checksum = "b1207a7e20ad57b847bbddc6776b968420d38292bbfe2089accff5e19e82454c"
 dependencies = [
  "num_enum_derive",
  "rustversion",
@@ -1297,9 +1301,9 @@ dependencies = [
 
 [[package]]
 name = "num_enum_derive"
-version = "0.7.4"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77e878c846a8abae00dd069496dbe8751b16ac1c3d6bd2a7283a938e8228f90d"
+checksum = "ff32365de1b6743cb203b710788263c44a03de03802daf96092f2da4fe6ba4d7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1719,7 +1723,7 @@ dependencies = [
  "digest",
  "ed25519-dalek",
  "edge-dhcp",
- "edge-nal",
+ "edge-nal 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "edge-nal-embassy",
  "embassy-embedded-hal",
  "embassy-executor",
@@ -1809,7 +1813,6 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sunset"
 version = "0.3.0"
-source = "git+https://github.com/mkj/sunset?rev=e05ffb6#e05ffb6cb96e173b306f41bf31b87f6a20fff5b2"
 dependencies = [
  "aes",
  "ascii",
@@ -1819,9 +1822,9 @@ dependencies = [
  "curve25519-dalek",
  "digest",
  "ed25519-dalek",
- "embedded-io 0.6.1",
+ "embedded-io 0.7.1",
  "getrandom",
- "heapless 0.8.0",
+ "heapless 0.9.2",
  "hmac",
  "log",
  "poly1305",
@@ -1840,11 +1843,10 @@ dependencies = [
 [[package]]
 name = "sunset-async"
 version = "0.3.0"
-source = "git+https://github.com/mkj/sunset?rev=e05ffb6#e05ffb6cb96e173b306f41bf31b87f6a20fff5b2"
 dependencies = [
  "embassy-futures",
  "embassy-sync 0.7.2",
- "embedded-io-async 0.6.1",
+ "embedded-io-async 0.7.0",
  "log",
  "portable-atomic",
  "sunset",
@@ -1853,7 +1855,6 @@ dependencies = [
 [[package]]
 name = "sunset-sshwire-derive"
 version = "0.2.0"
-source = "git+https://github.com/mkj/sunset?rev=e05ffb6#e05ffb6cb96e173b306f41bf31b87f6a20fff5b2"
 dependencies = [
  "virtue",
 ]
