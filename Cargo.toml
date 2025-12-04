@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025 Roman Valls, 2025
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # TODO: Potentially switch to cargo_xtask for easy re-targetting, i.e:
 # https://github.com/card-io-ecg/card-io-fw/blob/main/Cargo.toml
 
