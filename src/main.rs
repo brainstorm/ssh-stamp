@@ -18,7 +18,7 @@ use esp_hal::{
     // interrupt::{software::SoftwareInterruptControl, Priority},
     // peripherals::Peripherals,
     // peripherals::UART1,
-    peripherals::{RADIO_CLK, WIFI, TIMG0},
+    peripherals::{RADIO_CLK, WIFI, TIMG0, TIMG1, SYSTIMER},
     peripherals::{GPIO10,GPIO11},
     rng::Rng,
     timer::timg::TimerGroup,
@@ -52,6 +52,8 @@ pub async fn peripherals_wait_for_initialisation<'a>() -> SshStampPeripherals<'a
     let rng = Rng::new(peripherals.RNG);
     rng::register_custom_rng(rng);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
+    let timg1 = peripherals.TIMG1;
+    let systimer = peripherals.SYSTIMER;
     let radio_clock = peripherals.RADIO_CLK;
 
     // Read SSH configuration from Flash (if it exists)
@@ -75,6 +77,8 @@ pub async fn peripherals_wait_for_initialisation<'a>() -> SshStampPeripherals<'a
         config: config,
         gpio10: gpio10,
         gpio11: gpio11,
+        timg1: timg1,
+        systimer: systimer,
     };
     ssh_stamp_peripherals
 }
@@ -198,6 +202,8 @@ pub struct SshStampPeripherals<'a> {
     pub config:  &'a SunsetMutex<SSHStampConfig>,
     pub gpio10: GPIO10<'a>,
     pub gpio11: GPIO11<'a>,
+    pub timg1: TIMG1<'a>,
+    pub systimer: SYSTIMER<'a>,
 }
 
 pub struct SshStampInit<'a> {
@@ -229,12 +235,13 @@ async fn main(spawner: Spawner) -> ! {
 
     cfg_if::cfg_if! {
         if #[cfg(feature = "esp32")] {
-            let timg1 = TimerGroup::new(peripherals.TIMG1);
+            let timg1 = TimerGroup::new(peripherals.timg1);
             esp_hal_embassy::init(timg1.timer0);
         } else {
             use esp_hal::timer::systimer::SystemTimer;
-            let systimer = SystemTimer::new(peripherals.SYSTIMER);
+            let systimer = SystemTimer::new(peripherals.systimer);
             esp_hal_embassy::init(systimer.alarm0);
+        }
     }
 
     // TODO: Migrate this function/test to embedded-test.

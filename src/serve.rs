@@ -13,7 +13,7 @@ use embassy_net::tcp::TcpSocket;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
-use sunset_async::SunsetMutex;
+// use sunset_async::SunsetMutex;
 
 use heapless::String;
 use sunset::{error, ChanHandle, ServEvent, SignKey};

@@ -2,8 +2,8 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channe
 use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals;
 use sunset::sshwire::{ SSHDecode, SSHEncode, SSHSink, SSHSource, WireResult };
-use static_cell::StaticCell;
-use sunset_async::SunsetMutex;
+// use static_cell::StaticCell;
+// use sunset_async::SunsetMutex;
 
 use crate::{config::{dec_option, enc_option}, errors};
 
@@ -221,7 +221,7 @@ impl <'a>PinChannel<'a> {
 // Global PinChannel holder: initialize from main() and access from other modules.
 // We keep a StaticCell but avoid any unsafe global pointer; callers receive
 // the &'static SunsetMutex returned by init_global_channel and must retain it.
-static GLOBAL_PIN_CHANNEL: StaticCell<SunsetMutex<PinChannel>> = StaticCell::new();
+// static GLOBAL_PIN_CHANNEL: StaticCell<SunsetMutex<PinChannel>> = StaticCell::new();
 
 // pub fn init_global_channel(ch: PinChannel) -> &SunsetMutex<PinChannel> {
 //     // Initialize the StaticCell and return the &'static reference.

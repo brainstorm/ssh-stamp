@@ -3,7 +3,7 @@ use core::str::FromStr;
 
 use embassy_executor::Spawner;
 use embassy_net::{tcp::TcpSocket, Stack, StackResources};
-use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, StaticConfigV4};
+use embassy_net::{IpListenEndpoint, Ipv4Cidr, StaticConfigV4};
 use embassy_time::{Duration, Timer};
 
 use esp_hal::peripherals::WIFI;
@@ -11,10 +11,10 @@ use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_println::{dbg, println};
 
-use esp_wifi::wifi::{AccessPointConfiguration, Configuration, WifiController, WifiDevice};
+use esp_wifi::wifi::{AccessPointConfiguration, Configuration, WifiController};
 use esp_wifi::wifi::{WifiEvent, WifiState};
 use esp_wifi::EspWifiController;
-use sunset_async::SunsetMutex;
+// use sunset_async::SunsetMutex;
 
 use core::net::SocketAddrV4;
 use edge_dhcp;
@@ -26,7 +26,7 @@ use edge_dhcp::{
 use edge_nal::UdpBind;
 use edge_nal_embassy::{Udp, UdpBuffers};
 
-use crate::config::SSHStampConfig;
+// use crate::config::SSHStampConfig;
 
 use super::buffered_uart::BufferedUart;
 
@@ -43,7 +43,7 @@ macro_rules! mk_static {
 use heapless::String;
 
 pub async fn if_up<'a>(
-    spawner: Spawner,
+    _spawner: Spawner,
     wifi_controller: EspWifiController<'a>,
     wifi: WIFI<'a>,
     rng: &mut Rng,
@@ -74,7 +74,7 @@ pub async fn if_up<'a>(
     let seed = (rng.random() as u64) << 32 | rng.random() as u64;
 
     // Init network stack
-    let (ap_stack, runner) = embassy_net::new(
+    let (ap_stack, _runner) = embassy_net::new(
         interfaces.ap,
         net_config,
         mk_static!(StackResources<3>, StackResources::<3>::new()),
@@ -84,8 +84,8 @@ pub async fn if_up<'a>(
     // spawner.spawn(wifi_up(controller, wifi_ssid)).ok();
     // spawner.spawn(net_up(runner)).ok();
     // spawner.spawn(dhcp_server(ap_stack, gw_ip_addr_ipv4)).ok();
-    wifi_up(controller, wifi_ssid);
-    dhcp_server(ap_stack, gw_ip_addr_ipv4);
+    wifi_up(controller, wifi_ssid).await;
+    dhcp_server(ap_stack, gw_ip_addr_ipv4).await;
 
     loop {
         println!("Checking if link is up...\n");
