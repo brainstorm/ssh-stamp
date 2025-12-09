@@ -85,21 +85,21 @@ impl<'de> SSHDecode<'de> for SerdePinConfig {
 }
 
 #[derive(Default)]
-pub struct GPIOConfig {
-    pub gpio10: Option<AnyPin<'static>>,
-    pub gpio11: Option<AnyPin<'static>>,
+pub struct GPIOConfig<'a> {
+    pub gpio10: Option<AnyPin<'a>>,
+    pub gpio11: Option<AnyPin<'a>>,
 }
 
-pub struct PinChannel {
+pub struct PinChannel<'a> {
     pub config: SerdePinConfig,
-    pub gpios: GPIOConfig,
+    pub gpios: GPIOConfig<'a>,
     pub tx: Channel<CriticalSectionRawMutex, (), 1>,
     pub rx: Channel<CriticalSectionRawMutex, (), 1>,
     // TODO: cts/rts pins
 }
 
-impl PinChannel {
-    pub fn new(config: SerdePinConfig, gpios: GPIOConfig) -> Self {
+impl <'a>PinChannel<'a> {
+    pub fn new(config: SerdePinConfig, gpios: GPIOConfig<'a>) -> Self {
         Self {
             config,
             gpios,
@@ -108,7 +108,7 @@ impl PinChannel {
         }
     }
 
-    pub async fn recv_tx(&mut self) -> errors::Result<AnyPin<'static>> {
+    pub async fn recv_tx(&mut self) -> errors::Result<AnyPin<'a>> {
         // tx needs to lock here.
         //self.tx.receive().await;
 
@@ -127,7 +127,7 @@ impl PinChannel {
         })
     }
 
-    pub async fn send_tx(&mut self, pin: AnyPin<'static>) -> errors::Result<()> {
+    pub async fn send_tx(&mut self, pin: AnyPin<'a>) -> errors::Result<()> {
         match self.config.tx {
             10 => self.gpios.gpio10 = Some(pin),
             11 => self.gpios.gpio11 = Some(pin),
@@ -139,7 +139,7 @@ impl PinChannel {
         Ok(())
     }
 
-    pub async fn recv_rx(&mut self) -> errors::Result<AnyPin<'static>> {
+    pub async fn recv_rx(&mut self) -> errors::Result<AnyPin<'a>> {
         let res = Ok(match self.config.rx {
             10 => self
                 .gpios
@@ -161,7 +161,7 @@ impl PinChannel {
         res
     }
 
-    pub async fn send_rx(&mut self, pin: AnyPin<'static>) -> errors::Result<()> {
+    pub async fn send_rx(&mut self, pin: AnyPin<'a>) -> errors::Result<()> {
         match self.config.rx {
             10 => self.gpios.gpio10 = Some(pin),
             11 => self.gpios.gpio11 = Some(pin),
@@ -175,7 +175,7 @@ impl PinChannel {
 
     pub async fn with_channel<F>(&mut self, f: F) -> errors::Result<()>
     where
-        F: for<'a> AsyncFnOnce(AnyPin<'a>, AnyPin<'a>),
+        F: for<'b> AsyncFnOnce(AnyPin<'b>, AnyPin<'b>),
     {
         let mut rx = self.recv_rx().await?;
         let mut tx = self.recv_tx().await?;
@@ -223,14 +223,14 @@ impl PinChannel {
 // the &'static SunsetMutex returned by init_global_channel and must retain it.
 static GLOBAL_PIN_CHANNEL: StaticCell<SunsetMutex<PinChannel>> = StaticCell::new();
 
-pub fn init_global_channel(ch: PinChannel) -> &'static SunsetMutex<PinChannel> {
-    // Initialize the StaticCell and return the &'static reference.
-    GLOBAL_PIN_CHANNEL.init(SunsetMutex::new(ch))
-}
+// pub fn init_global_channel(ch: PinChannel) -> &SunsetMutex<PinChannel> {
+//     // Initialize the StaticCell and return the &'static reference.
+//     GLOBAL_PIN_CHANNEL.init(SunsetMutex::new(ch))
+// }
 
-pub struct PinConfig {
-    pub tx: AnyPin<'static>,
-    pub rx: AnyPin<'static>,
+pub struct PinConfig<'a> {
+    pub tx: AnyPin<'a>,
+    pub rx: AnyPin<'a>,
 }
 
 pub struct PinConfigAlt {
@@ -251,8 +251,8 @@ impl PinConfigAlt {
     }
 }
 
-impl PinConfig {
-    pub fn new(mut gpio_config: GPIOConfig, config_inner: SerdePinConfig) -> errors::Result<Self> {
+impl <'a>PinConfig<'a> {
+    pub fn new(mut gpio_config: GPIOConfig<'a>, config_inner: SerdePinConfig) -> errors::Result<Self> {
         if config_inner.rx == config_inner.tx {
             return Err(errors::Error::InvalidPin);
         }
@@ -277,7 +277,7 @@ impl PinConfig {
     pub fn initialize_pin(
         peripherals: peripherals::Peripherals,
         pin_number: u8,
-    ) -> errors::Result<AnyPin<'static>> {
+    ) -> errors::Result<AnyPin<'a>> {
         match pin_number {
             0 => Ok(peripherals.GPIO0.into()),
 

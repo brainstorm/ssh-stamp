@@ -21,15 +21,16 @@ use sunset_async::{ProgressHolder, SSHServer};
 
 use esp_println::{dbg, println};
 
-enum SessionType {
+pub enum SessionType {
     Bridge(ChanHandle),
     //Sftp(ChanHandle),
 }
 
-async fn connection_loop(
+pub async fn connection_loop<'a>(
     serv: &SSHServer<'_>,
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
-    pin_channel_ref: &'static SunsetMutex<PinChannel>,
+    // pin_channel_ref: &'a SunsetMutex<PinChannel<'a>>,
+    // pin_channel_ref: &PinChannel<'a>,
 ) -> Result<(), sunset::Error> {
     let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
     let mut session: Option<ChanHandle> = None;
@@ -80,64 +81,64 @@ async fn connection_loop(
                     }
                 }
             }
-            ServEvent::Environment(a) => {
-                dbg!("Got ENV request");
-                dbg!(a.name()?);
-                dbg!(a.value()?);
+            // ServEvent::Environment(a) => {
+            //     dbg!("Got ENV request");
+            //     dbg!(a.name()?);
+            //     dbg!(a.value()?);
 
-                // TODO: Logic to serialise/validate env vars? I.e:
-                // a.name.validate(); // Checks the input variable, sanitizes, assigns a target subsystem
-                //
-                // config.change(c): Apply the config change to the relevant subsystem.
-                // i.e: if UART_TX_PIN or UART_RX_PIN, we update the PinChannel with with_channel() to change pins live.
-                match a.name()? {
-                    "SAVE_CONFIG" => {
-                        if a.value()? == "1" {
-                            dbg!("Triggering config save...");
-                            todo!("Implement config save to flash");
-                        }
-                    }
-                    // If the env var is UART_TX_PIN or UART_RX_PIN
-                    "UART_TX_PIN" => {
-                        let val = a.value()?;
-                        dbg!("Updating UART TX pin to ", val);
-                        if let Ok(pin_num) = val.parse::<u8>() {
-                            let mut ch = pin_channel_ref.lock().await;
-                            if ch.set_tx_pin(pin_num).is_err() {
-                                dbg!("Failed to update TX pin");
-                            } else {
-                                dbg!("TX pin updated");
-                            }
-                        } else {
-                            dbg!("Invalid TX pin value");
-                        }
-                    }
-                    "UART_RX_PIN" => {
-                        let val = a.value()?;
-                        dbg!("Updating UART RX pin to ", val);
-                        if let Ok(pin_num) = val.parse::<u8>() {
-                            let mut ch = pin_channel_ref.lock().await;
-                            if ch.set_rx_pin(pin_num).is_err() {
-                                dbg!("Failed to update RX pin");
-                            } else {
-                                dbg!("RX pin updated");
-                            }
-                        } else {
-                            dbg!("Invalid RX pin value");
-                        }
-                    }
-                    _ => {
-                        dbg!("Unknown/unsupported ENV var");
-                    }
-                }
+            //     // TODO: Logic to serialise/validate env vars? I.e:
+            //     // a.name.validate(); // Checks the input variable, sanitizes, assigns a target subsystem
+            //     //
+            //     // config.change(c): Apply the config change to the relevant subsystem.
+            //     // i.e: if UART_TX_PIN or UART_RX_PIN, we update the PinChannel with with_channel() to change pins live.
+            //     match a.name()? {
+            //         "SAVE_CONFIG" => {
+            //             if a.value()? == "1" {
+            //                 dbg!("Triggering config save...");
+            //                 todo!("Implement config save to flash");
+            //             }
+            //         }
+            //         // If the env var is UART_TX_PIN or UART_RX_PIN
+            //         "UART_TX_PIN" => {
+            //             let val = a.value()?;
+            //             dbg!("Updating UART TX pin to ", val);
+            //             if let Ok(pin_num) = val.parse::<u8>() {
+            //                 let mut ch = pin_channel_ref.lock().await;
+            //                 if ch.set_tx_pin(pin_num).is_err() {
+            //                     dbg!("Failed to update TX pin");
+            //                 } else {
+            //                     dbg!("TX pin updated");
+            //                 }
+            //             } else {
+            //                 dbg!("Invalid TX pin value");
+            //             }
+            //         }
+            //         "UART_RX_PIN" => {
+            //             let val = a.value()?;
+            //             dbg!("Updating UART RX pin to ", val);
+            //             if let Ok(pin_num) = val.parse::<u8>() {
+            //                 let mut ch = pin_channel_ref.lock().await;
+            //                 if ch.set_rx_pin(pin_num).is_err() {
+            //                     dbg!("Failed to update RX pin");
+            //                 } else {
+            //                     dbg!("RX pin updated");
+            //                 }
+            //             } else {
+            //                 dbg!("Invalid RX pin value");
+            //             }
+            //         }
+            //         _ => {
+            //             dbg!("Unknown/unsupported ENV var");
+            //         }
+            //     }
 
 
 
-                // config.save(a): Potentially an optional special environment variable SAVE_CONFIG=1
-                // that serialises current config to flash
+            // //     // config.save(a): Potentially an optional special environment variable SAVE_CONFIG=1
+            // //     // that serialises current config to flash
 
-                a.succeed()?;
-            }
+            //     a.succeed()?;
+            // }
             ServEvent::SessionPty(a) => {
                 a.succeed()?;
             }
@@ -156,7 +157,7 @@ async fn connection_loop(
 pub(crate) async fn handle_ssh_client(
     stream: &mut TcpSocket<'_>,
     uart: &BufferedUart,
-    pin_channel_ref: &'static SunsetMutex<PinChannel>,
+    _pin_channel_ref: &PinChannel<'_>,
 ) -> Result<(), sunset::Error> {
     // Spawn network tasks to handle incoming connections with demo_common::session()
     let mut inbuf = [0u8; 4096];
@@ -168,7 +169,8 @@ pub(crate) async fn handle_ssh_client(
     let chan_pipe = Channel::<NoopRawMutex, SessionType, 1>::new();
 
     println!("Calling connection_loop from handle_ssh_client");
-    let conn_loop = connection_loop(&ssh_server, &chan_pipe, pin_channel_ref);
+    // let conn_loop = connection_loop(&ssh_server, &chan_pipe, pin_channel_ref);
+    let conn_loop = connection_loop(&ssh_server, &chan_pipe);
     println!("Running server from handle_ssh_client()");
     let server = ssh_server.run(&mut rsock, &mut wsock);
 

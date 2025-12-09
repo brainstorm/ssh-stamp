@@ -7,7 +7,7 @@ use esp_println::println;
 
 /// Forwards an incoming SSH connection to/from the local UART, until
 /// the connection drops
-pub(crate) async fn serial_bridge(
+pub async fn serial_bridge(
     chanr: impl Read<Error = sunset::Error>,
     chanw: impl Write<Error = sunset::Error>,
     uart: &BufferedUart,

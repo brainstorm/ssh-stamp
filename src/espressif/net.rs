@@ -40,15 +40,19 @@ macro_rules! mk_static {
     }};
 }
 
-pub async fn if_up(
+use heapless::String;
+
+pub async fn if_up<'a>(
     spawner: Spawner,
-    wifi_controller: EspWifiController<'static>,
-    wifi: WIFI<'static>,
+    wifi_controller: EspWifiController<'a>,
+    wifi: WIFI<'a>,
     rng: &mut Rng,
-    config: &'static SunsetMutex<SSHStampConfig>,
-) -> Result<Stack<'static>, sunset::Error> {
-    let wifi_init = &*mk_static!(EspWifiController<'static>, wifi_controller);
-    let (controller, interfaces) = esp_wifi::wifi::new(wifi_init, wifi).unwrap();
+    // config:  &'static SunsetMutex<SSHStampConfig>,
+    wifi_ssid:  String<32>,
+) -> Result<Stack<'a>, sunset::Error> {
+    // let wifi_init = &*mk_static!(EspWifiController<'static>, wifi_controller);
+    // let (controller, interfaces) = esp_wifi::wifi::new(wifi_init, wifi).unwrap();
+    let (controller, interfaces) = esp_wifi::wifi::new(&wifi_controller, wifi).unwrap();
 
     let gw_ip_addr_ipv4 = Ipv4Addr::from_str("192.168.0.1").expect("failed to parse gateway ip");
 
@@ -77,9 +81,11 @@ pub async fn if_up(
         seed,
     );
 
-    spawner.spawn(wifi_up(controller, config)).ok();
-    spawner.spawn(net_up(runner)).ok();
-    spawner.spawn(dhcp_server(ap_stack, gw_ip_addr_ipv4)).ok();
+    // spawner.spawn(wifi_up(controller, wifi_ssid)).ok();
+    // spawner.spawn(net_up(runner)).ok();
+    // spawner.spawn(dhcp_server(ap_stack, gw_ip_addr_ipv4)).ok();
+    wifi_up(controller, wifi_ssid);
+    dhcp_server(ap_stack, gw_ip_addr_ipv4);
 
     loop {
         println!("Checking if link is up...\n");
@@ -98,16 +104,19 @@ pub async fn if_up(
     Ok(ap_stack)
 }
 
-pub async fn accept_requests(
-    stack: Stack<'static>,
+pub async fn accept_requests<'a>(
+    stack: Stack<'a>,
     uart: &BufferedUart,
-    pin_channel_ref: &'static sunset_async::SunsetMutex<crate::pins::PinChannel>,
+    // pin_channel_ref: &'a sunset_async::SunsetMutex<crate::pins::PinChannel<'_>>,
+    pin_channel_ref: &crate::pins::PinChannel<'a>,
 ) -> ! {
-    let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
-    let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
-
+    // let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
+    // let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
+    let mut rx_buffer = [0u8; 1536];
+    let mut tx_buffer = [0u8; 1536];
     loop {
-        let mut socket = TcpSocket::new(stack, rx_buffer, tx_buffer);
+        // let mut socket = TcpSocket::new(stack, rx_buffer, tx_buffer);
+        let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
 
         println!("Waiting for SSH client...");
 
@@ -132,18 +141,19 @@ pub async fn accept_requests(
     }
 }
 
-#[embassy_executor::task]
+// #[embassy_executor::task]
 async fn wifi_up(
-    mut controller: WifiController<'static>,
-    config: &'static SunsetMutex<SSHStampConfig>,
+    // mut controller: WifiController<'static>,
+    mut controller: WifiController<'_>,
+    // config: &'static SunsetMutex<SSHStampConfig>,
+    wifi_ssid:  String<32>,
 ) {
     println!("Device capabilities: {:?}", controller.capabilities());
-
-    let wifi_ssid = {
-        let guard = config.lock().await;
-        guard.wifi_ssid.clone()
-        // drop guard
-    };
+    // let wifi_ssid = {
+    //     let guard = config.lock().await;
+    //     guard.wifi_ssid.clone()
+    //     // drop guard
+    // };
     // TODO: No wifi password(s) yet...
     //let wifi_password = config.lock().await.wifi_pw;
 
@@ -160,21 +170,21 @@ async fn wifi_up(
             });
             controller.set_configuration(&client_config).unwrap();
             println!("Starting wifi");
-            controller.start_async().await.unwrap();
+            // controller.start_async().await.unwrap();
             println!("Wifi started!");
         }
         Timer::after(Duration::from_millis(10)).await;
     }
 }
 
-#[embassy_executor::task]
-async fn net_up(mut runner: Runner<'static, WifiDevice<'static>>) {
-    println!("Bringing up network stack...\n");
-    runner.run().await
-}
+// #[embassy_executor::task]
+// async fn net_up<'a>(mut runner: Runner<'a, WifiDevice<'a>>) {
+    // println!("Bringing up network stack...\n");
+    // runner.run().await
+// }
 
-#[embassy_executor::task]
-async fn dhcp_server(stack: Stack<'static>, ip: Ipv4Addr) {
+// #[embassy_executor::task]
+async fn dhcp_server<'a>(stack: Stack<'a>, ip: Ipv4Addr) {
     let mut buf = [0u8; 1500];
 
     let mut gw_buf = [Ipv4Addr::UNSPECIFIED];
