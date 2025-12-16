@@ -1735,8 +1735,8 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "sunset"
-version = "0.2.0"
-source = "git+https://github.com/mkj/sunset?rev=cb6c720#cb6c72008d332d6a066dbcc0b1712bacfb07ab0e"
+version = "0.3.0"
+source = "git+https://github.com/mkj/sunset?branch=dev%2Fsftp-start#8e5d20916cf7b29111b90e4d3b7bb7827c9be8e5"
 dependencies = [
  "aes",
  "ascii",
@@ -1766,14 +1766,13 @@ dependencies = [
 
 [[package]]
 name = "sunset-async"
-version = "0.2.0"
-source = "git+https://github.com/mkj/sunset?rev=cb6c720#cb6c72008d332d6a066dbcc0b1712bacfb07ab0e"
+version = "0.3.0"
+source = "git+https://github.com/mkj/sunset?branch=dev%2Fsftp-start#8e5d20916cf7b29111b90e4d3b7bb7827c9be8e5"
 dependencies = [
  "embassy-futures",
  "embassy-sync 0.7.0",
  "embedded-io-async",
  "log",
- "pin-utils",
  "portable-atomic",
  "sunset",
 ]
@@ -1781,7 +1780,7 @@ dependencies = [
 [[package]]
 name = "sunset-sshwire-derive"
 version = "0.2.0"
-source = "git+https://github.com/mkj/sunset?rev=cb6c720#cb6c72008d332d6a066dbcc0b1712bacfb07ab0e"
+source = "git+https://github.com/mkj/sunset?branch=dev%2Fsftp-start#8e5d20916cf7b29111b90e4d3b7bb7827c9be8e5"
 dependencies = [
  "virtue",
 ]

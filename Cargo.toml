@@ -35,8 +35,8 @@ log = { version = "0.4" }
 static_cell = { version = "2", features = ["nightly"] }
 ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
 getrandom = { version = "0.2.10", features = ["custom"] }
-sunset = { git="https://github.com/mkj/sunset", rev = "cb6c720", default-features = false, features = ["openssh-key", "embedded-io"]}
-sunset-async = { git = "https://github.com/mkj/sunset", rev = "cb6c720", default-features = false}
+sunset = { git="https://github.com/mkj/sunset", branch = "dev/sftp-start", default-features = false, features = ["openssh-key", "embedded-io"]}
+sunset-async = { git="https://github.com/mkj/sunset", branch = "dev/sftp-start", default-features = false}
 embassy-sync = "0.7"
 heapless = "0.8"
 embassy-futures = "0.1"
