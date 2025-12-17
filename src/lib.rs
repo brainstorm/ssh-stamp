@@ -11,3 +11,5 @@ pub mod keys;
 pub mod serial;
 pub mod serve;
 pub mod settings;
+
+mod ota;

@@ -79,7 +79,7 @@ async fn main(spawner: Spawner) -> ! {
     }
     cfg_if::cfg_if! {
         if #[cfg(not(feature = "esp32c2"))] {
-    interrupt_spawner.spawn(uart_task(uart_buf, peripherals.UART1, peripherals.GPIO11.into(), peripherals.GPIO10.into())).unwrap();
+            interrupt_spawner.spawn(uart_task(uart_buf, peripherals.UART1, peripherals.GPIO11.into(), peripherals.GPIO10.into())).unwrap();
         } else {
             interrupt_spawner.spawn(uart_task(uart_buf, peripherals.UART1, peripherals.GPIO9.into(), peripherals.GPIO10.into())).unwrap();
         }

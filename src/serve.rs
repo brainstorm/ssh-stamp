@@ -23,9 +23,22 @@ use sunset_async::{ProgressHolder, SSHServer};
 
 use esp_println::{dbg, println};
 
+/// Represents the type of SSH session that has been requested. We make this distinction
+/// so that we can handle different session types appropriately.
+/// 
+/// The main type is `Shell`, which represents an interactive shell session that bridges to the UART.
+/// The other type is `Sftp`, which is a work-in-progress for handling SFTP sessions for OTA updates.
+#[derive(Debug)]
+enum SessionType {
+    /// An interactive shell session. This session bridges to the UART.
+    Shell {ch: ChanHandle},
+    /// An SFTP session. WIP. This session is used to perform OTA updates.
+    Sftp {ch: ChanHandle},
+}
+
 async fn connection_loop(
     serv: &SSHServer<'_>,
-    chan_pipe: &Channel<NoopRawMutex, ChanHandle, 1>,
+    chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
 ) -> Result<(), sunset::Error> {
     let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
     let mut session: Option<ChanHandle> = None;
@@ -42,7 +55,7 @@ async fn connection_loop(
                 if let Some(ch) = session.take() {
                     a.succeed()?;
                     dbg!("We got shell");
-                    let _ = chan_pipe.try_send(ch);
+                    let _ = chan_pipe.try_send(SessionType::Shell { ch });
                 } else {
                     a.fail()?;
                 }
@@ -85,7 +98,28 @@ async fn connection_loop(
                 error::BadUsage.fail()?
             }
             ServEvent::PollAgain => (),
-            ServEvent::SessionSubsystem(_) => (),
+            ServEvent::SessionSubsystem(a) => {
+                 match a.command()?.to_lowercase().as_str() {
+                            "sftp" => {
+                                dbg!("Starting SFTP OTA subsystem");
+                                if let Some(ch) = session.take() {
+                                    debug_assert!(ch.num() == a.channel());
+                                    a.succeed()?;
+                                    let _ = chan_pipe.try_send(SessionType::Sftp { ch });
+                                } else {
+                                    a.fail()?;
+                                }
+                            }
+                            _ => {
+                                println!(
+                                "request for subsystem '{}' not implemented: fail",
+                                a.command()?
+                                );
+                                a.fail()?;
+                            }
+                        }
+
+            },
         }
     }
 }
@@ -101,7 +135,7 @@ pub(crate) async fn handle_ssh_client(
     let ssh_server = SSHServer::new(&mut inbuf, &mut outbuf);
     let (mut rsock, mut wsock) = stream.split();
 
-    let chan_pipe = Channel::<NoopRawMutex, ChanHandle, 1>::new();
+    let chan_pipe = Channel::<NoopRawMutex, SessionType, 1>::new();
 
     println!("Calling connection_loop from handle_ssh_client");
     let conn_loop = connection_loop(&ssh_server, &chan_pipe);
@@ -110,10 +144,18 @@ pub(crate) async fn handle_ssh_client(
 
     println!("Setting up serial bridge");
     let bridge = async {
-        let ch = chan_pipe.receive().await;
-        let stdio = ssh_server.stdio(ch).await?;
-        let stdio2 = stdio.clone();
-        serial_bridge(stdio, stdio2, uart).await
+        match chan_pipe.receive().await {
+            SessionType::Shell { ch } => {
+                let stdio = ssh_server.stdio(ch).await?;
+                let stdio2 = stdio.clone();
+                serial_bridge(stdio, stdio2, uart).await
+            },
+            SessionType::Sftp { .. } => {
+                println!("SFTP not implemented");
+                return Ok(())
+            }
+        }
+
     };
 
     println!("Main select() in handle_ssh_client()");
