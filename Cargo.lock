@@ -1936,6 +1936,7 @@ dependencies = [
  "subtle",
  "sunset",
  "sunset-async",
+ "sunset-sftp",
  "sunset-sshwire-derive",
 ]
 
@@ -2027,6 +2028,21 @@ dependencies = [
  "log",
  "portable-atomic",
  "sunset",
+]
+
+[[package]]
+name = "sunset-sftp"
+version = "0.1.2"
+dependencies = [
+ "embassy-futures",
+ "embassy-sync 0.7.2",
+ "embedded-io-async",
+ "log",
+ "num_enum",
+ "paste",
+ "sunset",
+ "sunset-async",
+ "sunset-sshwire-derive",
 ]
 
 [[package]]

@@ -8,7 +8,7 @@ use core::writeln;
 
 use crate::pins::PinChannel;
 use crate::espressif::buffered_uart::BufferedUart;
-use crate::keys;
+use crate::{keys, ota};
 use crate::serial::serial_bridge;
 
 // Embassy
