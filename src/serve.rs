@@ -7,7 +7,7 @@ use core::result::Result;
 use core::writeln;
 
 use crate::espressif::buffered_uart::BufferedUart;
-use crate::keys;
+use crate::{keys, ota};
 use crate::serial::serial_bridge;
 
 // Embassy
@@ -97,6 +97,9 @@ async fn connection_loop(
                 println!("Expected caller to handle event");
                 error::BadUsage.fail()?
             }
+            ServEvent::SessionEnv(a) => {
+                a.fail()?;
+            }
             ServEvent::PollAgain => (),
             ServEvent::SessionSubsystem(a) => {
                  match a.command()?.to_lowercase().as_str() {
@@ -150,9 +153,9 @@ pub(crate) async fn handle_ssh_client(
                 let stdio2 = stdio.clone();
                 serial_bridge(stdio, stdio2, uart).await
             },
-            SessionType::Sftp { .. } => {
-                println!("SFTP not implemented");
-                return Ok(())
+            SessionType::Sftp { ch } => {
+                let stdio = ssh_server.stdio(ch).await?;
+                ota::run_ota_server(stdio).await
             }
         }
 
