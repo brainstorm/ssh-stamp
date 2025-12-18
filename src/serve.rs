@@ -80,7 +80,7 @@ async fn connection_loop(
                     }
                 }
             }
-            ServEvent::Environment(a) => {
+            ServEvent::SessionEnv(a) => {
                 dbg!("Got ENV request");
                 dbg!(a.name()?);
                 dbg!(a.value()?);
