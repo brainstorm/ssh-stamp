@@ -6,8 +6,8 @@ use core::net::Ipv4Addr;
 use core::str::FromStr;
 
 use embassy_executor::Spawner;
-use embassy_net::{tcp::TcpSocket, Stack, StackResources};
 use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, StaticConfigV4};
+use embassy_net::{Stack, StackResources, tcp::TcpSocket};
 use embassy_time::{Duration, Timer};
 
 use esp_hal::peripherals::WIFI;
@@ -15,9 +15,9 @@ use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_println::{dbg, println};
 
+use esp_wifi::EspWifiController;
 use esp_wifi::wifi::{AccessPointConfiguration, Configuration, WifiController, WifiDevice};
 use esp_wifi::wifi::{WifiEvent, WifiState};
-use esp_wifi::EspWifiController;
 use sunset_async::SunsetMutex;
 
 use core::net::SocketAddrV4;

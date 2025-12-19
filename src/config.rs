@@ -14,10 +14,10 @@ use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
 use sunset::packets::Ed25519PubKey;
-use sunset::{sshwire, KeyType, Result};
+use sunset::{KeyType, Result, sshwire};
 use sunset::{
-    sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
     SignKey,
+    sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
 };
 
 use crate::pins::SerdePinConfig;

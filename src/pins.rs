@@ -1,11 +1,14 @@
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals;
-use sunset::sshwire::{ SSHDecode, SSHEncode, SSHSink, SSHSource, WireResult };
 use static_cell::StaticCell;
+use sunset::sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireResult};
 use sunset_async::SunsetMutex;
 
-use crate::{config::{dec_option, enc_option}, errors};
+use crate::{
+    config::{dec_option, enc_option},
+    errors,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SerdePinConfig {
@@ -65,7 +68,6 @@ impl SSHEncode for SerdePinConfig {
         enc_option(&self.cts, s)
     }
 }
-
 
 impl<'de> SSHDecode<'de> for SerdePinConfig {
     fn dec<S>(s: &mut S) -> WireResult<Self>

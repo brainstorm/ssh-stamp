@@ -10,7 +10,7 @@ use esp_alloc as _;
 use esp_backtrace as _;
 use esp_hal::{
     gpio::Pin,
-    interrupt::{software::SoftwareInterruptControl, Priority},
+    interrupt::{Priority, software::SoftwareInterruptControl},
     peripherals::UART1,
     rng::Rng,
     timer::timg::TimerGroup,
@@ -115,10 +115,8 @@ async fn main(spawner: Spawner) -> ! {
 
     // Initialize the global pin channel and keep the &'static reference so we can
     // pass it to tasks that need to mutate pins (no unsafe globals).
-    let pin_channel_ref = pins::init_global_channel(PinChannel::new(
-        serde_pin_config,
-        available_gpios,
-    ));
+    let pin_channel_ref =
+        pins::init_global_channel(PinChannel::new(serde_pin_config, available_gpios));
 
     // Grab UART1, typically not connected to dev board's TTL2USB IC nor builtin JTAG functionality
     let uart1 = peripherals.UART1;

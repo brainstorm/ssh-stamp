@@ -6,13 +6,13 @@ use core::option::Option::{self, None, Some};
 use core::result::Result;
 use core::writeln;
 
-use crate::pins::PinChannel;
 use crate::espressif::buffered_uart::BufferedUart;
-use crate::{keys, ota};
+use crate::pins::PinChannel;
 use crate::serial::serial_bridge;
+use crate::{keys, ota};
 
 // Embassy
-use embassy_futures::select::{select3, Either3};
+use embassy_futures::select::{Either3, select3};
 use embassy_net::tcp::TcpSocket;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
@@ -20,7 +20,7 @@ use embassy_sync::mutex::Mutex;
 use sunset_async::SunsetMutex;
 
 use heapless::String;
-use sunset::{error, ChanHandle, ServEvent, SignKey};
+use sunset::{ChanHandle, ServEvent, SignKey, error};
 use sunset_async::{ProgressHolder, SSHServer};
 
 use esp_println::{dbg, println};
@@ -149,8 +149,6 @@ async fn connection_loop(
                         dbg!("Unknown/unsupported ENV var");
                     }
                 }
-
-
 
                 // config.save(a): Potentially an optional special environment variable SAVE_CONFIG=1
                 // that serialises current config to flash

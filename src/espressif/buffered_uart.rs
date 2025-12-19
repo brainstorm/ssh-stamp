@@ -12,8 +12,8 @@ use embassy_sync::pipe::TryWriteError;
 /// Doesn't implement the InterruptExecutor, in the task in the app should await
 /// the 'run' async function.
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pipe::Pipe};
-use esp_hal::uart::Uart;
 use esp_hal::Async;
+use esp_hal::uart::Uart;
 
 // Sizes of the software buffers. Inward is more
 // important as an overrun here drops bytes. A full outward
