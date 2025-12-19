@@ -2,17 +2,19 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use esp_bootloader_esp_idf::ota::Ota;
 use sunset::sshwire::{BinString, WireError};
-/// OTA update module over SFTP
 use sunset_async::ChanInOut;
 use sunset_sftp::{
-    SftpHandler, handles::OpaqueFileHandle, protocol::FileHandle, server::SftpServer,
+    SftpHandler,
+    handles::OpaqueFileHandle,
+    protocol::{FileHandle, Filename, NameEntry, PFlags},
+    server:: SftpServer,
 };
 
 use core::hash::Hasher;
 
 use esp_println::dbg;
+
 use rustc_hash::FxHasher;
 
 pub(crate) async fn run_ota_server(stdio: ChanInOut<'_>) -> Result<(), sunset::Error> {
@@ -25,7 +27,7 @@ pub(crate) async fn run_ota_server(stdio: ChanInOut<'_>) -> Result<(), sunset::E
     match {
         let mut file_server = SftpOtaServer::new();
 
-        SftpHandler::<OtaOpaqueFileHandle, SftpOtaServer, 512>::new(
+        SftpHandler::<OtaOpaqueFileHandle, SftpOtaServer<OtaOpaqueFileHandle>, 512>::new(
             &mut file_server,
             &mut request_buffer,
         )
@@ -36,16 +38,18 @@ pub(crate) async fn run_ota_server(stdio: ChanInOut<'_>) -> Result<(), sunset::E
     } {
         Ok(_) => {
             dbg!("sftp server loop finished gracefully");
-            return Ok(());
+            Ok(())
         }
         Err(e) => {
             dbg!("sftp server loop finished with an error: {}", &e);
-            return Err(e);
+            Err(e)
         }
-    };
-    Ok(())
+    }
 }
 
+/// This length is chosen to keep the file handle small
+/// while still providing a reasonable level of uniqueness.
+/// We are not expecting more than one OTA operation at a time.
 const HASH_LEN: usize = 4;
 /// OtaOpaqueFileHandle for OTA SFTP server
 ///
@@ -89,35 +93,78 @@ impl OpaqueFileHandle for OtaOpaqueFileHandle {
 ///
 /// This struct implements the SftpServer trait for handling OTA updates over SFTP
 /// For now, all methods log an error and return unsupported operation as this is a placeholder
-struct SftpOtaServer;
+struct SftpOtaServer<T> {
+    // Add fields as necessary for OTA server state
+    file_handle: Option<T>,
+    write_permission: bool,
+}
 
-impl SftpOtaServer {
+impl<T> SftpOtaServer<T> {
     pub fn new() -> Self {
-        SftpOtaServer
+        Self {
+            // Initialize fields as necessary
+            file_handle: None,
+            write_permission: false,
+        }
     }
 }
 
-impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer {
+impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
     fn open(
         &'_ mut self,
         path: &str,
         mode: &sunset_sftp::protocol::PFlags,
     ) -> sunset_sftp::server::SftpOpResult<T> {
-        log::error!(
-            "SftpServer Open operation not defined: path = {:?}, attrs = {:?}",
-            path,
-            mode
-        );
-        Err(sunset_sftp::protocol::StatusCode::SSH_FX_OP_UNSUPPORTED)
+        if self.file_handle.is_none(){
+            let num_mode =u32::from(mode);
+
+            self.write_permission = num_mode & u32::from(&PFlags::SSH_FXF_WRITE) > 0
+                || num_mode & u32::from(&PFlags::SSH_FXF_APPEND) > 0
+                || num_mode & u32::from(&PFlags::SSH_FXF_CREAT) > 0;
+
+            let handle = T::new(path);
+            self.file_handle = Some(handle.clone());
+            log::info!(
+                "SftpServer Open operation: path = {:?}, write_permission = {:?}, handle = {:?}",
+                path,
+                self.write_permission,
+                &handle
+            );
+            return Ok(handle);
+        } else {
+            log::error!(
+                "SftpServer Open operation failed: already writing OTA, path = {:?}, attrs = {:?}",
+                path,
+                mode
+            );
+            return Err(sunset_sftp::protocol::StatusCode::SSH_FX_PERMISSION_DENIED);
+        }
     }
 
     fn close(&mut self, handle: &T) -> sunset_sftp::server::SftpOpResult<()> {
-        log::error!(
-            "SftpServer Close operation not defined: handle = {:?}",
-            handle
-        );
-
-        Err(sunset_sftp::protocol::StatusCode::SSH_FX_OP_UNSUPPORTED)
+        if let Some(current_handle) = &self.file_handle {
+            if current_handle == handle {
+                log::info!(
+                    "SftpServer Close operation for OTA completed: handle = {:?}",
+                    handle
+                );
+                self.file_handle = None;
+                self.write_permission = false;
+                return Ok(());
+            } else {
+                log::warn!(
+                    "SftpServer Close operation failed: handle mismatch = {:?}",
+                    handle
+                );
+                return Err(sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE);
+            }
+        } else {
+            log::warn!(
+                "SftpServer Close operation granted on untracked handle: {:?}",
+                handle
+            );
+            return Ok(()); // TODO: Handle close properly. You will need this for the OTA server
+        }
     }
 
     fn read<const N: usize>(
@@ -125,7 +172,7 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer {
         opaque_file_handle: &T,
         offset: u64,
         len: u32,
-        reply: &mut sunset_sftp::server::ReadReply<'_, N>,
+        _reply: &mut sunset_sftp::server::ReadReply<'_, N>,
     ) -> impl core::future::Future<Output = sunset_sftp::error::SftpResult<()>> {
         async move {
             log::error!(
@@ -146,40 +193,64 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer {
         offset: u64,
         buf: &[u8],
     ) -> sunset_sftp::server::SftpOpResult<()> {
-        log::error!(
-            "SftpServer Write operation not defined: handle = {:?}, offset = {:?}, buf = {:?}",
-            opaque_file_handle,
-            offset,
-            buf
+        if let Some(current_handle) = &self.file_handle {
+            if current_handle == opaque_file_handle {
+                if !self.write_permission {
+                    log::warn!(
+                        "SftpServer Write operation denied: no write permission for handle = {:?}",
+                        opaque_file_handle
+                    );
+                    return Err(sunset_sftp::protocol::StatusCode::SSH_FX_PERMISSION_DENIED);
+                }
+                log::info!(
+                    "SftpServer Write operation for OTA: handle = {:?}, offset = {:?}, buf_len = {:?}",
+                    opaque_file_handle,
+                    offset,
+                    buf.len()
+                );
+                // Here you would add the logic to write the buffer to the OTA update mechanism
+                return Ok(());
+            } 
+        }
+     
+        log::warn!(
+            "SftpServer Write operation failed: handle mismatch = {:?}",
+            opaque_file_handle
         );
-        Ok(())
+        return Err(sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE);
     }
 
     fn opendir(&mut self, dir: &str) -> sunset_sftp::server::SftpOpResult<T> {
-        log::error!("SftpServer OpenDir operation not defined: dir = {:?}", dir);
-        Err(sunset_sftp::protocol::StatusCode::SSH_FX_OP_UNSUPPORTED)
+        let handle = T::new(dir);
+        log::info!(
+            "SftpServer OpenDir: dir = {:?}. Returning {:?}",
+            dir,
+            &handle
+        );
+        Ok(handle) // TODO: Store handle and use salt
     }
 
     fn readdir<const N: usize>(
         &mut self,
-        opaque_dir_handle: &T,
-        reply: &mut sunset_sftp::server::DirReply<'_, N>,
+        _opaque_dir_handle: &T,
+        _reply: &mut sunset_sftp::server::DirReply<'_, N>,
     ) -> impl core::future::Future<Output = sunset_sftp::server::SftpOpResult<()>> {
         async move {
-            log::error!(
-                "SftpServer ReadDir operation not defined: handle = {:?}",
-                opaque_dir_handle
+            log::info!(
+                "SftpServer ReadDir called for OTA SFTP server on handle: {:?}",
+                _opaque_dir_handle
             );
-            Err(sunset_sftp::protocol::StatusCode::SSH_FX_OP_UNSUPPORTED)
+            Err(sunset_sftp::protocol::StatusCode::SSH_FX_EOF)
         }
     }
 
-    fn realpath(
-        &mut self,
-        dir: &str,
-    ) -> sunset_sftp::server::SftpOpResult<sunset_sftp::protocol::NameEntry<'_>> {
-        log::error!("SftpServer RealPath operation not defined: dir = {:?}", dir);
-        Err(sunset_sftp::protocol::StatusCode::SSH_FX_OP_UNSUPPORTED)
+    fn realpath(&mut self, dir: &str) -> sunset_sftp::server::SftpOpResult<NameEntry<'_>> {
+        log::info!("SftpServer RealPath: dir = {:?}", dir);
+        Ok(NameEntry {
+            filename: Filename::from("/"),
+            _longname: Filename::from("/"),
+            attrs: sunset_sftp::protocol::Attrs::default(),
+        })
     }
 
     fn stats(
@@ -195,6 +266,4 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer {
         );
         Err(sunset_sftp::protocol::StatusCode::SSH_FX_OP_UNSUPPORTED)
     }
-
-    // Implement required methods for the SftpServer trait
 }
