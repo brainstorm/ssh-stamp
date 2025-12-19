@@ -6,7 +6,7 @@
 name = "ssh-stamp"
 version = "0.1.0"
 authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
@@ -38,7 +38,7 @@ sunset-sftp = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-
 getrandom = { version = "0.2.10", features = ["custom"] }
 embassy-sync = "0.7"
 heapless = "0.8"
-embassy-futures = "0.1"
+embassy-futures = "0.1.2"
 edge-dhcp = "0.6"
 edge-nal = "0.5"
 edge-nal-embassy = "0.6"
