@@ -27,7 +27,7 @@ use esp_println::{dbg, println};
 
 enum SessionType {
     Bridge(ChanHandle),
-    //Sftp(ChanHandle),
+    Sftp(ChanHandle),
 }
 
 async fn connection_loop(
@@ -46,6 +46,21 @@ async fn connection_loop(
         dbg!(&ev);
         #[allow(unreachable_patterns)]
         match ev {
+            ServEvent::SessionSubsystem(a) => {
+                if a.command()?.to_lowercase().as_str() == "sftp" {
+                    if let Some(ch) = session.take() {
+                        debug_assert!(ch.num() == a.channel());
+
+                        a.succeed()?;
+                        dbg!("We got SFTP subsystem");
+                        let _ = chan_pipe.try_send(SessionType::Sftp(ch));
+                    } else {
+                        a.fail()?;
+                    }
+                } else {
+                    a.fail()?;
+                }
+            }
             ServEvent::SessionShell(a) => {
                 if let Some(ch) = session.take() {
                     debug_assert!(ch.num() == a.channel());
@@ -188,10 +203,10 @@ pub(crate) async fn handle_ssh_client(
                 let stdio2 = stdio.clone();
                 serial_bridge(stdio, stdio2, uart).await?
             }
-            // SessionType::Sftp(_ch) => {
-            //     // Handle SFTP session
-            //     todo!()
-            // }
+            SessionType::Sftp(ch) => {
+                let stdio = ssh_server.stdio(ch).await?;
+                ota::run_ota_server(stdio).await?
+            }
         };
         Ok(())
     };
