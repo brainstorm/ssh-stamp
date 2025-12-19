@@ -2,14 +2,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# TODO: Potentially switch to cargo_xtask for easy re-targetting, i.e:
-# https://github.com/card-io-ecg/card-io-fw/blob/main/Cargo.toml
-
 [package]
 name = "ssh-stamp"
 version = "0.1.0"
 authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
-edition = "2024"
+edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
@@ -34,17 +31,14 @@ hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { version = "2", features = ["nightly"] }
 ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
-# sunset = { git = "https://github.com/mkj/sunset", rev = "5ff44bb", default-features = false, features = ["openssh-key", "embedded-io"]}
-# sunset-async = { git = "https://github.com/mkj/sunset", rev = "5ff44bb", default-features = false, features = ["multi-thread"]}
-# sunset-sshwire-derive = { git = "https://github.com/mkj/sunset", rev = "5ff44bb", default-features = false }
-sunset = { path = "../sunset", default-features = false, features = ["openssh-key", "embedded-io"]}
-sunset-async = { path = "../sunset/async", default-features = false, features = ["multi-thread"]}
-sunset-sshwire-derive = { path = "../sunset/sshwire-derive", default-features = false }
-sunset-sftp = { path = "../sunset/sftp", default-features = false}
+sunset = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false, features = ["openssh-key", "embedded-io"]}
+sunset-async = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false, features = ["multi-thread"]}
+sunset-sshwire-derive = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false }
+sunset-sftp = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false }
 getrandom = { version = "0.2.10", features = ["custom"] }
 embassy-sync = "0.7"
 heapless = "0.8"
-embassy-futures = "0.1.2"
+embassy-futures = "0.1"
 edge-dhcp = "0.6"
 edge-nal = "0.5"
 edge-nal-embassy = "0.6"
