@@ -57,7 +57,7 @@ esp-bootloader-esp-idf = "0.1"
 snafu = { version = "0.8.6", default-features = false }
 paste = "1"
 pretty-hex = { version = "0.4", default-features = false }
-rustc-hash = { version = "2.1", default-features = false } # For hash in the OTA SFTP server
+rustc-hash = { version = "2.1", default-features = false } # For hash in the OTA SFTP server TODO: For the optimisation task: Remove this dependency and use sha2 instead?
 
 [profile.dev]
 # Rust debug is too slow.
