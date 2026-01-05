@@ -10,7 +10,7 @@ pub mod config;
 pub mod errors;
 pub mod espressif;
 pub mod keys;
-mod ota;
+// pub mod ota;
 pub mod pins;
 pub mod serial;
 pub mod serve;

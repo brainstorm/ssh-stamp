@@ -1340,6 +1340,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
+name = "ota"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "rustc-hash",
+ "sha2",
+ "sunset",
+ "sunset-async",
+ "sunset-sftp",
+]
+
+[[package]]
 name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1734,6 +1746,7 @@ dependencies = [
  "hex",
  "hmac",
  "log",
+ "ota",
  "paste",
  "portable-atomic",
  "pretty-hex",

@@ -1,7 +1,8 @@
+#![cfg_attr(not(test), no_std)]
 // SPDX-FileCopyrightText: 2025 Roman Valls, 2025
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-
+use log::debug;
 use sunset::sshwire::{BinString, SSHDecode, SSHEncode, SSHSource, WireError, WireResult};
 use sunset_async::ChanInOut;
 use sunset_sftp::{
@@ -12,14 +13,13 @@ use sunset_sftp::{
 };
 
 use core::hash::Hasher;
-use esp_println::dbg;
 use rustc_hash::FxHasher;
 use sha2::Digest;
 
-pub(super) async fn run_ota_server(stdio: ChanInOut<'_>) -> Result<(), sunset::Error> {
+pub async fn run_ota_server(stdio: ChanInOut<'_>) -> Result<(), sunset::Error> {
     // Placeholder for OTA server logic
     // This function would handle the SFTP session and perform OTA updates
-    dbg!("SFTP not implemented");
+    debug!("SFTP not implemented");
     let mut buffer_in = [0u8; 512];
     let mut request_buffer = [0u8; 512];
 
@@ -36,11 +36,11 @@ pub(super) async fn run_ota_server(stdio: ChanInOut<'_>) -> Result<(), sunset::E
         Ok::<_, sunset::Error>(())
     } {
         Ok(_) => {
-            dbg!("sftp server loop finished gracefully");
+            debug!("sftp server loop finished gracefully");
             Ok(())
         }
         Err(e) => {
-            dbg!("sftp server loop finished with an error: {}", &e);
+            debug!("sftp server loop finished with an error: {}", &e);
             Err(e)
         }
     }
@@ -439,5 +439,16 @@ pub mod ota_tlv {
         {
             todo!()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    pub use crate::ota_tlv::*;
+
+    #[test]
+    fn test_dummy() {
+        assert_eq!(2 + 2, 4);
     }
 }

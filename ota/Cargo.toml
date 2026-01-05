@@ -1,0 +1,24 @@
+[package]
+name = "ota"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = []
+std = []
+
+[dependencies]
+sunset.workspace = true
+sunset-async.workspace = true
+sunset-sftp.workspace = true
+
+log.workspace = true
+sha2.workspace = true
+rustc-hash.workspace = true
+# sunset = { workspace = true, features = ["rsa", "std"] }
+# sunset-async.workspace = true
+# sunset-sftp = { workspace = true, features = ["std"] }
+
+# log = { workspace = true, features = ["std"] }
+# sha2 = { workspace = true, features = ["std"] }
+# rustc-hash = { workspace = true, features = ["std"] }

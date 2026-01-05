@@ -7,9 +7,10 @@ use core::result::Result;
 use core::writeln;
 
 use crate::espressif::buffered_uart::BufferedUart;
+use crate::keys;
 use crate::pins::PinChannel;
 use crate::serial::serial_bridge;
-use crate::{keys, ota};
+use ota;
 
 // Embassy
 use embassy_futures::select::{Either3, select3};

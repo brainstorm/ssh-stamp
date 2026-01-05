@@ -9,12 +9,44 @@ authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
 
+[workspace]
+members = ["ota"]
+exclude = ["tests-std"]
+
+[workspace.dependencies]
+sunset = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false, features = [
+    "openssh-key",
+    "embedded-io",
+] }
+sunset-async = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false, features = [
+    "multi-thread",
+] }
+sunset-sshwire-derive = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false }
+sunset-sftp = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false }
+
+sha2 = { version = "0.10", default-features = false }
+rustc-hash = { version = "2.1", default-features = false } # For hash in the OTA SFTP server TODO: For the optimisation task: Remove this dependency and use sha2 instead?
+log = "0.4"
+
 [dependencies]
+ota = { path = "ota" }
+
+sha2 = { workspace = true }
+rustc-hash = { workspace = true }
+
 cfg-if = "1"
 ed25519-dalek = { version = "2", default-features = false }
-embassy-executor = { version = "0.7"}
-embassy-net = { version = "0.7", features = ["tcp", "udp", "dhcpv4", "medium-ethernet"] }
-smoltcp = { version = "0.12", default-features = false, features = ["medium-ethernet", "socket-raw"]}
+embassy-executor = { version = "0.7" }
+embassy-net = { version = "0.7", features = [
+    "tcp",
+    "udp",
+    "dhcpv4",
+    "medium-ethernet",
+] }
+smoltcp = { version = "0.12", default-features = false, features = [
+    "medium-ethernet",
+    "socket-raw",
+] }
 embassy-time = { version = "0.4" }
 embedded-io-async = "0.6"
 esp-alloc = "0.8"
@@ -23,18 +55,18 @@ esp-backtrace = { version = "0.16", features = [
     "panic-handler",
     "println",
 ] }
-esp-hal = { version = "1.0.0-beta.1", features = [ "unstable" ] }
-esp-hal-embassy = { version = "0.8"}
-esp-println = { version = "0.14", features = ["log-04"]}
+esp-hal = { version = "1.0.0-beta.1", features = ["unstable"] }
+esp-hal-embassy = { version = "0.8" }
+esp-println = { version = "0.14", features = ["log-04"] }
 esp-wifi = { version = "0.14", features = ["wifi", "esp-alloc"] }
 hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { version = "2", features = ["nightly"] }
 ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
-sunset = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false, features = ["openssh-key", "embedded-io"]}
-sunset-async = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false, features = ["multi-thread"]}
-sunset-sshwire-derive = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false }
-sunset-sftp = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false }
+sunset = { workspace = true }
+sunset-async = { workspace = true }
+sunset-sshwire-derive = { workspace = true }
+sunset-sftp = { workspace = true }
 getrandom = { version = "0.2.10", features = ["custom"] }
 embassy-sync = "0.7"
 heapless = "0.8"
@@ -49,15 +81,17 @@ embassy-embedded-hal = "0.3"
 bcrypt = { version = "0.17", default-features = false }
 subtle = { version = "2", default-features = false }
 hmac = { version = "0.12", default-features = false }
-sha2 = { version = "0.10", default-features = false }
-digest = { version = "0.10", default-features = false, features = ["rand_core", "subtle"] }
+# sha2 = { version = "0.10", default-features = false }
+digest = { version = "0.10", default-features = false, features = [
+    "rand_core",
+    "subtle",
+] }
 embedded-storage-async = "0.4"
 portable-atomic = "1"
 esp-bootloader-esp-idf = "0.1"
 snafu = { version = "0.8.6", default-features = false }
 paste = "1"
 pretty-hex = { version = "0.4", default-features = false }
-rustc-hash = { version = "2.1", default-features = false } # For hash in the OTA SFTP server TODO: For the optimisation task: Remove this dependency and use sha2 instead?
 
 [profile.dev]
 # Rust debug is too slow.
@@ -67,7 +101,7 @@ debug = 2
 debug-assertions = true
 
 [profile.release]
-codegen-units = 1 # LLVM can perform better optimizations using a single thread
+codegen-units = 1       # LLVM can perform better optimizations using a single thread
 debug = 2
 debug-assertions = true
 incremental = false
@@ -77,7 +111,7 @@ overflow-checks = true
 
 [profile.esp32s2]
 inherits = "release"
-opt-level = "s"  # Optimize for size.
+opt-level = "s"      # Optimize for size.
 
 [profile.dev.package.esp-storage]
 opt-level = "s"

@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2025 Roman Valls, 2025
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Override the parent ssh-stamp config to use the host target for std tests
+# This allows running tests with `cargo test` without specifying --target
+
+[build]
+target = "x86_64-unknown-linux-gnu"

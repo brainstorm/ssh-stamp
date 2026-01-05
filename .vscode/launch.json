@@ -37,6 +37,24 @@
                     "svdFile": "${workspaceFolder}/docs/svd/esp32c6.svd"
                 }
             ]
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests 'ota'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--package=ota",
+                    "--features=std",
+                    "--target=x86_64-unknown-linux-gnu",
+                    "--",
+                    "--nocapture",
+                    "--test-threads=1"
+                ]
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
