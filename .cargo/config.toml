@@ -25,6 +25,7 @@ run-esp32c6 = "run --release --target riscv32imac-unknown-none-elf --features es
 run-esp32s2 = "run --profile esp32s2 --target xtensa-esp32s2-none-elf --features esp32s2 -Z build-std=core,alloc"
 run-esp32s3 = "run --release --target xtensa-esp32s3-none-elf --features esp32s3 -Z build-std=core,alloc"
 
+
 # Test alias
 test-ota = "test --package ota --target x86_64-unknown-linux-gnu"
 
@@ -59,9 +60,12 @@ ESP_LOG = "INFO"
 
 [build]
 target = "riscv32imac-unknown-none-elf"
+# target = "x86_64-unknown-linux-gnu"
+
 
 
 [unstable]
 build-std = []
+
 # build-std core and alloc has been moved as per alias parameter since 
 # `unstable` section MUST be global and cannot be definde per target.
