@@ -269,12 +269,6 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
     }
 }
 
-// TODO: Adjust this size as needed based on expected LTV sizes instead of a wild guess
-/// Maximum size for LTV (Length-Type-Value) entries in OTA metadata. Used during the reading of OTA parameters.
-const MAX_LTV_SIZE: usize = 32;
-
-const OTA_FIRMWARE_BLOB_TYPE: u32 = 0x73736873; // 'sshs' big endian in ASCII
-
 /// UpdateProcessorState for OTA update processing
 ///
 /// This enum defines the various states of the OTA update processing state machine and will control the flow of the update process.
@@ -282,7 +276,7 @@ const OTA_FIRMWARE_BLOB_TYPE: u32 = 0x73736873; // 'sshs' big endian in ASCII
 enum UpdateProcessorState {
     /// ReadingParameters state, OTA has started and the processor is obtaining metadata values until the firmware blob is reached
     ReadingParameters {
-        ltv_holder: [u8; MAX_LTV_SIZE],
+        ltv_holder: [u8; ota_tlv::MAX_TLV_SIZE as usize],
         current_len: usize,
     },
     /// Downloading state, receiving firmware data, computing hash on the fly and writing to flash
@@ -298,7 +292,7 @@ enum UpdateProcessorState {
 impl Default for UpdateProcessorState {
     fn default() -> Self {
         UpdateProcessorState::ReadingParameters {
-            ltv_holder: [0; MAX_LTV_SIZE],
+            ltv_holder: [0; ota_tlv::MAX_TLV_SIZE as usize],
             current_len: 0,
         }
     }
@@ -360,7 +354,7 @@ impl UpdateProcessor {
                 // If LTV entry is the firmware blob, transition to Downloading state
                 // only if we have the necessary parameters (ota_type, total_size, sha256_checksum)
                 // ota_type must be OTA_FIRMWARE_BLOB_TYPE
-                if self.ota_type != Some(OTA_FIRMWARE_BLOB_TYPE)
+                if self.ota_type != Some(ota_tlv::OTA_FIRMWARE_BLOB_TYPE)
                     || self.total_size.is_none()
                     || self.sha256_checksum.is_none()
                 {
@@ -404,51 +398,156 @@ enum OtaError {
 }
 
 /// Module to define the tlv types for OTA metadata
+///
+/// Unsophisticated implementation of the ssh-stamp OTA TLV types using sshwire traits.
+///
+/// If you are looking into improving this, consider looking into [proto.rs](https://github.com/mkj/sunset/blob/8e5d20916cf7b29111b90e4d3b7bb7827c9be8e5/sftp/src/proto.rs)
+/// for an example on how to automate the generation of protocols with macros
 pub mod ota_tlv {
     use sunset::sshwire::{SSHDecode, SSHEncode};
 
-    pub const FIRMWARE_BLOB: u8 = 0;
-    pub const TOTAL_SIZE: u8 = 1;
+    pub const OTA_TYPE: u8 = 0;
+    pub const FIRMWARE_BLOB: u8 = 1;
+    // pub const FIRMWARE_BLOB_LEN: usize = 4; // u32 length allowing blobs up to 4GB
     pub const SHA256_CHECKSUM: u8 = 2;
-    pub const OTA_TYPE: u8 = 3;
+
+    pub const OTA_FIRMWARE_BLOB_TYPE: u32 = 0x73736873; // 'sshs' big endian in ASCII
+
+    pub const CHECKSUM_LEN: u32 = 32;
+    /// Maximum size for LTV (Length-Type-Value) entries in OTA metadata. Used during the reading of OTA parameters.
+    pub const MAX_TLV_SIZE: u32 = 1 + 8 + CHECKSUM_LEN; // type + length + value
+
+    /// Encodes the length and value of a sized values
+    fn enc_len_val<SE>(
+        value: &SE,
+        s: &mut dyn sunset::sshwire::SSHSink,
+    ) -> sunset::sshwire::WireResult<()>
+    where
+        SE: Sized + SSHEncode,
+    {
+        (core::mem::size_of::<SE>() as u32).enc(s)?;
+        value.enc(s)
+    }
+
+    /// Decodes and checks that the length of the value matches the expected size
+    ///
+    /// Call it before decoding the actual value for simple types
+    fn dec_check_val_len<'de, S, SE>(s: &mut S) -> sunset::sshwire::WireResult<()>
+    where
+        S: sunset::sshwire::SSHSource<'de>,
+        SE: Sized,
+    {
+        let val_len = u32::dec(s)?;
+        if val_len != (core::mem::size_of::<SE>() as u32) {
+            return Err(sunset::sshwire::WireError::PacketWrong);
+        }
+        Ok(())
+    }
+
     /// OTA_TLV enum for OTA metadata LTV entries
     /// This TLV does not capture length as it will be captured during parsing
     /// Parsing will be done using sshwire types
     #[derive(Debug)]
-    pub enum OtaTlv {
-        /// What follows is the firmware blob
-        FirmwareBlob {},
-        /// The blob's total size in bytes
-        TotalSize { size: u64 },
+    #[repr(u8)]
+    pub enum Tlv {
+        /// What follows is the firmware blob. the length of the blob is the payload value.
+        FirmwareBlob { size: u32 },
         /// Expected SHA256 checksum of the firmware blob
-        Sha256Checksum { checksum: [u8; 32] },
+        Sha256Checksum {
+            checksum: [u8; CHECKSUM_LEN as usize],
+        },
         /// Type of OTA update. For SSH Stamp, this must be OTA_FIRMWARE_BLOB_TYPE
         OtaType { ota_type: u32 },
     }
 
-    impl SSHEncode for OtaTlv {
+    impl SSHEncode for Tlv {
         fn enc(&self, s: &mut dyn sunset::sshwire::SSHSink) -> sunset::sshwire::WireResult<()> {
-            todo!()
+            match self {
+                Tlv::FirmwareBlob { size } => {
+                    FIRMWARE_BLOB.enc(s)?;
+                    enc_len_val(size, s)
+                }
+                Tlv::Sha256Checksum { checksum } => {
+                    SHA256_CHECKSUM.enc(s)?;
+                    enc_len_val(checksum, s)
+                }
+                Tlv::OtaType { ota_type } => {
+                    OTA_TYPE.enc(s)?;
+                    enc_len_val(ota_type, s)
+                }
+            }
         }
     }
 
-    impl<'de> SSHDecode<'de> for OtaTlv {
+    impl<'de> SSHDecode<'de> for Tlv {
         fn dec<S>(s: &mut S) -> sunset::sshwire::WireResult<Self>
         where
             S: sunset::sshwire::SSHSource<'de>,
         {
-            todo!()
+            u8::dec(s).and_then(|tlv_type| match tlv_type {
+                FIRMWARE_BLOB => {
+                    dec_check_val_len::<S, u32>(s)?;
+                    Ok(Tlv::FirmwareBlob { size: u32::dec(s)? })
+                }
+                SHA256_CHECKSUM => {
+                    if u32::dec(s)? != CHECKSUM_LEN {
+                        return Err(sunset::sshwire::WireError::PacketWrong);
+                    }
+                    let mut checksum = [0u8; 32];
+                    checksum.iter_mut().for_each(|element| {
+                        *element = u8::dec(s).unwrap_or(0);
+                    });
+                    Ok(Tlv::Sha256Checksum { checksum })
+                }
+                OTA_TYPE => {
+                    dec_check_val_len::<S, u32>(s)?;
+                    let ota_type = u32::dec(s)?;
+                    Ok(Tlv::OtaType { ota_type })
+                }
+                _ => Err(sunset::sshwire::WireError::PacketWrong),
+            })
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
+mod ota_tlv_tests {
 
-    pub use crate::ota_tlv::*;
+    use crate::ota_tlv::*;
+    use sunset::sshwire::{self, SSHDecode, SSHEncode};
 
     #[test]
-    fn test_dummy() {
-        assert_eq!(2 + 2, 4);
+    fn test_ota_tlv_round_trip() {
+        let variants = [
+            Tlv::FirmwareBlob { size: 1024 },
+            Tlv::Sha256Checksum {
+                checksum: [
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                    23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+                ],
+            },
+            Tlv::OtaType {
+                ota_type: OTA_FIRMWARE_BLOB_TYPE,
+            },
+        ];
+        for variant in variants.iter() {
+            let mut buffer = [0u8; MAX_TLV_SIZE as usize];
+            let used = sshwire::write_ssh(&mut buffer, variant).expect("Failed to create SSH sink");
+
+            let decoded =
+                sshwire::read_ssh::<Tlv>(&buffer[..used], None).expect("Failed to decode TLV");
+            match (variant, decoded) {
+                (Tlv::FirmwareBlob { size: s1 }, Tlv::FirmwareBlob { size: s2 }) => {
+                    assert_eq!(s1, &s2);
+                }
+                (Tlv::Sha256Checksum { checksum: c1 }, Tlv::Sha256Checksum { checksum: c2 }) => {
+                    assert_eq!(c1, &c2);
+                }
+                (Tlv::OtaType { ota_type: o1 }, Tlv::OtaType { ota_type: o2 }) => {
+                    assert_eq!(o1, &o2);
+                }
+                _ => panic!("Decoded variant does not match original"),
+            }
+        }
     }
 }
