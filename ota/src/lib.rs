@@ -311,7 +311,7 @@ struct UpdateProcessor {
     hasher: sha2::Sha256,
     ota_type: Option<u32>,
     /// Total size of the firmware being downloaded, if known
-    total_size: Option<u64>,
+    firmware_size: Option<u32>,
     /// Expected sha256 checksum of the firmware, if provided
     sha256_checksum: Option<[u8; 32]>,
 }
@@ -322,7 +322,7 @@ impl UpdateProcessor {
             state: UpdateProcessorState::default(),
             hasher: sha2::Sha256::new(),
             ota_type: None,
-            total_size: None,
+            firmware_size: None,
             sha256_checksum: None,
         }
     }
@@ -354,14 +354,14 @@ impl UpdateProcessor {
                 // If LTV entry is the firmware blob, transition to Downloading state
                 // only if we have the necessary parameters (ota_type, total_size, sha256_checksum)
                 // ota_type must be OTA_FIRMWARE_BLOB_TYPE
-                if self.ota_type != Some(ota_tlv::OTA_FIRMWARE_BLOB_TYPE)
-                    || self.total_size.is_none()
+                if self.ota_type != Some(ota_tlv::OTA_TYPE_SSH_STAMP)
+                    || self.firmware_size.is_none()
                     || self.sha256_checksum.is_none()
                 {
                     log::error!(
                         "UpdateProcessor: Missing required OTA parameters: ota_type = {:?}, total_size = {:?}, sha256_checksum = {:?}",
                         self.ota_type,
-                        self.total_size,
+                        self.firmware_size,
                         self.sha256_checksum
                     );
                     return Err(OtaError::IllegalOperation);
@@ -411,7 +411,7 @@ pub mod ota_tlv {
     // pub const FIRMWARE_BLOB_LEN: usize = 4; // u32 length allowing blobs up to 4GB
     pub const SHA256_CHECKSUM: u8 = 2;
 
-    pub const OTA_FIRMWARE_BLOB_TYPE: u32 = 0x73736873; // 'sshs' big endian in ASCII
+    pub const OTA_TYPE_SSH_STAMP: u32 = 0x73736873; // 'sshs' big endian in ASCII
 
     pub const CHECKSUM_LEN: u32 = 32;
     /// Maximum size for LTV (Length-Type-Value) entries in OTA metadata. Used during the reading of OTA parameters.
@@ -527,7 +527,7 @@ mod ota_tlv_tests {
                 ],
             },
             Tlv::OtaType {
-                ota_type: OTA_FIRMWARE_BLOB_TYPE,
+                ota_type: OTA_TYPE_SSH_STAMP,
             },
         ];
         for variant in variants.iter() {
