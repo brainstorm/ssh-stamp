@@ -2,14 +2,19 @@ use ota::{Header, tlv};
 
 use clap::{ArgAction, Command};
 use sha2::{Digest, Sha256};
-use std::{io::Write, path::PathBuf};
+use std::{
+    io::{Read, Seek, SeekFrom, Write},
+    path::PathBuf,
+};
+
+const OTA_PACKER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() {
     let matches = Command::new("ota-packer")
-        .about("SSH-Stamp utility to pack (unpack) OTA update files adding the required metadata.")
+        .about(format!("SSH-Stamp utility {} to pack (unpack) OTA update files adding the required metadata.", OTA_PACKER_VERSION))
         .arg(clap::arg!(<FILE> "The file to process").required(true))
         .arg(
-            clap::arg!(-u --unpack "Unpacks a OTA file. Will save to <file> with .ota.unpkd extension")
+            clap::arg!(-u --unpack "Unpacks a OTA file. Will save to <file> with .ota.npkd extension")
                 .action(ArgAction::SetTrue)
                 .conflicts_with("pack"),
         )
@@ -44,30 +49,30 @@ fn main() {
     std::process::exit(pack_bin(file_path));
 }
 
-// TODO: Optimize memory usage by streaming the file instead of reading it all at once
 fn unpack_ota(file_path: PathBuf) -> i32 {
     println!("Unpacking BIN from OTA file {}...", file_path.display());
-    let Ok(read) = std::fs::read(&file_path) else {
-        eprintln!("Error: Could not read file '{}'", file_path.display(),);
+    let Ok(file) = std::fs::File::open(&file_path) else {
+        eprintln!("Error: Could not open file '{}'", file_path.display(),);
         return 4;
     };
-    let header = match Header::deserialize(&read) {
-        Ok(header) => {
-            println!("Header: {:?} ", header);
-            header
-        }
-        Err(e) => {
-            eprintln!(
-                "Error: Could not parse OTA header from file '{}': {:?}",
-                file_path.display(),
-                e
-            );
-            return 5;
-        }
+    let mut reader = std::io::BufReader::new(file);
+    let mut buffer = [0u8; 512];
+    let Ok(_) = reader.read(&mut buffer) else {
+        eprintln!("Error: Could not read from file '{}'", file_path.display(),);
+        return 5;
+    };
+    let Ok((header, seek_to_bin)) = Header::deserialize(&buffer) else {
+        eprintln!(
+            "Error: Could not parse OTA header from file '{}'",
+            file_path.display(),
+        );
+        return 5;
     };
 
+    println!("Found OTA header: {:?}", header);
+
     let mut file_path_bin = file_path.clone();
-    file_path_bin.set_extension("ota.unpkd");
+    file_path_bin.set_extension("ota.npkd");
     println!("Saving unpacked BIN file to: {}", file_path_bin.display());
 
     let Ok(mut bin_file) = std::fs::File::create(&file_path_bin) else {
@@ -77,9 +82,42 @@ fn unpack_ota(file_path: PathBuf) -> i32 {
         );
         return 6;
     };
-    eprintln!("Nothing written to unpacked file yet... WIP");
-    // To be able to deserialize the rest of the file as the binary, I would first need to know where the header ended.
-    // Using the length of the header is unreliable so I better instead read the file in stream mode to keep track of the position.
+
+    reader.seek(SeekFrom::Start(seek_to_bin as u64)).unwrap();
+
+    let mut recover_ota_bin_hasher = Sha256::new();
+
+    let mut r: usize;
+    while {
+        r = reader.read(&mut buffer).unwrap_or(0);
+        r
+    } > 0
+    {
+        let Ok(_) = bin_file.write(&buffer[..r]) else {
+            eprintln!(
+                "Error: Could not write to BIN file '{}'",
+                file_path_bin.display(),
+            );
+            return 7;
+        };
+        recover_ota_bin_hasher.update(&buffer[..r]);
+    }
+
+    if let Some(recovered_firmware_sha256) = recover_ota_bin_hasher.finalize().as_array() {
+        if recovered_firmware_sha256 != &header.sha256_checksum.unwrap_or_default() {
+            eprintln!(
+                "Error: Recovered firmware SHA-256 does not match expected value!\nExpected: {:x?}\nRecovered: {:x?}",
+                header.sha256_checksum.unwrap_or_default(),
+                recovered_firmware_sha256
+            );
+            return 9;
+        } else {
+            println!("Recovered firmware SHA-256 matches expected value.");
+        }
+    } else {
+        eprintln!("Error: Could not finalize SHA-256 hash of recovered firmware");
+        return 8;
+    };
 
     return 0;
 }
@@ -88,7 +126,6 @@ fn unpack_ota(file_path: PathBuf) -> i32 {
 fn pack_bin(file_path: PathBuf) -> i32 {
     println!("Packing {} as OTA...", file_path.display());
 
-    // TODO: Check read permissions?
     let firmware_size = match file_path.metadata() {
         Ok(metadata) => u32::try_from(metadata.len()).unwrap_or_else(|_| {
             eprintln!(
@@ -106,7 +143,7 @@ fn pack_bin(file_path: PathBuf) -> i32 {
             return 4;
         }
     };
-    println!("Firmware size: {} bytes", firmware_size);
+    println!("Bin file size: {} bytes", firmware_size);
 
     let mut hasher = Sha256::new();
     let Ok(read) = std::fs::read(&file_path) else {
@@ -135,11 +172,13 @@ fn pack_bin(file_path: PathBuf) -> i32 {
         return 6;
     };
 
-    let mut buf = [0u8; 512];
     // More than enough for the header
+    let mut buf = [0u8; 512];
 
     let header_len =
         Header::new(ota_type, firmware_sha256.as_slice(), firmware_size).serialize(&mut buf);
+
+    println!("OTA header length: {} bytes", header_len);
 
     let Ok(bytes) = ota_file.write(&buf[..header_len]) else {
         eprintln!(

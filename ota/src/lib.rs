@@ -573,7 +573,7 @@ pub struct Header {
     /// Total size of the firmware being downloaded, if known
     firmware_blob_size: Option<u32>,
     /// Expected sha256 checksum of the firmware, if provided
-    sha256_checksum: Option<[u8; 32]>,
+    pub sha256_checksum: Option<[u8; 32]>,
 }
 
 impl Header {
@@ -622,7 +622,7 @@ impl Header {
     }
 
     /// Deserializes an OTA header from the provided buffer
-    pub fn deserialize(buf: &[u8]) -> Result<Self, sunset::sshwire::WireError> {
+    pub fn deserialize(buf: &[u8]) -> Result<(Self, usize), sunset::sshwire::WireError> {
         let buf_len = buf.len();
         let mut source = tlv::TlvsSource::new(buf);
         let mut ota_type = None;
@@ -633,7 +633,7 @@ impl Header {
             match tlv::Tlv::dec(&mut source) {
                 Err(sunset::sshwire::WireError::UnknownPacket { number }) => {
                     warn!(
-                        "Unknown packet type encountered: {}. Stopping TLV skipping it and continuing",
+                        "Unknown packet type encountered: {}. TLV skipping it and continuing",
                         number
                     );
                     // Unknown TLV was skipped already in the decoder
@@ -663,11 +663,14 @@ impl Header {
             }
         }
 
-        Ok(Self {
-            ota_type,
-            firmware_blob_size,
-            sha256_checksum,
-        })
+        Ok((
+            Self {
+                ota_type,
+                firmware_blob_size,
+                sha256_checksum,
+            },
+            source.used(),
+        ))
     }
 }
 
@@ -748,7 +751,8 @@ mod ota_tlv_tests {
         offset += sshwire::write_ssh(&mut buffer[offset..], &firmware_blob_tlv)
             .expect("Failed to write Firmware Blob TLV");
 
-        let header = Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
+        let (header, _) =
+            Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
 
         assert_eq!(header.ota_type, Some(OTA_TYPE_SSH_STAMP));
         assert_eq!(header.firmware_blob_size, Some(2048));
@@ -786,7 +790,8 @@ mod ota_tlv_tests {
         offset += sshwire::write_ssh(&mut buffer[offset..], &ota_checksum)
             .expect("Failed to write SHA256 Checksum TLV");
 
-        let header = Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
+        let (header, _) =
+            Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
 
         assert_eq!(header.ota_type, Some(OTA_TYPE_SSH_STAMP));
         assert_eq!(header.firmware_blob_size, Some(2048));
@@ -842,7 +847,8 @@ mod ota_tlv_tests {
         offset += sshwire::write_ssh(&mut buffer[offset..], &ota_checksum)
             .expect("Failed to write SHA256 Checksum TLV");
 
-        let header = Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
+        let (header, _) =
+            Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
 
         assert_eq!(header.ota_type, Some(OTA_TYPE_SSH_STAMP));
         assert_eq!(header.firmware_blob_size, None);
@@ -883,7 +889,8 @@ mod ota_tlv_tests {
             .expect("Failed to write Firmware Blob TLV");
         offset += used;
 
-        let header = Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
+        let (header, _) =
+            Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
 
         assert_eq!(header.ota_type, Some(OTA_TYPE_SSH_STAMP));
         assert_eq!(header.firmware_blob_size, Some(2048));
