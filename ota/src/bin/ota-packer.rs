@@ -1,8 +1,8 @@
-use ota::ota_tlv;
+use ota::{Header, tlv};
 
 use clap::{ArgAction, Command};
 use sha2::{Digest, Sha256};
-use std::path::PathBuf;
+use std::{io::Write, path::PathBuf};
 
 fn main() {
     let matches = Command::new("ota-packer")
@@ -78,12 +78,55 @@ fn main() {
     println!("Firmware SHA-256: {:x}", firmware_sha256);
 
     // We could read an u32 from an argument if we want to support multiple OTA types...
-    let ota_type = ota_tlv::OTA_TYPE_SSH_STAMP;
+    let ota_type = tlv::OTA_TYPE_SSH_STAMP;
     println!("OTA Type Number: {} (SSH-Stamp)", ota_type);
 
     let mut ota_file_path = file_path.clone();
     ota_file_path.set_extension("ota");
     println!("Saving OTA file to: {}", ota_file_path.display());
-    // let mut temp_buf = [0u8; ota_tlv::OTA_TLV_TOTAL_HEADER_SIZE as usize];
+    let mut ota_file = std::fs::File::create(&ota_file_path).unwrap_or_else(|e| {
+        eprintln!(
+            "Error: Could not create OTA file '{}': {}",
+            ota_file_path.display(),
+            e
+        );
+        std::process::exit(6);
+    });
+
+    let mut buf = [0u8; 512]; // More than enough for the header
+
+    let header_len =
+        Header::new(ota_type, firmware_sha256.as_slice(), firmware_size).serialize(&mut buf);
+
+    ota_file.write(&buf[..header_len]).unwrap_or_else(|e| {
+        eprintln!(
+            "Error: Could not write to OTA file '{}': {}",
+            ota_file_path.display(),
+            e
+        );
+        std::process::exit(7);
+    });
+    ota_file
+        .write(
+            std::fs::read(&file_path)
+                .unwrap_or_else(|e| {
+                    eprintln!(
+                        "Error: Could not read file '{}': {}",
+                        file_path.display(),
+                        e
+                    );
+                    std::process::exit(5);
+                })
+                .as_slice(),
+        )
+        .unwrap_or_else(|e| {
+            eprintln!(
+                "Error: Could not write to OTA file '{}': {}",
+                ota_file_path.display(),
+                e
+            );
+            std::process::exit(7);
+        });
+
     std::process::exit(0);
 }
