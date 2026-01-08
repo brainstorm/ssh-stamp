@@ -2,7 +2,6 @@
 // SPDX-FileCopyrightText: 2025 Roman Valls, 2025
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-use log::{debug, error, warn};
 use sunset::sshwire::{BinString, SSHDecode, WireError};
 use sunset_async::ChanInOut;
 use sunset_sftp::{
@@ -13,13 +12,15 @@ use sunset_sftp::{
 };
 
 use core::hash::Hasher;
+
+use log::{debug, error, info, warn};
 use rustc_hash::FxHasher;
 use sha2::Digest;
 
 pub async fn run_ota_server(stdio: ChanInOut<'_>) -> Result<(), sunset::Error> {
     // Placeholder for OTA server logic
     // This function would handle the SFTP session and perform OTA updates
-    debug!("SFTP not implemented");
+    warn!("WIP SFTP not implemented");
     let mut buffer_in = [0u8; 512];
     let mut request_buffer = [0u8; 512];
 
@@ -40,7 +41,7 @@ pub async fn run_ota_server(stdio: ChanInOut<'_>) -> Result<(), sunset::Error> {
             Ok(())
         }
         Err(e) => {
-            debug!("sftp server loop finished with an error: {}", &e);
+            warn!("sftp server loop finished with an error: {}", &e);
             Err(e)
         }
     }
@@ -125,18 +126,15 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
 
             let handle = T::new(path);
             self.file_handle = Some(handle.clone());
-            log::info!(
+            info!(
                 "SftpServer Open operation: path = {:?}, write_permission = {:?}, handle = {:?}",
-                path,
-                self.write_permission,
-                &handle
+                path, self.write_permission, &handle
             );
             return Ok(handle);
         } else {
-            log::error!(
+            error!(
                 "SftpServer Open operation failed: already writing OTA, path = {:?}, attrs = {:?}",
-                path,
-                mode
+                path, mode
             );
             return Err(sunset_sftp::protocol::StatusCode::SSH_FX_PERMISSION_DENIED);
         }
@@ -145,22 +143,24 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
     fn close(&mut self, handle: &T) -> sunset_sftp::server::SftpOpResult<()> {
         if let Some(current_handle) = &self.file_handle {
             if current_handle == handle {
-                log::info!(
+                info!(
                     "SftpServer Close operation for OTA completed: handle = {:?}",
                     handle
                 );
                 self.file_handle = None;
                 self.write_permission = false;
+
+                // Good place to finalize the OTA update process
                 return Ok(());
             } else {
-                log::warn!(
+                warn!(
                     "SftpServer Close operation failed: handle mismatch = {:?}",
                     handle
                 );
                 return Err(sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE);
             }
         } else {
-            log::warn!(
+            warn!(
                 "SftpServer Close operation granted on untracked handle: {:?}",
                 handle
             );
@@ -168,6 +168,7 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
         }
     }
 
+    // We are not interested on download operations for OTA. Only upload (write)
     fn read<const N: usize>(
         &mut self,
         opaque_file_handle: &T,
@@ -176,11 +177,9 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
         _reply: &mut sunset_sftp::server::ReadReply<'_, N>,
     ) -> impl core::future::Future<Output = sunset_sftp::error::SftpResult<()>> {
         async move {
-            log::error!(
+            error!(
                 "SftpServer Read operation not defined: handle = {:?}, offset = {:?}, len = {:?}",
-                opaque_file_handle,
-                offset,
-                len
+                opaque_file_handle, offset, len
             );
             Err(sunset_sftp::error::SftpError::FileServerError(
                 sunset_sftp::protocol::StatusCode::SSH_FX_OP_UNSUPPORTED,
@@ -197,24 +196,25 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
         if let Some(current_handle) = &self.file_handle {
             if current_handle == opaque_file_handle {
                 if !self.write_permission {
-                    log::warn!(
+                    warn!(
                         "SftpServer Write operation denied: no write permission for handle = {:?}",
                         opaque_file_handle
                     );
                     return Err(sunset_sftp::protocol::StatusCode::SSH_FX_PERMISSION_DENIED);
                 }
-                log::info!(
+                info!(
                     "SftpServer Write operation for OTA: handle = {:?}, offset = {:?}, buf_len = {:?}",
                     opaque_file_handle,
                     offset,
                     buf.len()
                 );
                 // Here you would add the logic to write the buffer to the OTA update mechanism
+
                 return Ok(());
             }
         }
 
-        log::warn!(
+        warn!(
             "SftpServer Write operation failed: handle mismatch = {:?}",
             opaque_file_handle
         );
@@ -223,21 +223,21 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
 
     fn opendir(&mut self, dir: &str) -> sunset_sftp::server::SftpOpResult<T> {
         let handle = T::new(dir);
-        log::info!(
+        info!(
             "SftpServer OpenDir: dir = {:?}. Returning {:?}",
-            dir,
-            &handle
+            dir, &handle
         );
         Ok(handle) // TODO: Store handle and use salt
     }
 
+    // For OTA, we do not expect any directory listing
     fn readdir<const N: usize>(
         &mut self,
         _opaque_dir_handle: &T,
         _reply: &mut sunset_sftp::server::DirReply<'_, N>,
     ) -> impl core::future::Future<Output = sunset_sftp::server::SftpOpResult<()>> {
         async move {
-            log::info!(
+            info!(
                 "SftpServer ReadDir called for OTA SFTP server on handle: {:?}",
                 _opaque_dir_handle
             );
@@ -245,8 +245,9 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
         }
     }
 
+    // For OTA, realpath will always return root
     fn realpath(&mut self, dir: &str) -> sunset_sftp::server::SftpOpResult<NameEntry<'_>> {
-        log::info!("SftpServer RealPath: dir = {:?}", dir);
+        info!("SftpServer RealPath: dir = {:?}", dir);
         Ok(NameEntry {
             filename: Filename::from("/"),
             _longname: Filename::from("/"),
@@ -254,16 +255,16 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
         })
     }
 
+    // For OTA, we do not expect stat operations
     fn stats(
         &mut self,
         follow_links: bool,
         file_path: &str,
     ) -> sunset_sftp::server::SftpOpResult<sunset_sftp::protocol::Attrs> {
-        log::error!(
+        error!(
             "SftpServer Stats operation not defined: follow_link = {:?}, \
             file_path = {:?}",
-            follow_links,
-            file_path
+            follow_links, file_path
         );
         Err(sunset_sftp::protocol::StatusCode::SSH_FX_OP_UNSUPPORTED)
     }
@@ -332,7 +333,7 @@ impl UpdateProcessor {
     /// It will try to consume as much data as possible from the provided buffer and return the number of bytes used.
     pub fn process_data_chunk(&mut self, _offset: u64, _data: &[u8]) -> Result<usize, OtaError> {
         let mut used_bytes = 0;
-        log::debug!(
+        debug!(
             "UpdateProcessor: Processing data chunk at offset {}, length {} in state {:?}",
             _offset,
             _data.len(),
@@ -356,7 +357,7 @@ impl UpdateProcessor {
                     || self.header.firmware_blob_size.is_none()
                     || self.header.sha256_checksum.is_none()
                 {
-                    log::error!(
+                    error!(
                         "UpdateProcessor: Missing required OTA parameters: ota_type = {:?}, total_size = {:?}, sha256_checksum = {:?}",
                         self.header.ota_type,
                         self.header.firmware_blob_size,
@@ -368,11 +369,11 @@ impl UpdateProcessor {
                 // sha256_checksum must be Some
 
                 self.state = UpdateProcessorState::Downloading { received_size: 0 };
-                log::debug!("UpdateProcessor: Transitioning to downloading state");
+                debug!("UpdateProcessor: Transitioning to downloading state");
             }
             // Add other states and their processing logic here
             _ => {
-                log::warn!(
+                warn!(
                     "UpdateProcessor: Received data in unexpected state: {:?}",
                     self.state
                 );
