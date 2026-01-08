@@ -38,11 +38,54 @@ fn main() {
     }
 
     if matches.get_flag("unpack") {
-        println!("Unpacking OTA file...");
-
-        std::process::exit(0);
+        std::process::exit(unpack_ota(file_path));
     }
 
+    std::process::exit(pack_bin(file_path));
+}
+
+// TODO: Optimize memory usage by streaming the file instead of reading it all at once
+fn unpack_ota(file_path: PathBuf) -> i32 {
+    println!("Unpacking BIN from OTA file {}...", file_path.display());
+    let Ok(read) = std::fs::read(&file_path) else {
+        eprintln!("Error: Could not read file '{}'", file_path.display(),);
+        return 4;
+    };
+    let header = match Header::deserialize(&read) {
+        Ok(header) => {
+            println!("Header: {:?} ", header);
+            header
+        }
+        Err(e) => {
+            eprintln!(
+                "Error: Could not parse OTA header from file '{}': {:?}",
+                file_path.display(),
+                e
+            );
+            return 5;
+        }
+    };
+
+    let mut file_path_bin = file_path.clone();
+    file_path_bin.set_extension("ota.unpkd");
+    println!("Saving unpacked BIN file to: {}", file_path_bin.display());
+
+    let Ok(mut bin_file) = std::fs::File::create(&file_path_bin) else {
+        eprintln!(
+            "Error: Could not create BIN file '{}'",
+            file_path_bin.display(),
+        );
+        return 6;
+    };
+    eprintln!("Nothing written to unpacked file yet... WIP");
+    // To be able to deserialize the rest of the file as the binary, I would first need to know where the header ended.
+    // Using the length of the header is unreliable so I better instead read the file in stream mode to keep track of the position.
+
+    return 0;
+}
+
+// TODO: Optimize memory usage by streaming the file instead of reading it all at once
+fn pack_bin(file_path: PathBuf) -> i32 {
     println!("Packing {} as OTA...", file_path.display());
 
     // TODO: Check read permissions?
@@ -52,7 +95,7 @@ fn main() {
                 "Error: File '{}' is too large (max 4GB supported)",
                 file_path.display()
             );
-            std::process::exit(5);
+            return 5;
         }),
         Err(e) => {
             eprintln!(
@@ -60,20 +103,18 @@ fn main() {
                 file_path.display(),
                 e
             );
-            std::process::exit(4);
+            return 4;
         }
     };
     println!("Firmware size: {} bytes", firmware_size);
 
     let mut hasher = Sha256::new();
-    hasher.update(std::fs::read(&file_path).unwrap_or_else(|e| {
-        eprintln!(
-            "Error: Could not read file '{}': {}",
-            file_path.display(),
-            e
-        );
-        std::process::exit(5);
-    }));
+    let Ok(read) = std::fs::read(&file_path) else {
+        eprintln!("Error: Could not read file '{}'", file_path.display(),);
+        return 5;
+    };
+    hasher.update(&read);
+
     let firmware_sha256 = hasher.finalize();
     println!("Firmware SHA-256: {:x}", firmware_sha256);
 
@@ -83,50 +124,40 @@ fn main() {
 
     let mut ota_file_path = file_path.clone();
     ota_file_path.set_extension("ota");
-    println!("Saving OTA file to: {}", ota_file_path.display());
-    let mut ota_file = std::fs::File::create(&ota_file_path).unwrap_or_else(|e| {
-        eprintln!(
-            "Error: Could not create OTA file '{}': {}",
-            ota_file_path.display(),
-            e
-        );
-        std::process::exit(6);
-    });
 
-    let mut buf = [0u8; 512]; // More than enough for the header
+    println!("Saving OTA file to: {}", ota_file_path.display());
+
+    let Ok(mut ota_file) = std::fs::File::create(&ota_file_path) else {
+        eprintln!(
+            "Error: Could not create OTA file '{}'",
+            ota_file_path.display(),
+        );
+        return 6;
+    };
+
+    let mut buf = [0u8; 512];
+    // More than enough for the header
 
     let header_len =
         Header::new(ota_type, firmware_sha256.as_slice(), firmware_size).serialize(&mut buf);
 
-    ota_file.write(&buf[..header_len]).unwrap_or_else(|e| {
+    let Ok(bytes) = ota_file.write(&buf[..header_len]) else {
         eprintln!(
-            "Error: Could not write to OTA file '{}': {}",
+            "Error: Could not write to OTA file '{}'",
             ota_file_path.display(),
-            e
         );
-        std::process::exit(7);
-    });
-    ota_file
-        .write(
-            std::fs::read(&file_path)
-                .unwrap_or_else(|e| {
-                    eprintln!(
-                        "Error: Could not read file '{}': {}",
-                        file_path.display(),
-                        e
-                    );
-                    std::process::exit(5);
-                })
-                .as_slice(),
-        )
-        .unwrap_or_else(|e| {
-            eprintln!(
-                "Error: Could not write to OTA file '{}': {}",
-                ota_file_path.display(),
-                e
-            );
-            std::process::exit(7);
-        });
+        return 5;
+    };
+    println!("Wrote {} bytes of OTA header", bytes);
 
-    std::process::exit(0);
+    let Ok(bytes) = ota_file.write(&read) else {
+        eprintln!(
+            "Error: Could not write firmware data to OTA file '{}'",
+            ota_file_path.display(),
+        );
+        return 5;
+    };
+    println!("Wrote {} bytes of firmware data", bytes);
+
+    0
 }

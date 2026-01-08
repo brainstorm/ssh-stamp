@@ -410,6 +410,7 @@ pub mod tlv {
     // pub const FIRMWARE_BLOB_LEN: usize = 4; // u32 length allowing blobs up to 4GB
     pub const SHA256_CHECKSUM: u8 = 2;
 
+    // TODO: We could provide a new type for better debuging information
     pub const OTA_TYPE_SSH_STAMP: u32 = 0x73736873; // 'sshs' big endian in ASCII
 
     pub const CHECKSUM_LEN: u32 = 32;
@@ -563,6 +564,7 @@ pub mod tlv {
 /// This struct holds the metadata that will be used to validate the OTA file prior to applying the update.
 ///
 /// The fields serialisation and deserialization
+#[derive(Debug)]
 pub struct Header {
     // Not part of the header data
     // hasher: sha2::Sha256,
