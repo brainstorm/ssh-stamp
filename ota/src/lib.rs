@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Roman Valls, 2025
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
-use sunset::sshwire::{BinString, SSHDecode, WireError};
+use sunset::sshwire::{BinString, SSHDecode, SSHSource, WireError};
 use sunset_async::ChanInOut;
 use sunset_sftp::{
     SftpHandler,
@@ -141,6 +141,7 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
     }
 
     fn close(&mut self, handle: &T) -> sunset_sftp::server::SftpOpResult<()> {
+        info!("Close called for handle {:?}", handle);
         if let Some(current_handle) = &self.file_handle {
             if current_handle == handle {
                 info!(
@@ -208,8 +209,16 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
                     offset,
                     buf.len()
                 );
-                // Here you would add the logic to write the buffer to the OTA update mechanism
 
+                self.processor
+                    .process_data_chunk(offset, buf)
+                    .map_err(|e| {
+                        error!(
+                            "SftpServer Write operation failed during OTA processing: {:?}",
+                            e
+                        );
+                        sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE
+                    })?;
                 return Ok(());
             }
         }
@@ -277,7 +286,7 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
 enum UpdateProcessorState {
     /// ReadingParameters state, OTA has started and the processor is obtaining metadata values until the firmware blob is reached
     ReadingParameters {
-        ltv_holder: [u8; tlv::MAX_TLV_SIZE as usize],
+        tlv_holder: [u8; tlv::MAX_TLV_SIZE as usize],
         current_len: usize,
     },
     /// Downloading state, receiving firmware data, computing hash on the fly and writing to flash
@@ -293,7 +302,7 @@ enum UpdateProcessorState {
 impl Default for UpdateProcessorState {
     fn default() -> Self {
         UpdateProcessorState::ReadingParameters {
-            ltv_holder: [0; tlv::MAX_TLV_SIZE as usize],
+            tlv_holder: [0; tlv::MAX_TLV_SIZE as usize],
             current_len: 0,
         }
     }
@@ -331,55 +340,206 @@ impl UpdateProcessor {
     /// It processes data based on the current state of the update processor [[UpdateProcessorState]]. To first, read most metadata parameters, after that, write the data to the appropriate location. as it is received.
     ///
     /// It will try to consume as much data as possible from the provided buffer and return the number of bytes used.
-    pub fn process_data_chunk(&mut self, _offset: u64, _data: &[u8]) -> Result<usize, OtaError> {
-        let mut used_bytes = 0;
+    pub fn process_data_chunk(&mut self, _offset: u64, data: &[u8]) -> Result<(), OtaError> {
         debug!(
             "UpdateProcessor: Processing data chunk at offset {}, length {} in state {:?}",
             _offset,
-            _data.len(),
+            data.len(),
             self.state
         );
-        match self.state {
-            UpdateProcessorState::ReadingParameters {
-                mut ltv_holder,
-                mut current_len,
-            } => {
-                // TODO: Implement LTV parsing logic here
-                // Check if we have data in the ltv_holder buffer. If so add enough data to complete the LTV entry
-                // Otherwise, try processing new LTV entries in place from the data buffer
+        let mut source = tlv::TlvsSource::new(&data);
+        while source.remaining() > 0 {
+            debug!("processor state : {:?}", self.state);
 
-                // Unknown LTV must be skipped gracefully
+            match self.state {
+                UpdateProcessorState::ReadingParameters {
+                    mut tlv_holder,
+                    mut current_len,
+                } => {
+                    if current_len == 0 {
+                        debug!("Reading TLV type byte");
+                        // Read one byte for the type into tlv_holder
+                        let type_bytes = source.take(1).map_err(|e| {
+                            error!("UpdateProcessor: Failed to read TLV type: {:?}", e);
+                            OtaError::InternalError
+                        })?;
+                        tlv_holder[0] = type_bytes[0];
+                        current_len += 1;
+                    }
+                    // The TLV data is pretty simple
+                    // If we only have the type byte, we need to read the length next
+                    if current_len > 0 && current_len < 5 {
+                        info!("Reading TLV length bytes");
+                        // try reading length (u32 == 4 bytes)
+                        let remaining_len_bytes = 4 - (current_len - 1);
+                        info!("Remaining len bytes to read: {}", remaining_len_bytes);
+                        if source.remaining() >= remaining_len_bytes {
+                            let len_bytes = source.take(remaining_len_bytes).map_err(|e| {
+                                error!("UpdateProcessor: Failed to read TLV length: {:?}", e);
+                                OtaError::InternalError
+                            })?;
+                            info!("Adding length bytes: {:?}", len_bytes);
+                            tlv_holder[1..1 + remaining_len_bytes].copy_from_slice(len_bytes);
+                            current_len += remaining_len_bytes;
+                        } else {
+                            // Not enough data to read length we will take what we can
+                            let available = source.remaining();
+                            let len_bytes = source.take(available).map_err(|e| {
+                                error!(
+                                    "UpdateProcessor: Failed to read partial TLV length: {:?}",
+                                    e
+                                );
+                                OtaError::InternalError
+                            })?;
+                            info!("Adding available length bytes: {:?}", len_bytes);
+                            tlv_holder[1..1 + available].copy_from_slice(len_bytes);
+                            current_len += available;
+                            self.state = UpdateProcessorState::ReadingParameters {
+                                tlv_holder,
+                                current_len,
+                            };
+                            // Wait for more data TODO: Do we return here Error RanOut?
+                            info!("Will get more data to complete TLV length");
+                            return Ok(());
+                        }
+                    }
 
-                // If LTV entry is the firmware blob, transition to Downloading state
-                // only if we have the necessary parameters (ota_type, total_size, sha256_checksum)
-                // ota_type must be OTA_FIRMWARE_BLOB_TYPE
-                if self.header.ota_type != Some(tlv::OTA_TYPE_SSH_STAMP)
-                    || self.header.firmware_blob_size.is_none()
-                    || self.header.sha256_checksum.is_none()
-                {
-                    error!(
-                        "UpdateProcessor: Missing required OTA parameters: ota_type = {:?}, total_size = {:?}, sha256_checksum = {:?}",
-                        self.header.ota_type,
-                        self.header.firmware_blob_size,
-                        self.header.sha256_checksum
+                    if current_len >= 5 {
+                        // try reading bytes to complete the value
+                        let val_len =
+                            u32::from_be_bytes(tlv_holder[1..5].try_into().unwrap()) as usize;
+                        info!(
+                            "value length: {}, Source remaining bytes: {}",
+                            val_len,
+                            source.remaining()
+                        );
+
+                        if val_len > tlv::CHECKSUM_LEN as usize {
+                            error!(
+                                "UpdateProcessor: TLV value length {} exceeds maximum {}",
+                                val_len,
+                                tlv::MAX_TLV_SIZE
+                            );
+                            return Err(OtaError::InternalError);
+                        }
+
+                        if source.remaining() >= val_len {
+                            let value_bytes = source.take(val_len).map_err(|e| {
+                                error!("UpdateProcessor: Failed to read TLV Value: {:?}", e);
+                                OtaError::InternalError
+                            })?;
+                            // Careful here. if the value length exceeds the tlv_holder length
+                            // copy from slice will panic
+                            if 5 + val_len > tlv_holder.len() {
+                                error!("UpdateProcessor: Value exceeds tlv_holder capacity");
+                                return Err(OtaError::InternalError);
+                            }
+
+                            tlv_holder[5..5 + val_len].copy_from_slice(value_bytes);
+                            current_len += val_len;
+                        } else {
+                            let available = source.remaining();
+                            info!("Available bytes: {}", available);
+                            let value_bytes = source.take(available).map_err(|e| {
+                                error!(
+                                    "UpdateProcessor: Failed to read partial TLV Value: {:?}",
+                                    e
+                                );
+                                OtaError::InternalError
+                            })?;
+                            tlv_holder[5..5 + available - 1].copy_from_slice(value_bytes);
+                            current_len += available;
+                            self.state = UpdateProcessorState::ReadingParameters {
+                                tlv_holder,
+                                current_len,
+                            };
+                            //Wait for more data TODO: Do we return here Error RanOut?
+                            return Ok(());
+                        }
+                    }
+
+                    // At this point there should be a complete TLV to be decoded
+                    info!(
+                        "Decoding TLV from tlv_holder: {:?},  current_len: {}",
+                        &tlv_holder, &current_len
                     );
-                    return Err(OtaError::IllegalOperation);
-                }
-                // total_size must be > 0 and TODO: smaller than the ota partition size
-                // sha256_checksum must be Some
+                    let mut singular_source = tlv::TlvsSource::new(&tlv_holder[..current_len]);
 
-                self.state = UpdateProcessorState::Downloading { received_size: 0 };
-                debug!("UpdateProcessor: Transitioning to downloading state");
-            }
-            // Add other states and their processing logic here
-            _ => {
-                warn!(
-                    "UpdateProcessor: Received data in unexpected state: {:?}",
-                    self.state
-                );
-            }
+                    match tlv::Tlv::dec(&mut singular_source) {
+                        Ok(tlv) => match tlv {
+                            tlv::Tlv::OtaType { ota_type } => {
+                                info!("Received Ota type: {:?}", ota_type);
+                                self.header.ota_type = Some(ota_type);
+                                self.state = UpdateProcessorState::ReadingParameters {
+                                    tlv_holder: [0; tlv::MAX_TLV_SIZE as usize],
+                                    current_len: 0,
+                                };
+                            }
+
+                            tlv::Tlv::Sha256Checksum { checksum } => {
+                                info!("Received Checksum: {:?}", &checksum);
+                                if self.header.ota_type.is_none() {
+                                    error!(
+                                        "UpdateProcessor: Received SHA256 Checksum TLV before OTA Type TLV"
+                                    );
+                                    return Err(OtaError::IllegalOperation);
+                                }
+                                self.header.sha256_checksum = Some(checksum);
+                                self.state = UpdateProcessorState::ReadingParameters {
+                                    tlv_holder: [0; tlv::MAX_TLV_SIZE as usize],
+                                    current_len: 0,
+                                };
+                            }
+                            tlv::Tlv::FirmwareBlob { size } => {
+                                info!("Received FirmwareBlob size: {:?}", size);
+                                if self.header.ota_type.is_none() {
+                                    error!(
+                                        "UpdateProcessor: Received SHA256 Checksum TLV before OTA Type TLV"
+                                    );
+                                    return Err(OtaError::IllegalOperation);
+                                }
+
+                                self.header.firmware_blob_size = Some(size);
+                                // Transition to Downloading state will be done after this match
+                                self.state = UpdateProcessorState::Downloading { received_size: 0 };
+                                info!("Transitioning to Downloading state");
+                            }
+                        },
+                        Err(WireError::UnknownPacket { number }) => {
+                            warn!(
+                                "UpdateProcessor: Unknown TLV type encountered: {}. Skipping it",
+                                number
+                            );
+                            // Skip this TLV and continue
+                            self.state = UpdateProcessorState::ReadingParameters {
+                                tlv_holder: [0; tlv::MAX_TLV_SIZE as usize],
+                                current_len: 0,
+                            }
+                        }
+                        Err(WireError::RanOut) => {
+                            self.state = UpdateProcessorState::ReadingParameters {
+                                tlv_holder,
+                                current_len,
+                            };
+                            error!("UpdateProcessor: RanOut should not be happening");
+                            return Err(OtaError::MoreDataRequired);
+                        }
+                        Err(e) => {
+                            error!("Handle {:?} appropriately", e);
+                            return Err(OtaError::InternalError);
+                        }
+                    }
+                }
+                // Add other states and their processing logic here
+                _ => {
+                    warn!(
+                        "UpdateProcessor: Received data in unexpected state: {:?}",
+                        self.state
+                    );
+                }
+            };
         }
-        Ok(used_bytes)
+        Ok(())
     }
 
     // Add other parameters, such as verify, apply, check signature, etc.
@@ -388,6 +548,10 @@ impl UpdateProcessor {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 /// OtaError for OTA update processing errors
 enum OtaError {
+    /// Needs more data to proceed
+    MoreDataRequired,
+    /// Internal error
+    InternalError,
     /// An operation was illegal in the current state
     IllegalOperation,
     /// Error writing data to flash memory
@@ -623,6 +787,9 @@ impl Header {
     }
 
     /// Deserializes an OTA header from the provided buffer
+    ///
+    /// This approach requires that the whole header is contained in the buffer. An incomplete
+    /// header will result in unpopulated fields.
     pub fn deserialize(buf: &[u8]) -> Result<(Self, usize), sunset::sshwire::WireError> {
         let buf_len = buf.len();
         let mut source = tlv::TlvsSource::new(buf);
