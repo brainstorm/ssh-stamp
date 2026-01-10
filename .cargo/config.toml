@@ -20,11 +20,14 @@ run-esp32c3 = "run --release --target riscv32imc-unknown-none-elf --features esp
 # Available but not supported by esp-hal (yet).
 #run-esp32c5 = "run --release --target riscv32imac-unknown-none-elf --features esp32c5"
 run-esp32c6 = "run --release --target riscv32imac-unknown-none-elf --features esp32c6 -Z build-std=core,alloc"
+
 # Debug build (too big for target and probe-rs doesn't work anyway)
 #run-esp32c6 = "run --target riscv32imac-unknown-none-elf --features esp32c6"
 run-esp32s2 = "run --profile esp32s2 --target xtensa-esp32s2-none-elf --features esp32s2 -Z build-std=core,alloc"
 run-esp32s3 = "run --release --target xtensa-esp32s3-none-elf --features esp32s3 -Z build-std=core,alloc"
 
+# Build ota-packer alias: I might need to modify it so when run it can run a build for target architecture, extract the binary from the elf image and then pack the ota file.
+ota-packer = "run --package ota --bin ota-packer --target x86_64-unknown-linux-gnu"
 
 # Test alias
 test-ota = "test --package ota --target x86_64-unknown-linux-gnu"
@@ -37,8 +40,8 @@ runner = "espflash flash --baud=921600 --monitor"
 rustflags = ["-C", "force-frame-pointers"]
 [target.riscv32imac-unknown-none-elf]
 runner = "espflash flash --baud=921600 --partition-table partitions.csv --monitor"
-#runner = "espflash flash --baud=921600 --monitor"
 rustflags = ["-C", "force-frame-pointers"]
+
 [target.xtensa-esp32s2-none-elf]
 runner = "espflash flash --baud=921600 --monitor --chip esp32s2"
 rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s2"']
@@ -61,7 +64,6 @@ ESP_LOG = "INFO"
 [build]
 target = "riscv32imac-unknown-none-elf"
 # target = "x86_64-unknown-linux-gnu"
-
 
 
 [unstable]
