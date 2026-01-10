@@ -17,6 +17,8 @@ use log::{debug, error, info, warn};
 use rustc_hash::FxHasher;
 use sha2::Digest;
 
+use crate::tlv::OtaTlvLen;
+
 pub async fn run_ota_server(stdio: ChanInOut<'_>) -> Result<(), sunset::Error> {
     // Placeholder for OTA server logic
     // This function would handle the SFTP session and perform OTA updates
@@ -356,107 +358,23 @@ impl UpdateProcessor {
                     mut tlv_holder,
                     mut current_len,
                 } => {
-                    if current_len == 0 {
-                        debug!("Reading TLV type byte");
-                        // Read one byte for the type into tlv_holder
-                        let type_bytes = source.take(1).map_err(|e| {
-                            error!("UpdateProcessor: Failed to read TLV type: {:?}", e);
-                            OtaError::InternalError
-                        })?;
-                        tlv_holder[0] = type_bytes[0];
-                        current_len += 1;
-                    }
-                    // The TLV data is pretty simple
-                    // If we only have the type byte, we need to read the length next
-                    if current_len > 0 && current_len < 5 {
-                        info!("Reading TLV length bytes");
-                        // try reading length (u32 == 4 bytes)
-                        let remaining_len_bytes = 4 - (current_len - 1);
-                        info!("Remaining len bytes to read: {}", remaining_len_bytes);
-                        if source.remaining() >= remaining_len_bytes {
-                            let len_bytes = source.take(remaining_len_bytes).map_err(|e| {
-                                error!("UpdateProcessor: Failed to read TLV length: {:?}", e);
-                                OtaError::InternalError
-                            })?;
-                            info!("Adding length bytes: {:?}", len_bytes);
-                            tlv_holder[1..1 + remaining_len_bytes].copy_from_slice(len_bytes);
-                            current_len += remaining_len_bytes;
-                        } else {
-                            // Not enough data to read length we will take what we can
-                            let available = source.remaining();
-                            let len_bytes = source.take(available).map_err(|e| {
-                                error!(
-                                    "UpdateProcessor: Failed to read partial TLV length: {:?}",
-                                    e
-                                );
-                                OtaError::InternalError
-                            })?;
-                            info!("Adding available length bytes: {:?}", len_bytes);
-                            tlv_holder[1..1 + available].copy_from_slice(len_bytes);
-                            current_len += available;
+                    match source.try_taking_bytes_for_tlv(&mut tlv_holder, &mut current_len) {
+                        Err(WireError::RanOut) => {
+                            // Not enough data to complete TLV, wait for more data
                             self.state = UpdateProcessorState::ReadingParameters {
                                 tlv_holder,
                                 current_len,
                             };
-                            // Wait for more data TODO: Do we return here Error RanOut?
-                            info!("Will get more data to complete TLV length");
                             return Ok(());
                         }
-                    }
-
-                    if current_len >= 5 {
-                        // try reading bytes to complete the value
-                        let val_len =
-                            u32::from_be_bytes(tlv_holder[1..5].try_into().unwrap()) as usize;
-                        info!(
-                            "value length: {}, Source remaining bytes: {}",
-                            val_len,
-                            source.remaining()
-                        );
-
-                        if val_len > tlv::CHECKSUM_LEN as usize {
-                            error!(
-                                "UpdateProcessor: TLV value length {} exceeds maximum {}",
-                                val_len,
-                                tlv::MAX_TLV_SIZE
-                            );
+                        Err(e) => {
+                            error!("Error processing TLV: {:?}", e);
                             return Err(OtaError::InternalError);
                         }
-
-                        if source.remaining() >= val_len {
-                            let value_bytes = source.take(val_len).map_err(|e| {
-                                error!("UpdateProcessor: Failed to read TLV Value: {:?}", e);
-                                OtaError::InternalError
-                            })?;
-                            // Careful here. if the value length exceeds the tlv_holder length
-                            // copy from slice will panic
-                            if 5 + val_len > tlv_holder.len() {
-                                error!("UpdateProcessor: Value exceeds tlv_holder capacity");
-                                return Err(OtaError::InternalError);
-                            }
-
-                            tlv_holder[5..5 + val_len].copy_from_slice(value_bytes);
-                            current_len += val_len;
-                        } else {
-                            let available = source.remaining();
-                            info!("Available bytes: {}", available);
-                            let value_bytes = source.take(available).map_err(|e| {
-                                error!(
-                                    "UpdateProcessor: Failed to read partial TLV Value: {:?}",
-                                    e
-                                );
-                                OtaError::InternalError
-                            })?;
-                            tlv_holder[5..5 + available - 1].copy_from_slice(value_bytes);
-                            current_len += available;
-                            self.state = UpdateProcessorState::ReadingParameters {
-                                tlv_holder,
-                                current_len,
-                            };
-                            //Wait for more data TODO: Do we return here Error RanOut?
-                            return Ok(());
+                        Ok(_) => {
+                            // Successfully read a TLV, continue processing
                         }
-                    }
+                    };
 
                     // At this point there should be a complete TLV to be decoded
                     info!(
@@ -536,6 +454,7 @@ impl UpdateProcessor {
                         "UpdateProcessor: Received data in unexpected state: {:?}",
                         self.state
                     );
+                    loop {}
                 }
             };
         }
@@ -567,8 +486,8 @@ enum OtaError {
 /// If you are looking into improving this, consider looking into [proto.rs](https://github.com/mkj/sunset/blob/8e5d20916cf7b29111b90e4d3b7bb7827c9be8e5/sftp/src/proto.rs)
 /// for an example on how to automate the generation of protocols with macros
 pub mod tlv {
-    use log::warn;
-    use sunset::sshwire::{SSHDecode, SSHEncode, SSHSource};
+    use log::{debug, error, info, warn};
+    use sunset::sshwire::{SSHDecode, SSHEncode, SSHSource, WireError};
 
     use crate::tlv;
 
@@ -693,6 +612,7 @@ pub mod tlv {
     }
 
     /// An implementation of SSHSource based on [[sunset::sshwire::DecodeBytes]]
+    ///
     pub struct TlvsSource<'a> {
         remaining_buf: &'a [u8],
         ctx: sunset::packets::ParseContext,
@@ -710,6 +630,66 @@ pub mod tlv {
 
         pub fn used(&self) -> usize {
             self.used
+        }
+        /// Puts bytes in the tlv_holder and updates current_len until an OTA TLV enum variant can be decoded
+        ///
+        /// Even if it fails, it adds bytes to the tlv_holder and updates current_len accordingly
+        /// so more data can be added later to complete the TLV
+        ///
+        /// If more data is required, it returns WireError::RanOut
+        /// If successful, it returns Ok(()) and a dec
+        // TODO: Add test for RanOut and acomplete TLV
+        pub fn try_taking_bytes_for_tlv(
+            &mut self,
+            tlv_holder: &mut [u8],
+            current_len: &mut usize,
+        ) -> Result<(), WireError> {
+            if *current_len
+                < core::mem::size_of::<tlv::OtaTlvType>() + core::mem::size_of::<tlv::OtaTlvLen>()
+            {
+                let needed = core::mem::size_of::<tlv::OtaTlvType>()
+                    + core::mem::size_of::<tlv::OtaTlvLen>()
+                    - *current_len;
+                debug!("Adding {} bytes to have up to TLV type and length", needed);
+                let to_read = core::cmp::min(needed, self.remaining());
+                let type_len_bytes = self.take(to_read)?;
+                tlv_holder[*current_len..*current_len + to_read].copy_from_slice(type_len_bytes);
+                *current_len += to_read;
+                if needed < to_read {
+                    info!("Will get more data to complete TLV type/length");
+                    return Err(WireError::RanOut);
+                }
+            }
+
+            let slice_len_start = core::mem::size_of::<tlv::OtaTlvType>();
+            let slice_value_start =
+                core::mem::size_of::<tlv::OtaTlvType>() + core::mem::size_of::<tlv::OtaTlvLen>();
+            if *current_len >= slice_value_start {
+                // try reading bytes to complete the value
+                let val_len = tlv::OtaTlvLen::from_be_bytes(
+                    tlv_holder[slice_len_start..slice_value_start]
+                        .try_into()
+                        .unwrap(),
+                ) as usize;
+                info!(
+                    "value length: {}, Source remaining bytes: {}",
+                    val_len,
+                    self.remaining()
+                );
+
+                let needed = val_len + slice_value_start - *current_len;
+                let to_read = needed.min(self.remaining());
+
+                let needed_type_len_bytes = self.take(to_read)?;
+                tlv_holder[*current_len..*current_len + to_read]
+                    .copy_from_slice(needed_type_len_bytes);
+                *current_len += to_read;
+                if needed < to_read {
+                    info!("Will get more data to complete TLV type/length");
+                    return Err(WireError::RanOut);
+                }
+            }
+            Ok(())
         }
     }
 
