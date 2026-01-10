@@ -156,7 +156,7 @@ fn pack_bin(file_path: PathBuf) -> i32 {
     println!("Firmware SHA-256: {:x}", firmware_sha256);
 
     // We could read an u32 from an argument if we want to support multiple OTA types...
-    let ota_type = tlv::OTA_TYPE_SSH_STAMP;
+    let ota_type = tlv::OTA_TYPE_VALUE_SSH_STAMP;
     println!("OTA Type Number: {} (SSH-Stamp)", ota_type);
 
     let mut ota_file_path = file_path.clone();

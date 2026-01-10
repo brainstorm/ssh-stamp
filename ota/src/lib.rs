@@ -570,17 +570,21 @@ pub mod tlv {
     use log::warn;
     use sunset::sshwire::{SSHDecode, SSHEncode, SSHSource};
 
-    pub const OTA_TYPE: u8 = 0;
-    pub const FIRMWARE_BLOB: u8 = 1;
-    // pub const FIRMWARE_BLOB_LEN: usize = 4; // u32 length allowing blobs up to 4GB
-    pub const SHA256_CHECKSUM: u8 = 2;
+    use crate::tlv;
 
-    // TODO: We could provide a new type for better debuging information
-    pub const OTA_TYPE_SSH_STAMP: u32 = 0x73736873; // 'sshs' big endian in ASCII
+    /// Type alias for OTA TLV type: The type field in the TLV structure will be an u8
+    pub type OtaTlvType = u8;
+    /// Type alias for OTA TLV length: The length field in the TLV structure will be an u8
+    pub type OtaTlvLen = u8;
+
+    // TODO: We could provide a new type for better debugging information
+    pub const OTA_TYPE_VALUE_SSH_STAMP: u32 = 0x73736873; // 'sshs' big endian in ASCII
 
     pub const CHECKSUM_LEN: u32 = 32;
     /// Maximum size for LTV (Length-Type-Value) entries in OTA metadata. Used during the reading of OTA parameters.
-    pub const MAX_TLV_SIZE: u32 = 1 + 8 + CHECKSUM_LEN; // type + length + value
+    pub const MAX_TLV_SIZE: u32 = (core::mem::size_of::<OtaTlvType>()
+        + core::mem::size_of::<OtaTlvLen>()
+        + u8::max_value() as usize) as u32; // type + length + value
 
     /// Encodes the length and value of a sized values
     fn enc_len_val<SE>(
@@ -590,7 +594,7 @@ pub mod tlv {
     where
         SE: Sized + SSHEncode,
     {
-        (core::mem::size_of::<SE>() as u32).enc(s)?;
+        (core::mem::size_of::<SE>() as OtaTlvLen).enc(s)?;
         value.enc(s)
     }
 
@@ -602,18 +606,24 @@ pub mod tlv {
         S: sunset::sshwire::SSHSource<'de>,
         SE: Sized,
     {
-        let val_len = u32::dec(s)?;
-        if val_len != (core::mem::size_of::<SE>() as u32) {
+        let val_len = OtaTlvLen::dec(s)?;
+        if val_len != (core::mem::size_of::<SE>() as OtaTlvLen) {
             return Err(sunset::sshwire::WireError::PacketWrong);
         }
         Ok(())
     }
 
+    // OTA TLV type defined values
+
+    pub const OTA_TYPE: OtaTlvType = 0;
+    pub const FIRMWARE_BLOB: OtaTlvType = 1;
+    pub const SHA256_CHECKSUM: OtaTlvType = 2;
+
     /// OTA_TLV enum for OTA metadata LTV entries
     /// This TLV does not capture length as it will be captured during parsing
     /// Parsing will be done using sshwire types
     #[derive(Debug)]
-    #[repr(u8)]
+    #[repr(u8)] // Must match the type of OtaTlvType
     pub enum Tlv {
         /// Type of OTA update. This MUST be the first Tlv.
         /// For SSH Stamp, this must be OTA_FIRMWARE_BLOB_TYPE
@@ -629,6 +639,10 @@ pub mod tlv {
     impl SSHEncode for Tlv {
         fn enc(&self, s: &mut dyn sunset::sshwire::SSHSink) -> sunset::sshwire::WireResult<()> {
             match self {
+                Tlv::OtaType { ota_type } => {
+                    OTA_TYPE.enc(s)?;
+                    enc_len_val(ota_type, s)
+                }
                 Tlv::FirmwareBlob { size } => {
                     FIRMWARE_BLOB.enc(s)?;
                     enc_len_val(size, s)
@@ -636,10 +650,6 @@ pub mod tlv {
                 Tlv::Sha256Checksum { checksum } => {
                     SHA256_CHECKSUM.enc(s)?;
                     enc_len_val(checksum, s)
-                }
-                Tlv::OtaType { ota_type } => {
-                    OTA_TYPE.enc(s)?;
-                    enc_len_val(ota_type, s)
                 }
             }
         }
@@ -650,16 +660,16 @@ pub mod tlv {
         where
             S: sunset::sshwire::SSHSource<'de>,
         {
-            u8::dec(s).and_then(|tlv_type| match tlv_type {
+            OtaTlvType::dec(s).and_then(|tlv_type| match tlv_type {
                 FIRMWARE_BLOB => {
                     dec_check_val_len::<S, u32>(s)?;
                     Ok(Tlv::FirmwareBlob { size: u32::dec(s)? })
                 }
                 SHA256_CHECKSUM => {
-                    if u32::dec(s)? != CHECKSUM_LEN {
+                    if OtaTlvLen::dec(s)? != tlv::CHECKSUM_LEN as u8 {
                         return Err(sunset::sshwire::WireError::PacketWrong);
                     }
-                    let mut checksum = [0u8; 32];
+                    let mut checksum = [0u8; tlv::CHECKSUM_LEN as usize];
                     checksum.iter_mut().for_each(|element| {
                         *element = u8::dec(s).unwrap_or(0);
                     });
@@ -674,7 +684,7 @@ pub mod tlv {
                 // and returns an UnknownVariant error
                 _ => {
                     warn!("Unknown TLV type encountered: {}. Skipping it", tlv_type);
-                    let len = u32::dec(s)?;
+                    let len = OtaTlvLen::dec(s)?;
                     s.take(len as usize)?; // Skip unknown TLV value
                     Err(sunset::sshwire::WireError::UnknownPacket { number: tlv_type })
                 }
@@ -738,7 +748,7 @@ pub struct Header {
     /// Total size of the firmware being downloaded, if known
     firmware_blob_size: Option<u32>,
     /// Expected sha256 checksum of the firmware, if provided
-    pub sha256_checksum: Option<[u8; 32]>,
+    pub sha256_checksum: Option<[u8; tlv::CHECKSUM_LEN as usize]>,
 }
 
 impl Header {
@@ -748,7 +758,7 @@ impl Header {
     #[cfg(not(target_os = "none"))]
     pub fn new(ota_type: u32, sha256_checksum: &[u8], firmware_blob_size: u32) -> Self {
         // TODO: Check that the sha256_checksum length is correct: 32 bytes
-        let mut checksum_array = [0u8; 32];
+        let mut checksum_array = [0u8; tlv::CHECKSUM_LEN as usize];
         checksum_array.copy_from_slice(sha256_checksum);
         Self {
             ota_type: Some(ota_type),
@@ -791,13 +801,12 @@ impl Header {
     /// This approach requires that the whole header is contained in the buffer. An incomplete
     /// header will result in unpopulated fields.
     pub fn deserialize(buf: &[u8]) -> Result<(Self, usize), sunset::sshwire::WireError> {
-        let buf_len = buf.len();
         let mut source = tlv::TlvsSource::new(buf);
         let mut ota_type = None;
         let mut firmware_blob_size = None;
         let mut sha256_checksum = None;
 
-        while source.used() < buf_len {
+        while source.remaining() > 0 {
             match tlv::Tlv::dec(&mut source) {
                 Err(sunset::sshwire::WireError::UnknownPacket { number }) => {
                     warn!(
@@ -870,7 +879,7 @@ mod ota_tlv_tests {
                 ],
             },
             Tlv::OtaType {
-                ota_type: OTA_TYPE_SSH_STAMP,
+                ota_type: OTA_TYPE_VALUE_SSH_STAMP,
             },
         ];
         for variant in variants.iter() {
@@ -900,7 +909,7 @@ mod ota_tlv_tests {
         let mut offset = 0;
 
         let ota_type_tlv = Tlv::OtaType {
-            ota_type: OTA_TYPE_SSH_STAMP,
+            ota_type: OTA_TYPE_VALUE_SSH_STAMP,
         };
         offset += sshwire::write_ssh(&mut buffer[offset..], &ota_type_tlv)
             .expect("Failed to write OTA Type TLV");
@@ -922,7 +931,7 @@ mod ota_tlv_tests {
         let (header, _) =
             Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
 
-        assert_eq!(header.ota_type, Some(OTA_TYPE_SSH_STAMP));
+        assert_eq!(header.ota_type, Some(OTA_TYPE_VALUE_SSH_STAMP));
         assert_eq!(header.firmware_blob_size, Some(2048));
         assert_eq!(
             header.sha256_checksum,
@@ -939,7 +948,7 @@ mod ota_tlv_tests {
         let mut offset = 0;
 
         let ota_type_tlv = Tlv::OtaType {
-            ota_type: OTA_TYPE_SSH_STAMP,
+            ota_type: OTA_TYPE_VALUE_SSH_STAMP,
         };
         offset += sshwire::write_ssh(&mut buffer[offset..], &ota_type_tlv)
             .expect("Failed to write OTA Type TLV");
@@ -961,7 +970,7 @@ mod ota_tlv_tests {
         let (header, _) =
             Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
 
-        assert_eq!(header.ota_type, Some(OTA_TYPE_SSH_STAMP));
+        assert_eq!(header.ota_type, Some(OTA_TYPE_VALUE_SSH_STAMP));
         assert_eq!(header.firmware_blob_size, Some(2048));
         assert_eq!(header.sha256_checksum, None);
     }
@@ -982,7 +991,7 @@ mod ota_tlv_tests {
             .expect("Failed to write SHA256 Checksum TLV");
 
         let ota_type = Tlv::OtaType {
-            ota_type: OTA_TYPE_SSH_STAMP,
+            ota_type: OTA_TYPE_VALUE_SSH_STAMP,
         };
         offset += sshwire::write_ssh(&mut buffer[offset..], &ota_type)
             .expect("Failed to write OTA Type TLV");
@@ -1000,7 +1009,7 @@ mod ota_tlv_tests {
         let mut offset = 0;
 
         let ota_type_tlv = Tlv::OtaType {
-            ota_type: OTA_TYPE_SSH_STAMP,
+            ota_type: OTA_TYPE_VALUE_SSH_STAMP,
         };
         offset += sshwire::write_ssh(&mut buffer[offset..], &ota_type_tlv)
             .expect("Failed to write OTA Type TLV");
@@ -1018,7 +1027,7 @@ mod ota_tlv_tests {
         let (header, _) =
             Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
 
-        assert_eq!(header.ota_type, Some(OTA_TYPE_SSH_STAMP));
+        assert_eq!(header.ota_type, Some(OTA_TYPE_VALUE_SSH_STAMP));
         assert_eq!(header.firmware_blob_size, None);
         assert_eq!(
             header.sha256_checksum,
@@ -1035,14 +1044,14 @@ mod ota_tlv_tests {
         let mut offset = 0;
 
         let ota_type_tlv = Tlv::OtaType {
-            ota_type: OTA_TYPE_SSH_STAMP,
+            ota_type: OTA_TYPE_VALUE_SSH_STAMP,
         };
         offset += sshwire::write_ssh(&mut buffer[offset..], &ota_type_tlv)
             .expect("Failed to write OTA Type TLV");
 
         // Manually generating a valid unknown type
-        let unknown_type: u8 = 99;
-        let unknown_type_len = 4u32;
+        let unknown_type: OtaTlvType = 99;
+        let unknown_type_len: OtaTlvLen = 4;
         let unknown_value: [u8; 4] = [10, 20, 30, 40];
 
         offset += sshwire::write_ssh(&mut buffer[offset..], &unknown_type)
@@ -1060,7 +1069,7 @@ mod ota_tlv_tests {
         let (header, _) =
             Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
 
-        assert_eq!(header.ota_type, Some(OTA_TYPE_SSH_STAMP));
+        assert_eq!(header.ota_type, Some(OTA_TYPE_VALUE_SSH_STAMP));
         assert_eq!(header.firmware_blob_size, Some(2048));
         assert_eq!(header.sha256_checksum, None);
     }
