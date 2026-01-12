@@ -147,6 +147,16 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
         info!("Close called for handle {:?}", handle);
         if let Some(current_handle) = &self.file_handle {
             if current_handle == handle {
+                let ret_val = match self.processor.finalize() {
+                    Ok(_) => {
+                        info!("OTA update finalized successfully.");
+                        Ok(())
+                    }
+                    Err(e) => {
+                        error!("OTA update finalization failed: {:?}", e);
+                        Err(sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE)
+                    }
+                };
                 info!(
                     "SftpServer Close operation for OTA completed: handle = {:?}",
                     handle
@@ -155,7 +165,7 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
                 self.write_permission = false;
 
                 // Good place to finalize the OTA update process
-                return Ok(());
+                return ret_val;
             } else {
                 warn!(
                     "SftpServer Close operation failed: handle mismatch = {:?}",
@@ -579,6 +589,42 @@ impl UpdateProcessor {
             };
         }
         Ok(())
+    }
+
+    pub fn finalize(&mut self) -> Result<(), OtaError> {
+        let ret_val = match self.state {
+            UpdateProcessorState::Finished => {
+                info!("Finalizing OTA update process successfully.");
+
+                // Here you would trigger the application of the update, e.g., rebooting into the new firmware
+                Ok(())
+            }
+            UpdateProcessorState::Error(e) => {
+                error!("Cannot finalize OTA update due to error state: {:?}", e);
+                Err(e)
+            }
+            _ => {
+                error!(
+                    "Cannot finalize OTA update, current state is not Finished: {:?}",
+                    self.state
+                );
+                Err(OtaError::IllegalOperation)
+            }
+        };
+
+        self.reset_ota();
+        ret_val
+    }
+
+    fn reset_ota(&mut self) {
+        info!("Resetting OTA processor state.");
+        self.state = UpdateProcessorState::default();
+        self.hasher = Sha256::new();
+        self.header = Header {
+            ota_type: None,
+            firmware_blob_size: None,
+            sha256_checksum: None,
+        };
     }
 
     // Add other parameters, such as verify, apply, check signature, etc.
