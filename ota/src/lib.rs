@@ -15,9 +15,7 @@ use core::hash::Hasher;
 
 use log::{debug, error, info, warn};
 use rustc_hash::FxHasher;
-use sha2::Digest;
-
-use crate::tlv::OtaTlvLen;
+use sha2::{Digest, Sha256};
 
 pub async fn run_ota_server(stdio: ChanInOut<'_>) -> Result<(), sunset::Error> {
     // Placeholder for OTA server logic
@@ -52,14 +50,14 @@ pub async fn run_ota_server(stdio: ChanInOut<'_>) -> Result<(), sunset::Error> {
 /// This length is chosen to keep the file handle small
 /// while still providing a reasonable level of uniqueness.
 /// We are not expecting more than one OTA operation at a time.
-const HASH_LEN: usize = 4;
+const OPAQUE_HASH_LEN: usize = 4;
 /// OtaOpaqueFileHandle for OTA SFTP server
 ///
 /// Minimal implementation of an opaque file handle with a tiny hash
 #[derive(Hash, Debug, Eq, PartialEq, Clone)]
 struct OtaOpaqueFileHandle {
     // Define fields as needed for OTA file handle
-    tiny_hash: [u8; HASH_LEN],
+    tiny_hash: [u8; OPAQUE_HASH_LEN],
 }
 
 impl OpaqueFileHandle for OtaOpaqueFileHandle {
@@ -81,7 +79,7 @@ impl OpaqueFileHandle for OtaOpaqueFileHandle {
             return Err(WireError::BadString);
         }
 
-        let mut tiny_hash = [0u8; HASH_LEN];
+        let mut tiny_hash = [0u8; OPAQUE_HASH_LEN];
         tiny_hash.copy_from_slice(file_handle.0.0);
         Ok(OtaOpaqueFileHandle { tiny_hash })
     }
@@ -143,6 +141,9 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
     }
 
     fn close(&mut self, handle: &T) -> sunset_sftp::server::SftpOpResult<()> {
+        // TODO: At this point I need to reset the target if all is ok or reset the processor if not so we are
+        // either loading a new firmware or ready to receive a correct one.
+
         info!("Close called for handle {:?}", handle);
         if let Some(current_handle) = &self.file_handle {
             if current_handle == handle {
@@ -292,9 +293,7 @@ enum UpdateProcessorState {
         current_len: usize,
     },
     /// Downloading state, receiving firmware data, computing hash on the fly and writing to flash
-    Downloading { received_size: u32 },
-    /// In this state, the processor verifies the downloaded firmware image
-    Verifying,
+    Downloading { total_received_size: u32 },
     /// Like idle, but after successful verification, ready to reboot and apply the update
     Finished,
     /// Error state, an error occurred during the OTA process
@@ -320,7 +319,7 @@ impl Default for UpdateProcessorState {
 struct UpdateProcessor {
     state: UpdateProcessorState,
     /// Hasher computing the checksum of the downloaded firmware on the fly
-    hasher: sha2::Sha256,
+    hasher: Sha256,
     header: Header,
 }
 
@@ -328,7 +327,7 @@ impl UpdateProcessor {
     pub fn new() -> Self {
         Self {
             state: UpdateProcessorState::default(),
-            hasher: sha2::Sha256::new(),
+            hasher: Sha256::new(),
             header: Header {
                 ota_type: None,
                 firmware_blob_size: None,
@@ -386,6 +385,16 @@ impl UpdateProcessor {
                     match tlv::Tlv::dec(&mut singular_source) {
                         Ok(tlv) => match tlv {
                             tlv::Tlv::OtaType { ota_type } => {
+                                // TODO: If the received ota_type does not match tlv::OTA_TYPE_VALUE_SSH_STAMP go to error state.
+                                if ota_type != tlv::OTA_TYPE_VALUE_SSH_STAMP {
+                                    self.state =
+                                        UpdateProcessorState::Error(OtaError::IllegalOperation);
+                                    error!(
+                                        "UpdateProcessor: Unsupported OTA Type received: {:?}",
+                                        ota_type
+                                    );
+                                    return Ok(());
+                                }
                                 info!("Received Ota type: {:?}", ota_type);
                                 self.header.ota_type = Some(ota_type);
                                 self.state = UpdateProcessorState::ReadingParameters {
@@ -400,7 +409,9 @@ impl UpdateProcessor {
                                     error!(
                                         "UpdateProcessor: Received SHA256 Checksum TLV before OTA Type TLV"
                                     );
-                                    return Err(OtaError::IllegalOperation);
+                                    self.state =
+                                        UpdateProcessorState::Error(OtaError::IllegalOperation);
+                                    return Ok(());
                                 }
                                 self.header.sha256_checksum = Some(checksum);
                                 self.state = UpdateProcessorState::ReadingParameters {
@@ -414,12 +425,25 @@ impl UpdateProcessor {
                                     error!(
                                         "UpdateProcessor: Received SHA256 Checksum TLV before OTA Type TLV"
                                     );
-                                    return Err(OtaError::IllegalOperation);
+                                    self.state =
+                                        UpdateProcessorState::Error(OtaError::IllegalOperation);
+                                    return Ok(());
+                                }
+
+                                if self.header.sha256_checksum.is_none() {
+                                    error!(
+                                        "UpdateProcessor: Received FirmwareBlob TLV before SHA256 Checksum TLV"
+                                    );
+                                    self.state =
+                                        UpdateProcessorState::Error(OtaError::IllegalOperation);
+                                    return Ok(());
                                 }
 
                                 self.header.firmware_blob_size = Some(size);
                                 // Transition to Downloading state will be done after this match
-                                self.state = UpdateProcessorState::Downloading { received_size: 0 };
+                                self.state = UpdateProcessorState::Downloading {
+                                    total_received_size: 0,
+                                };
                                 info!("Transitioning to Downloading state");
                             }
                         },
@@ -428,6 +452,14 @@ impl UpdateProcessor {
                                 "UpdateProcessor: Unknown TLV type encountered: {}. Skipping it",
                                 number
                             );
+                            if self.header.ota_type.is_none() {
+                                error!(
+                                    "UpdateProcessor: Received unknown TLV type before OTA Type TLV"
+                                );
+                                self.state =
+                                    UpdateProcessorState::Error(OtaError::IllegalOperation);
+                                return Ok(());
+                            }
                             // Skip this TLV and continue
                             self.state = UpdateProcessorState::ReadingParameters {
                                 tlv_holder: [0; tlv::MAX_TLV_SIZE as usize],
@@ -435,6 +467,7 @@ impl UpdateProcessor {
                             }
                         }
                         Err(WireError::RanOut) => {
+                            // Keep current data and wait for more
                             self.state = UpdateProcessorState::ReadingParameters {
                                 tlv_holder,
                                 current_len,
@@ -448,13 +481,100 @@ impl UpdateProcessor {
                         }
                     }
                 }
-                // Add other states and their processing logic here
-                _ => {
-                    warn!(
-                        "UpdateProcessor: Received data in unexpected state: {:?}",
-                        self.state
+                UpdateProcessorState::Downloading {
+                    mut total_received_size,
+                } => {
+                    let total_blob_size = match self.header.firmware_blob_size {
+                        Some(size) => size,
+                        None => {
+                            error!(
+                                "UpdateProcessor: Firmware blob size not set before downloading"
+                            );
+                            return Err(OtaError::IllegalOperation);
+                        }
+                    };
+                    // Once the totallity of the blob has been received the FSM must move to the Finished or Error States
+                    if total_received_size >= total_blob_size {
+                        error!(
+                            "UpdateProcessor: Received more data than expected: received_size = {}, total_blob_size = {}",
+                            total_received_size, total_blob_size
+                        );
+                        return Err(OtaError::IllegalOperation);
+                    }
+
+                    let to_take = data
+                        .len()
+                        .min((total_blob_size - total_received_size) as usize);
+
+                    let data_chunk = source.take(to_take).map_err(|e| {
+                        error!(
+                            "UpdateProcessor: Error taking data chunk of size {}: {:?}",
+                            to_take, e
+                        );
+                        OtaError::InternalError
+                    })?;
+
+                    // Update hasher with the new data chunk
+                    self.hasher.update(data_chunk);
+
+                    // TODO: Here you would write data_chunk to flash memory
+                    info!(
+                        "Writing {} bytes to flash at offset {}",
+                        data_chunk.len(),
+                        total_received_size
                     );
-                    loop {}
+
+                    total_received_size += to_take as u32;
+
+                    if total_received_size >= total_blob_size {
+                        let Some(original_hash) = self.header.sha256_checksum else {
+                            error!(
+                                "UpdateProcessor: No original checksum to verify against after download"
+                            );
+                            return Err(OtaError::IllegalOperation);
+                        };
+
+                        // if *new_hash != original_hash {
+                        if original_hash
+                            != *self
+                                .hasher
+                                .clone()
+                                .finalize()
+                                .as_array()
+                                .ok_or(OtaError::VerificationFailed)?
+                        {
+                            error!(
+                                "UpdateProcessor: Checksum mismatch after download! Expected: {:x?}`",
+                                original_hash
+                            );
+                            self.state = UpdateProcessorState::Error(OtaError::VerificationFailed);
+                            return Ok(());
+                        } else {
+                            info!("UpdateProcessor: Checksum verified successfully");
+                        }
+
+                        info!("All firmware data received, transitioning to Finished state");
+                        self.state = UpdateProcessorState::Finished;
+                    } else {
+                        self.state = UpdateProcessorState::Downloading {
+                            total_received_size,
+                        };
+                    }
+                }
+                UpdateProcessorState::Finished => {
+                    // Will ignore the data. It will be consumed and the file will be closed eventually
+                    warn!(
+                        "UpdateProcessor: Received data in Finished state, ignoring additional data"
+                    );
+                    return Ok(());
+                }
+                UpdateProcessorState::Error(ota_error) => {
+                    // Will ignore the data. It will be consumed and the file will be closed eventually
+                    warn!(
+                        "UpdateProcessor: Received data in Error state: {:?}, ignoring additional data",
+                        ota_error
+                    );
+                    return Ok(());
                 }
             };
         }
@@ -486,7 +606,7 @@ enum OtaError {
 /// If you are looking into improving this, consider looking into [proto.rs](https://github.com/mkj/sunset/blob/8e5d20916cf7b29111b90e4d3b7bb7827c9be8e5/sftp/src/proto.rs)
 /// for an example on how to automate the generation of protocols with macros
 pub mod tlv {
-    use log::{debug, error, info, warn};
+    use log::{debug, info, warn};
     use sunset::sshwire::{SSHDecode, SSHEncode, SSHSource, WireError};
 
     use crate::tlv;
