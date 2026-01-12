@@ -360,7 +360,7 @@ impl UpdateProcessor {
         );
         let mut source = tlv::TlvsSource::new(&data);
         while source.remaining() > 0 {
-            debug!("processor state : {:?}", self.state);
+            info!("processor state : {:?}", self.state);
 
             match self.state {
                 UpdateProcessorState::ReadingParameters {
@@ -501,7 +501,8 @@ impl UpdateProcessor {
                             return Err(OtaError::IllegalOperation);
                         }
                     };
-                    // Once the totallity of the blob has been received the FSM must move to the Finished or Error States
+                    info!("source contains {} bytes", source.remaining());
+                    // Once the totality of the blob has been received, the FSM must move to the Finished or Error States
                     if total_received_size >= total_blob_size {
                         error!(
                             "UpdateProcessor: Received more data than expected: received_size = {}, total_blob_size = {}",
@@ -510,8 +511,8 @@ impl UpdateProcessor {
                         return Err(OtaError::IllegalOperation);
                     }
 
-                    let to_take = data
-                        .len()
+                    let to_take = source
+                        .remaining()
                         .min((total_blob_size - total_received_size) as usize);
 
                     let data_chunk = source.take(to_take).map_err(|e| {
