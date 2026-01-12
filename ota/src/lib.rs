@@ -216,7 +216,7 @@ impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
                     );
                     return Err(sunset_sftp::protocol::StatusCode::SSH_FX_PERMISSION_DENIED);
                 }
-                info!(
+                debug!(
                     "SftpServer Write operation for OTA: handle = {:?}, offset = {:?}, buf_len = {:?}",
                     opaque_file_handle,
                     offset,
@@ -360,7 +360,7 @@ impl UpdateProcessor {
         );
         let mut source = tlv::TlvsSource::new(&data);
         while source.remaining() > 0 {
-            info!("processor state : {:?}", self.state);
+            debug!("processor state : {:?}", self.state);
 
             match self.state {
                 UpdateProcessorState::ReadingParameters {
@@ -501,7 +501,7 @@ impl UpdateProcessor {
                             return Err(OtaError::IllegalOperation);
                         }
                     };
-                    info!("source contains {} bytes", source.remaining());
+                    debug!("source contains {} bytes", source.remaining());
                     // Once the totality of the blob has been received, the FSM must move to the Finished or Error States
                     if total_received_size >= total_blob_size {
                         error!(
@@ -527,7 +527,7 @@ impl UpdateProcessor {
                     self.hasher.update(data_chunk);
 
                     // TODO: Here you would write data_chunk to flash memory
-                    info!(
+                    debug!(
                         "Writing {} bytes to flash at offset {}",
                         data_chunk.len(),
                         total_received_size
