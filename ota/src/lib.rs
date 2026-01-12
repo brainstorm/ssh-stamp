@@ -20,7 +20,7 @@ use sha2::{Digest, Sha256};
 pub async fn run_ota_server(stdio: ChanInOut<'_>) -> Result<(), sunset::Error> {
     // Placeholder for OTA server logic
     // This function would handle the SFTP session and perform OTA updates
-    warn!("WIP SFTP not implemented");
+    warn!("WIP SFTP OTA Under tests");
     let mut buffer_in = [0u8; 512];
     let mut request_buffer = [0u8; 512];
 
@@ -386,7 +386,7 @@ impl UpdateProcessor {
                     };
 
                     // At this point there should be a complete TLV to be decoded
-                    info!(
+                    debug!(
                         "Decoding TLV from tlv_holder: {:?},  current_len: {}",
                         &tlv_holder, &current_len
                     );
@@ -399,11 +399,9 @@ impl UpdateProcessor {
                                 if ota_type != tlv::OTA_TYPE_VALUE_SSH_STAMP {
                                     self.state =
                                         UpdateProcessorState::Error(OtaError::IllegalOperation);
-                                    error!(
-                                        "UpdateProcessor: Unsupported OTA Type received: {:?}",
-                                        ota_type
-                                    );
-                                    return Ok(());
+                                    self.state =
+                                        UpdateProcessorState::Error(OtaError::IllegalOperation);
+                                    return Err(OtaError::IllegalOperation);
                                 }
                                 info!("Received Ota type: {:?}", ota_type);
                                 self.header.ota_type = Some(ota_type);
@@ -421,7 +419,7 @@ impl UpdateProcessor {
                                     );
                                     self.state =
                                         UpdateProcessorState::Error(OtaError::IllegalOperation);
-                                    return Ok(());
+                                    return Err(OtaError::IllegalOperation);
                                 }
                                 self.header.sha256_checksum = Some(checksum);
                                 self.state = UpdateProcessorState::ReadingParameters {
@@ -437,7 +435,7 @@ impl UpdateProcessor {
                                     );
                                     self.state =
                                         UpdateProcessorState::Error(OtaError::IllegalOperation);
-                                    return Ok(());
+                                    return Err(OtaError::IllegalOperation);
                                 }
 
                                 if self.header.sha256_checksum.is_none() {
@@ -446,7 +444,7 @@ impl UpdateProcessor {
                                     );
                                     self.state =
                                         UpdateProcessorState::Error(OtaError::IllegalOperation);
-                                    return Ok(());
+                                    return Err(OtaError::IllegalOperation);
                                 }
 
                                 self.header.firmware_blob_size = Some(size);
@@ -468,7 +466,7 @@ impl UpdateProcessor {
                                 );
                                 self.state =
                                     UpdateProcessorState::Error(OtaError::IllegalOperation);
-                                return Ok(());
+                                return Err(OtaError::IllegalOperation);
                             }
                             // Skip this TLV and continue
                             self.state = UpdateProcessorState::ReadingParameters {
@@ -544,7 +542,6 @@ impl UpdateProcessor {
                             return Err(OtaError::IllegalOperation);
                         };
 
-                        // if *new_hash != original_hash {
                         if original_hash
                             != *self
                                 .hasher
