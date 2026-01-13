@@ -571,6 +571,8 @@ impl UpdateProcessor {
                 }
                 UpdateProcessorState::Finished => {
                     // Will ignore the data. It will be consumed and the file will be closed eventually
+                    // This behaviour will prevent any future file footer (e.g. signature?) to be discarded
+                    //  without causing problems
                     warn!(
                         "UpdateProcessor: Received data in Finished state, ignoring additional data"
                     );
@@ -595,6 +597,7 @@ impl UpdateProcessor {
                 info!("Finalizing OTA update process successfully.");
 
                 // Here you would trigger the application of the update, e.g., rebooting into the new firmware
+
                 Ok(())
             }
             UpdateProcessorState::Error(e) => {
