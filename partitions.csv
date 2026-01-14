@@ -6,7 +6,7 @@
 # OTA configuration with two app partitions for firmware updates
 # **Explicit offsets for proper 64KB alignment of OTA partitions**
 # Name,     Type,   SubType,    Offset,     Size,       Flags
-nvs,        data,   nvs,        0x9000,     180K,
+app_config,        data,   nvs,        0x9000,     180K,
 otadata,    data,   ota,        0x36000,    8K,
 phy_init,   data,   phy,        0x38000,    4K,
 ota_0,      app,    ota_0,      0x40000,    1920K,
