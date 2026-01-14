@@ -15,6 +15,10 @@ sunset-sftp.workspace = true
 log.workspace = true
 sha2.workspace = true
 rustc-hash.workspace = true
+# Will avoid adding esp-idf dependencies to riscv build
+# esp-idf-hal = "0.45" 
+# Error: Unsupported target 'riscv32imac-unknown-none-elf'
+# esp-ota = "0.2.2" 
 
 # Only for ota-packer binary
 [target.'cfg(not(target_os = "none"))'.dependencies]
