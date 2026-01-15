@@ -1443,6 +1443,7 @@ name = "ota"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "embedded-storage",
  "esp-bootloader-esp-idf",
  "log",
  "rustc-hash",

@@ -10,6 +10,9 @@ mod handler;
 /// Module implementing the OTA SFTP server
 mod sftpserver;
 /// Defining the target hardware abstraction for OTA updates
+///
+/// It heavily relies on esp-bootloader-esp-idf crate for handling the partitions and OTA slots
+/// as it is described in the [esp-rs ota update example code](https://github.com/esp-rs/esp-hal/blob/99042a7d60388580459eab6fe0d10e2f89d6ab6c/examples/src/bin/ota_update.rs)
 mod target;
 
 pub use target::validate_current_ota_partition;
