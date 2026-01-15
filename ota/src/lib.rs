@@ -12,6 +12,7 @@ mod sftpserver;
 /// Defining the target hardware abstraction for OTA updates
 mod target;
 
+pub use target::validate_current_ota_partition;
 /// Module defining TLV types and constants for OTA updates
 ///
 /// Re-exporting this module for easier access from outside the crate: ota-packer

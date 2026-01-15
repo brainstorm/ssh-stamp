@@ -20,8 +20,8 @@ use esp_hal_embassy::InterruptExecutor;
 
 use embassy_executor::Spawner;
 use esp_println::dbg;
-use esp_storage::FlashStorage;
 
+use ota;
 use ssh_stamp::pins;
 use ssh_stamp::pins::GPIOConfig;
 use ssh_stamp::pins::PinChannel;
@@ -33,7 +33,7 @@ use ssh_stamp::{
         rng,
     },
 };
-use storage::{flash, flash::FlashBuffer};
+use storage::flash;
 
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
@@ -70,15 +70,19 @@ async fn main(spawner: Spawner) -> ! {
        }
     }
 
-    // TODO: Migrate this function/test to embedded-test.
-    // Quick roundtrip test for SSHStampConfig
-    // ssh_stamp::config::roundtrip_config();
-
-    // Read SSH configuration from Flash (if it exists)
     flash::init();
 
+    // Careful here. There is a bug that might cause this call to crash
+    ota::validate_current_ota_partition()
+        .await
+        .expect("Failed to validate the current ota partition");
+
+    // Read SSH configuration from Flash (if it exists)
     let config = {
         let mut flash_storage = flash::get_flash_n_buffer().lock().await;
+        // TODO: Migrate this function/test to embedded-test.
+        // Quick roundtrip test for SSHStampConfig
+        // ssh_stamp::config::roundtrip_config();
         ssh_stamp::storage::load_or_create(&mut flash_storage).await
     }
     .expect("Could not load or create SSHStampConfig");

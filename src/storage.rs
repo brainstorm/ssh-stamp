@@ -2,7 +2,6 @@ use embedded_storage::ReadStorage;
 use embedded_storage::nor_flash::NorFlash;
 use esp_bootloader_esp_idf::partitions;
 use esp_println::{dbg, println};
-use esp_storage::FlashStorage;
 
 use pretty_hex::PrettyHex;
 use sha2::Digest;

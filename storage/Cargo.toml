@@ -4,9 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+log.workspace = true
+
+once_cell.workspace = true
+
+sunset-async.workspace = true
+
 embedded-storage.workspace = true
 esp-storage.workspace = true
-esp-bootloader-esp-idf.workspace = true
-static_cell.workspace = true
-sunset-async.workspace = true
-once_cell.workspace = true
