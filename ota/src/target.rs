@@ -11,51 +11,56 @@ use storage::flash;
 /// It will abstract the flash memory or other storage media so later we can implement it for different platforms
 use crate::handler::OtaError;
 
-use esp_bootloader_esp_idf::{
-    ota::Slot,
-    partitions::{self, DataPartitionSubType},
-};
+use esp_bootloader_esp_idf;
 
 use embedded_storage::nor_flash::NorFlash;
 
+#[derive(Debug, Copy, Clone)]
 pub(crate) struct OtaWriter {
-    target_slot: Slot,
+    target_slot: esp_bootloader_esp_idf::ota::Slot,
 }
 
 impl OtaWriter {
-    pub(crate) fn new(target_slot: Slot) -> Self {
+    /// Creates a new OtaWriter for the given target OTA slot.
+    ///
+    /// To obtain a target OTA slot use [get_next_app_slot]
+    pub(crate) fn new(target_slot: esp_bootloader_esp_idf::ota::Slot) -> Self {
         OtaWriter { target_slot }
     }
     // TODO: Not tested. May crash!
+    /// Writes data to the target OTA partition at the given offset.
     pub(crate) async fn write(&self, offset: u32, data: &[u8]) -> Result<(), OtaError> {
         write_to_target(self.target_slot, offset, data).await
     }
-
-    pub fn finalize(&mut self) -> Result<(), OtaError> {
-        todo!("Implement this using the same example");
-        Ok(())
+    // TODO: Not tested. May crash!
+    /// Finalizes the OTA update by setting the target slot as current.
+    pub async fn finalize(&mut self) -> Result<(), OtaError> {
+        set_current(self.target_slot).await
     }
 }
 
 // TODO: Not tested. Unlikely to crash but might be refactored
 /// Finds the next app slot to write the OTA update to.
 ///
-/// We use an slot since it does not require lifetimes and is easier to handle.
-pub async fn get_next_app_slot() -> Result<Slot, OtaError> {
+/// We use an slot since it does not require lifetimes and is easier to handle, but it does create
+/// overhead in the [write_to_target] and [set_current] functions.
+pub async fn get_next_app_slot() -> Result<esp_bootloader_esp_idf::ota::Slot, OtaError> {
     let mut fb = flash::get_flash_n_buffer().lock().await;
     let (storage, buffer) = fb.split_ref_mut();
     let Ok(pt) = esp_bootloader_esp_idf::partitions::read_partition_table(
         storage,
-        &mut buffer[..partitions::PARTITION_TABLE_MAX_LEN],
+        &mut buffer[..esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN],
     ) else {
         error!("Could not read partition table");
         return Err(OtaError::WriteError);
     };
 
     // Find the OTA-data partition and show the currently active partition
-    let Ok(Some(ota_data_part)) = pt.find_partition(
-        esp_bootloader_esp_idf::partitions::PartitionType::Data(DataPartitionSubType::Ota),
-    ) else {
+    let Ok(Some(ota_data_part)) =
+        pt.find_partition(esp_bootloader_esp_idf::partitions::PartitionType::Data(
+            esp_bootloader_esp_idf::partitions::DataPartitionSubType::Ota,
+        ))
+    else {
         error!("Could not find OTA data partition");
         return Err(OtaError::WriteError);
     };
@@ -80,12 +85,16 @@ pub async fn get_next_app_slot() -> Result<Slot, OtaError> {
 /// Finds the next app slot to write the OTA update to.
 ///
 /// We use an slot since it does not require lifetimes and is easier to handle.
-async fn write_to_target(target_slot: Slot, offset: u32, data: &[u8]) -> Result<(), OtaError> {
+async fn write_to_target(
+    target_slot: esp_bootloader_esp_idf::ota::Slot,
+    offset: u32,
+    data: &[u8],
+) -> Result<(), OtaError> {
     let mut fb = flash::get_flash_n_buffer().lock().await;
     let (storage, buffer) = fb.split_ref_mut();
     let Ok(pt) = esp_bootloader_esp_idf::partitions::read_partition_table(
         storage,
-        &mut buffer[..partitions::PARTITION_TABLE_MAX_LEN],
+        &mut buffer[..esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN],
     ) else {
         error!("Could not read partition table");
         return Err(OtaError::WriteError);
@@ -93,24 +102,28 @@ async fn write_to_target(target_slot: Slot, offset: u32, data: &[u8]) -> Result<
 
     // Unfortunately, this is pretty convoluted way to get the target partition
     let target_partition = match target_slot {
-        Slot::None =>
+        esp_bootloader_esp_idf::ota::Slot::None =>
         // None is FACTORY if present, OTA0 otherwise
         {
-            pt.find_partition(partitions::PartitionType::App(
-                partitions::AppPartitionSubType::Factory,
+            pt.find_partition(esp_bootloader_esp_idf::partitions::PartitionType::App(
+                esp_bootloader_esp_idf::partitions::AppPartitionSubType::Factory,
             ))
             .or_else(|_| {
-                pt.find_partition(partitions::PartitionType::App(
-                    partitions::AppPartitionSubType::Ota0,
+                pt.find_partition(esp_bootloader_esp_idf::partitions::PartitionType::App(
+                    esp_bootloader_esp_idf::partitions::AppPartitionSubType::Ota0,
                 ))
             })
         }
-        Slot::Slot0 => pt.find_partition(partitions::PartitionType::App(
-            partitions::AppPartitionSubType::Ota0,
-        )),
-        Slot::Slot1 => pt.find_partition(partitions::PartitionType::App(
-            partitions::AppPartitionSubType::Ota1,
-        )),
+        esp_bootloader_esp_idf::ota::Slot::Slot0 => {
+            pt.find_partition(esp_bootloader_esp_idf::partitions::PartitionType::App(
+                esp_bootloader_esp_idf::partitions::AppPartitionSubType::Ota0,
+            ))
+        }
+        esp_bootloader_esp_idf::ota::Slot::Slot1 => {
+            pt.find_partition(esp_bootloader_esp_idf::partitions::PartitionType::App(
+                esp_bootloader_esp_idf::partitions::AppPartitionSubType::Ota1,
+            ))
+        }
     };
     let Ok(Some(target_partition)) = target_partition else {
         error!("Could not find target OTA partition");
@@ -120,6 +133,42 @@ async fn write_to_target(target_slot: Slot, offset: u32, data: &[u8]) -> Result<
     let mut target_partition = target_partition.as_embedded_storage(storage);
 
     NorFlash::write(&mut target_partition, offset, data).map_err(|_| OtaError::WriteError)
+}
+
+// TODO: Not tested. May crash!!!
+/// The provided target slot will be marked as current and the image will be set as New so after
+/// the reboot it will boot from it and be validated if the bootloader requires it.
+///
+/// We use an slot since it does not require lifetimes and is easier to handle.
+async fn set_current(target_slot: esp_bootloader_esp_idf::ota::Slot) -> Result<(), OtaError> {
+    let mut fb = flash::get_flash_n_buffer().lock().await;
+    let (storage, buffer) = fb.split_ref_mut();
+    let Ok(pt) = esp_bootloader_esp_idf::partitions::read_partition_table(
+        storage,
+        &mut buffer[..esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN],
+    ) else {
+        error!("Could not read partition table");
+        return Err(OtaError::WriteError);
+    };
+
+    // Find the OTA-data partition and show the currently active partition
+    let Ok(Some(ota_data_part)) =
+        pt.find_partition(esp_bootloader_esp_idf::partitions::PartitionType::Data(
+            esp_bootloader_esp_idf::partitions::DataPartitionSubType::Ota,
+        ))
+    else {
+        error!("Could not find OTA data partition");
+        return Err(OtaError::WriteError);
+    };
+
+    let mut ota_data_part = ota_data_part.as_embedded_storage(storage);
+    debug!("Found ota data");
+    let mut ota = esp_bootloader_esp_idf::ota::Ota::new(&mut ota_data_part)
+        .map_err(|_| OtaError::WriteError)?;
+    ota.set_current_slot(target_slot)
+        .map_err(|_| OtaError::WriteError)?;
+    ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::New)
+        .map_err(|_| OtaError::WriteError)
 }
 
 // TODO: build bootloader with auto-rollback to avoid invalid images rendering the device unbootable
@@ -135,16 +184,18 @@ pub async fn validate_current_ota_partition() -> Result<(), ()> {
     let (storage, buffer) = fb.split_ref_mut();
     let Ok(pt) = esp_bootloader_esp_idf::partitions::read_partition_table(
         storage,
-        &mut buffer[..partitions::PARTITION_TABLE_MAX_LEN],
+        &mut buffer[..esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN],
     ) else {
         error!("Could not read partition table");
         return Err(());
     };
 
     // Find the OTA-data partition and show the currently active partition
-    let Ok(Some(ota_data_part)) = pt.find_partition(
-        esp_bootloader_esp_idf::partitions::PartitionType::Data(DataPartitionSubType::Ota),
-    ) else {
+    let Ok(Some(ota_data_part)) =
+        pt.find_partition(esp_bootloader_esp_idf::partitions::PartitionType::Data(
+            esp_bootloader_esp_idf::partitions::DataPartitionSubType::Ota,
+        ))
+    else {
         error!("Could not find OTA data partition");
         return Err(());
     };
@@ -167,7 +218,7 @@ pub async fn validate_current_ota_partition() -> Result<(), ()> {
         return Err(());
     };
 
-    if current == Slot::None {
+    if current == esp_bootloader_esp_idf::ota::Slot::None {
         error!("Current ota slot is None, cannot validate");
         return Err(());
     }

@@ -4,7 +4,10 @@
 
 use sunset::sshwire::{SSHDecode, SSHSource, WireError};
 
-use crate::tlv;
+use crate::{
+    target::{self, OtaWriter},
+    tlv,
+};
 
 use log::{debug, error, info, warn};
 use sha2::{Digest, Sha256};
@@ -20,9 +23,12 @@ enum UpdateProcessorState {
         current_len: usize,
     },
     /// Downloading state, receiving firmware data, computing hash on the fly and writing to flash
-    Downloading { total_received_size: u32 },
+    Downloading {
+        total_received_size: u32,
+        writer: OtaWriter,
+    },
     /// Like idle, but after successful verification, ready to reboot and apply the update
-    Finished,
+    Finished { writer: OtaWriter },
     /// Error state, an error occurred during the OTA process
     Error(OtaError),
 }
@@ -68,7 +74,7 @@ impl UpdateProcessor {
     /// It processes data based on the current state of the update processor [[UpdateProcessorState]]. To first, read most metadata parameters, after that, write the data to the appropriate location. as it is received.
     ///
     /// It will try to consume as much data as possible from the provided buffer and return the number of bytes used.
-    pub fn process_data_chunk(&mut self, _offset: u64, data: &[u8]) -> Result<(), OtaError> {
+    pub async fn process_data_chunk(&mut self, _offset: u64, data: &[u8]) -> Result<(), OtaError> {
         debug!(
             "UpdateProcessor: Processing data chunk at offset {}, length {} in state {:?}",
             _offset,
@@ -165,9 +171,21 @@ impl UpdateProcessor {
                                 }
 
                                 self.header.firmware_blob_size = Some(size);
+
                                 // Transition to Downloading state will be done after this match
+
+                                let update_slot =
+                                    target::get_next_app_slot().await.map_err(|e| {
+                                        error!(
+                                            "UpdateProcessor: Error getting OTA update slot: {:?}",
+                                            e
+                                        );
+                                        OtaError::InternalError
+                                    })?;
+
                                 self.state = UpdateProcessorState::Downloading {
                                     total_received_size: 0,
+                                    writer: OtaWriter::new(update_slot),
                                 };
                                 info!("Transitioning to Downloading state");
                             }
@@ -208,6 +226,7 @@ impl UpdateProcessor {
                 }
                 UpdateProcessorState::Downloading {
                     mut total_received_size,
+                    writer,
                 } => {
                     let total_blob_size = match self.header.firmware_blob_size {
                         Some(size) => size,
@@ -249,6 +268,13 @@ impl UpdateProcessor {
                         data_chunk.len(),
                         total_received_size
                     );
+                    writer.write(total_received_size, data_chunk).await.map_err(|e| {
+                        error!(
+                            "UpdateProcessor: Error writing data chunk to flash at offset {}: {:?}",
+                            total_received_size, e
+                        );
+                        OtaError::WriteError
+                    })?;
 
                     total_received_size += to_take as u32;
 
@@ -279,14 +305,15 @@ impl UpdateProcessor {
                         }
 
                         info!("All firmware data received, transitioning to Finished state");
-                        self.state = UpdateProcessorState::Finished;
+                        self.state = UpdateProcessorState::Finished { writer };
                     } else {
                         self.state = UpdateProcessorState::Downloading {
                             total_received_size,
+                            writer,
                         };
                     }
                 }
-                UpdateProcessorState::Finished => {
+                UpdateProcessorState::Finished { writer: _ } => {
                     // Will ignore the data. It will be consumed and the file will be closed eventually
                     // This behaviour will prevent any future file footer (e.g. signature?) to be discarded
                     //  without causing problems
@@ -308,14 +335,16 @@ impl UpdateProcessor {
         Ok(())
     }
 
-    pub fn finalize(&mut self) -> Result<(), OtaError> {
+    pub async fn finalize(&mut self) -> Result<(), OtaError> {
         let ret_val = match self.state {
-            UpdateProcessorState::Finished => {
+            UpdateProcessorState::Finished { mut writer } => {
                 info!("Finalizing OTA update process successfully.");
 
                 // Here you would trigger the application of the update, e.g., rebooting into the new firmware
-
-                Ok(())
+                writer.finalize().await.map_err(|e| {
+                    error!("Error finalizing OTA update: {:?}", e);
+                    OtaError::InternalError
+                })
             }
             UpdateProcessorState::Error(e) => {
                 error!("Cannot finalize OTA update due to error state: {:?}", e);
@@ -330,11 +359,11 @@ impl UpdateProcessor {
             }
         };
 
-        self.reset_ota();
+        self.reset_ota_state();
         ret_val
     }
 
-    fn reset_ota(&mut self) {
+    fn reset_ota_state(&mut self) {
         info!("Resetting OTA processor state.");
         self.state = UpdateProcessorState::default();
         self.hasher = Sha256::new();
