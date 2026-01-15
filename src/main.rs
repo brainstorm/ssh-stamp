@@ -21,6 +21,7 @@ use esp_hal_embassy::InterruptExecutor;
 use embassy_executor::Spawner;
 use esp_println::dbg;
 use esp_storage::FlashStorage;
+
 use ssh_stamp::pins;
 use ssh_stamp::pins::GPIOConfig;
 use ssh_stamp::pins::PinChannel;
@@ -31,8 +32,9 @@ use ssh_stamp::{
         net::{accept_requests, if_up},
         rng,
     },
-    storage::Fl,
 };
+use storage::{flash, flash::FlashBuffer};
+
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
 
@@ -73,14 +75,16 @@ async fn main(spawner: Spawner) -> ! {
     // ssh_stamp::config::roundtrip_config();
 
     // Read SSH configuration from Flash (if it exists)
-    let mut flash_storage = Fl::new(FlashStorage::new());
-    let config = ssh_stamp::storage::load_or_create(&mut flash_storage).await;
+    flash::init();
 
-    static FLASH: StaticCell<SunsetMutex<Fl>> = StaticCell::new();
-    let _flash = FLASH.init(SunsetMutex::new(flash_storage));
+    let config = {
+        let mut flash_storage = flash::get_flash_n_buffer().lock().await;
+        ssh_stamp::storage::load_or_create(&mut flash_storage).await
+    }
+    .expect("Could not load or create SSHStampConfig");
 
     static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
-    let config = CONFIG.init(SunsetMutex::new(config.unwrap()));
+    let config = CONFIG.init(SunsetMutex::new(config));
 
     let wifi_controller = esp_wifi::init(timg0.timer0, rng, peripherals.RADIO_CLK).unwrap();
 
