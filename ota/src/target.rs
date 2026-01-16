@@ -257,7 +257,7 @@ pub async fn validate_current_ota_partition() -> Result<(), ()> {
             }
             // TODO: Report the crash? Crash: Exception 'Load access fault' mepc=0x4205cc54, mtval=0xfa3a8e38
             _ => {
-                warn!("The current ota image is marking is unknown");
+                warn!("The current ota image marking is unknown");
             } // esp_bootloader_esp_idf::ota::OtaImageState::Undefined => {
               //     warn!("The current ota image is marked as Undefined");
               // }

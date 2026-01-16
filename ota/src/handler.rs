@@ -5,6 +5,7 @@
 use sunset::sshwire::{SSHDecode, SSHSource, WireError};
 
 use crate::{
+    OtaHeader,
     target::{self, OtaWriter},
     tlv,
 };
@@ -53,7 +54,7 @@ pub(crate) struct UpdateProcessor {
     state: UpdateProcessorState,
     /// Hasher computing the checksum of the downloaded firmware on the fly
     hasher: Sha256,
-    header: Header,
+    header: OtaHeader,
 }
 
 impl UpdateProcessor {
@@ -61,7 +62,7 @@ impl UpdateProcessor {
         Self {
             state: UpdateProcessorState::default(),
             hasher: Sha256::new(),
-            header: Header {
+            header: OtaHeader {
                 ota_type: None,
                 firmware_blob_size: None,
                 sha256_checksum: None,
@@ -367,7 +368,7 @@ impl UpdateProcessor {
         info!("Resetting OTA processor state.");
         self.state = UpdateProcessorState::default();
         self.hasher = Sha256::new();
-        self.header = Header {
+        self.header = OtaHeader {
             ota_type: None,
             firmware_blob_size: None,
             sha256_checksum: None,
@@ -390,131 +391,4 @@ pub(crate) enum OtaError {
     WriteError,
     /// Verification of the downloaded firmware failed
     VerificationFailed,
-}
-
-/// Header struct for OTA file header processing
-///
-/// This struct holds the metadata that will be used to validate the OTA file prior to applying the update.
-///
-/// The fields serialisation and deserialization
-#[derive(Debug)]
-pub struct Header {
-    // Not part of the header data
-    // hasher: sha2::Sha256,
-    /// Type of OTA update being processed. Used for screening incorrect ota blobs quickly
-    pub(crate) ota_type: Option<u32>,
-    /// Total size of the firmware being downloaded, if known
-    pub(crate) firmware_blob_size: Option<u32>,
-    /// Expected sha256 checksum of the firmware, if provided
-    pub sha256_checksum: Option<[u8; tlv::CHECKSUM_LEN as usize]>,
-}
-
-impl Header {
-    /// Creates a new OTA header with the provided parameters
-    ///
-    /// Used during packing of OTA files. Therefore, not needed in the embedded side.
-    #[cfg(not(target_os = "none"))]
-    pub fn new(ota_type: u32, sha256_checksum: &[u8], firmware_blob_size: u32) -> Self {
-        // TODO: Check that the sha256_checksum length is correct: 32 bytes
-        let mut checksum_array = [0u8; tlv::CHECKSUM_LEN as usize];
-        checksum_array.copy_from_slice(sha256_checksum);
-        Self {
-            ota_type: Some(ota_type),
-            firmware_blob_size: Some(firmware_blob_size),
-            sha256_checksum: Some(checksum_array),
-        }
-    }
-
-    /// Serializes the OTA header into the provided buffer
-    ///
-    /// Returns the number of bytes written to the buffer
-    // #[cfg(not(target_os = "none"))] // Maybe I should remove this from embedded side as well
-    pub fn serialize(&self, buf: &mut [u8]) -> usize {
-        let mut offset = 0;
-        if let Some(ota_type) = self.ota_type {
-            let tlv = tlv::Tlv::OtaType { ota_type };
-            let used = sunset::sshwire::write_ssh(&mut buf[offset..], &tlv)
-                .expect("Failed to serialize OTA Type TLV");
-            offset += used;
-        }
-        if let Some(checksum) = &self.sha256_checksum {
-            let tlv = tlv::Tlv::Sha256Checksum {
-                checksum: *checksum,
-            };
-            let used = sunset::sshwire::write_ssh(&mut buf[offset..], &tlv)
-                .expect("Failed to serialize SHA256 Checksum TLV");
-            offset += used;
-        }
-        if let Some(size) = self.firmware_blob_size {
-            let tlv = tlv::Tlv::FirmwareBlob { size };
-            let used = sunset::sshwire::write_ssh(&mut buf[offset..], &tlv)
-                .expect("Failed to serialize Firmware Blob TLV");
-            offset += used;
-        }
-        offset
-    }
-
-    /// Deserializes an OTA header from the provided buffer
-    ///
-    /// This approach requires that the whole header is contained in the buffer. An incomplete
-    /// header will result in unpopulated fields.
-    pub fn deserialize(buf: &[u8]) -> Result<(Self, usize), sunset::sshwire::WireError> {
-        let mut source = tlv::TlvsSource::new(buf);
-        let mut ota_type = None;
-        let mut firmware_blob_size = None;
-        let mut sha256_checksum = None;
-
-        while source.remaining() > 0 {
-            match tlv::Tlv::dec(&mut source) {
-                Err(sunset::sshwire::WireError::UnknownPacket { number }) => {
-                    warn!(
-                        "Unknown packet type encountered: {}. TLV skipping it and continuing",
-                        number
-                    );
-                    // Unknown TLV was skipped already in the decoder
-                    continue;
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-                Ok(tlv) => {
-                    match tlv {
-                        tlv::Tlv::OtaType { ota_type: ot } => {
-                            ota_type = Some(ot);
-                        }
-                        tlv::Tlv::Sha256Checksum { checksum } => {
-                            check_ota_is_first_tlv(ota_type)?;
-                            sha256_checksum = Some(checksum);
-                        }
-                        tlv::Tlv::FirmwareBlob { size } => {
-                            check_ota_is_first_tlv(ota_type)?;
-                            firmware_blob_size = Some(size);
-                            // After firmware blob, there shall be no more tlvs and the
-                            // actual blob follows. Therefore we stop reading here
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok((
-            Self {
-                ota_type,
-                firmware_blob_size,
-                sha256_checksum,
-            },
-            source.used(),
-        ))
-    }
-}
-
-fn check_ota_is_first_tlv(ota_type: Option<u32>) -> Result<(), WireError> {
-    match ota_type.is_none() {
-        true => {
-            error!("SHA256 Checksum TLV encountered before OTA Type TLV. Ignoring it");
-            Err(sunset::sshwire::WireError::PacketWrong)
-        }
-        false => Ok(()),
-    }
 }

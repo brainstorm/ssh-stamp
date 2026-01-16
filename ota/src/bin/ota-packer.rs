@@ -1,4 +1,4 @@
-use ota::{Header, tlv};
+use ota::{OtaHeader, tlv};
 
 use clap::{ArgAction, Command};
 use sha2::{Digest, Sha256};
@@ -61,7 +61,7 @@ fn unpack_ota(file_path: PathBuf) -> i32 {
         eprintln!("Error: Could not read from file '{}'", file_path.display(),);
         return 5;
     };
-    let Ok((header, seek_to_bin)) = Header::deserialize(&buffer) else {
+    let Ok((header, seek_to_bin)) = OtaHeader::deserialize(&buffer) else {
         eprintln!(
             "Error: Could not parse OTA header from file '{}'",
             file_path.display(),
@@ -176,7 +176,7 @@ fn pack_bin(file_path: PathBuf) -> i32 {
     let mut buf = [0u8; 512];
 
     let header_len =
-        Header::new(ota_type, firmware_sha256.as_slice(), firmware_size).serialize(&mut buf);
+        OtaHeader::new(ota_type, firmware_sha256.as_slice(), firmware_size).serialize(&mut buf);
 
     println!("OTA header length: {} bytes", header_len);
 

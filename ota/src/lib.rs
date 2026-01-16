@@ -3,18 +3,28 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// Runs the ota server taking care of reading ota file metadata,
+/// internal state, storage and target reset
+///
+/// Entry point for this crate when used as an OTA server
+#[cfg(target_os = "none")]
+pub use sftpserver::run_ota_server;
 /// Module handling OTA update metadata and header parsing
 ///
 /// It will be called from the sftpserver module to handle the OTA update process
+#[cfg(target_os = "none")]
 mod handler;
 /// Module implementing the OTA SFTP server
+#[cfg(target_os = "none")]
 mod sftpserver;
 /// Defining the target hardware abstraction for OTA updates
 ///
 /// It heavily relies on esp-bootloader-esp-idf crate for handling the partitions and OTA slots
 /// as it is described in the [esp-rs ota update example code](https://github.com/esp-rs/esp-hal/blob/99042a7d60388580459eab6fe0d10e2f89d6ab6c/examples/src/bin/ota_update.rs)
+#[cfg(target_os = "none")]
 mod target;
 
+#[cfg(target_os = "none")]
 pub use target::validate_current_ota_partition;
 /// Module defining TLV types and constants for OTA updates
 ///
@@ -24,18 +34,12 @@ pub mod tlv;
 /// OTA Header structure and deserialization logic
 ///
 /// Re-exporting Header for easier access from outside the crate: ota-packer
-pub use handler::Header;
-
-/// Runs the ota server taking care of reading ota file metadata,
-/// internal state, storage and target reset
-///
-/// Entry point for this crate when used as an OTA server
-pub use sftpserver::run_ota_server;
+pub use tlv::OtaHeader;
 
 #[cfg(test)]
 mod ota_tlv_tests {
 
-    use crate::Header;
+    use crate::OtaHeader;
     use crate::tlv::*;
     use sunset::sshwire::{self, SSHDecode, SSHEncode};
 
@@ -100,7 +104,7 @@ mod ota_tlv_tests {
             .expect("Failed to write Firmware Blob TLV");
 
         let (header, _) =
-            Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
+            OtaHeader::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
 
         assert_eq!(header.ota_type, Some(OTA_TYPE_VALUE_SSH_STAMP));
         assert_eq!(header.firmware_blob_size, Some(2048));
@@ -139,7 +143,7 @@ mod ota_tlv_tests {
             .expect("Failed to write SHA256 Checksum TLV");
 
         let (header, _) =
-            Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
+            OtaHeader::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
 
         assert_eq!(header.ota_type, Some(OTA_TYPE_VALUE_SSH_STAMP));
         assert_eq!(header.firmware_blob_size, Some(2048));
@@ -171,7 +175,7 @@ mod ota_tlv_tests {
         offset += sshwire::write_ssh(&mut buffer[offset..], &firmware_blob_tlv)
             .expect("Failed to write Firmware Blob TLV");
 
-        assert!(Header::deserialize(&buffer[..offset]).is_err());
+        assert!(OtaHeader::deserialize(&buffer[..offset]).is_err());
     }
 
     #[test]
@@ -196,7 +200,7 @@ mod ota_tlv_tests {
             .expect("Failed to write SHA256 Checksum TLV");
 
         let (header, _) =
-            Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
+            OtaHeader::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
 
         assert_eq!(header.ota_type, Some(OTA_TYPE_VALUE_SSH_STAMP));
         assert_eq!(header.firmware_blob_size, None);
@@ -238,7 +242,7 @@ mod ota_tlv_tests {
         offset += used;
 
         let (header, _) =
-            Header::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
+            OtaHeader::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
 
         assert_eq!(header.ota_type, Some(OTA_TYPE_VALUE_SSH_STAMP));
         assert_eq!(header.firmware_blob_size, Some(2048));
