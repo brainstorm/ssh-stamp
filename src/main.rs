@@ -21,6 +21,7 @@ use esp_hal_embassy::InterruptExecutor;
 use embassy_executor::Spawner;
 use esp_println::dbg;
 
+use log::info;
 use ota;
 use ssh_stamp::pins;
 use ssh_stamp::pins::GPIOConfig;
@@ -134,7 +135,11 @@ async fn main(spawner: Spawner) -> ! {
     interrupt_spawner
         .spawn(uart_task(uart_buf, uart1, pin_channel_ref))
         .unwrap();
-
+    info!(
+        "Initialization done. Starting SSH server... version : v{}, build date: {}",
+        env!("CARGO_PKG_VERSION"),
+        env!("BUILD_DATE")
+    );
     // Pass pin_channel_ref into accept_requests (so SSH handlers can use it).
     // NOTE: accept_requests signature must accept this arg; if it doesn't,
     // thread the reference into whatever code spawns handle_ssh_client.

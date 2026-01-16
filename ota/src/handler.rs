@@ -183,7 +183,7 @@ impl UpdateProcessor {
                                         );
                                         OtaError::InternalError
                                     })?;
-
+                                info!("Starting OTA update in slot {:?}", update_slot);
                                 self.state = UpdateProcessorState::Downloading {
                                     total_received_size: 0,
                                     writer: OtaWriter::new(update_slot),

@@ -13,7 +13,8 @@ use crate::handler::OtaError;
 
 use esp_bootloader_esp_idf;
 
-use embedded_storage::nor_flash::NorFlash;
+use embedded_storage::Storage;
+use esp_hal::system;
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct OtaWriter {
@@ -35,7 +36,9 @@ impl OtaWriter {
     // TODO: Not tested. May crash!
     /// Finalizes the OTA update by setting the target slot as current.
     pub async fn finalize(&mut self) -> Result<(), OtaError> {
-        set_current(self.target_slot).await
+        set_current(self.target_slot).await?;
+        system::software_reset(); // TODO: Not the right place. I would need to signal the main app to reboot after closing the SFTP session
+        Ok(())
     }
 }
 
@@ -99,7 +102,7 @@ async fn write_to_target(
         error!("Could not read partition table");
         return Err(OtaError::WriteError);
     };
-
+    debug!("Resolving target_partition");
     // Unfortunately, this is pretty convoluted way to get the target partition
     let target_partition = match target_slot {
         esp_bootloader_esp_idf::ota::Slot::None =>
@@ -130,9 +133,19 @@ async fn write_to_target(
         return Err(OtaError::WriteError);
     };
 
+    debug!("Resolving target_partition storage");
     let mut target_partition = target_partition.as_embedded_storage(storage);
 
-    NorFlash::write(&mut target_partition, offset, data).map_err(|_| OtaError::WriteError)
+    debug!(
+        "Writing data to target_partition at offset {}, with len {}",
+        offset,
+        data.len()
+    );
+    target_partition.write(offset, data).map_err(|e| {
+        error!("Failed to write data to target_partition: {}", e);
+        OtaError::WriteError
+    })?;
+    Ok(())
 }
 
 // TODO: Not tested. May crash!!!
@@ -162,11 +175,13 @@ async fn set_current(target_slot: esp_bootloader_esp_idf::ota::Slot) -> Result<(
     };
 
     let mut ota_data_part = ota_data_part.as_embedded_storage(storage);
-    debug!("Found ota data");
+    debug!("Found ota data. Creating handle to modify properties");
     let mut ota = esp_bootloader_esp_idf::ota::Ota::new(&mut ota_data_part)
         .map_err(|_| OtaError::WriteError)?;
+    info!("Setting current ota slot to {:?}", target_slot);
     ota.set_current_slot(target_slot)
         .map_err(|_| OtaError::WriteError)?;
+    debug!("setting current ota state to New");
     ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::New)
         .map_err(|_| OtaError::WriteError)
 }
