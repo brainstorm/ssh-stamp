@@ -1445,6 +1445,7 @@ dependencies = [
  "clap",
  "embedded-storage",
  "esp-bootloader-esp-idf",
+ "esp-hal",
  "log",
  "rustc-hash",
  "sha2",
