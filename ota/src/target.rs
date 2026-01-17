@@ -38,7 +38,6 @@ impl OtaWriter {
     pub async fn finalize(&mut self) -> Result<(), OtaError> {
         set_current(self.target_slot).await?;
         system::software_reset(); // TODO: Not the right place. I would need to signal the main app to reboot after closing the SFTP session
-        Ok(())
     }
 }
 
