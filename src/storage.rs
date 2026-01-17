@@ -37,9 +37,16 @@ impl FlashConfig<'_> {
     // TODO: Rework Error mapping with esp_storage errors
     /// Finds the NVS partitions and retrieves information about it.
     pub fn find_config_partition(fb: &mut FlashBuffer) -> Result<(), SSHStampError> {
-        println!("Flash size = {} bytes", fb.flash.capacity());
-
-        let pt = partitions::read_partition_table(&mut fb.flash, &mut fb.buf).unwrap();
+        println!("Flash size = {} Mb", fb.flash.capacity() / (1024 * 1024));
+        println!("Flash storage : {:?}", fb.flash);
+        let pt = partitions::read_partition_table(
+            &mut fb.flash,
+            &mut fb.buf[..esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN],
+        )
+        .map_err(|e| {
+            println!("Failed to read partition table: {:?}", e);
+            SSHStampError::FlashStorageError
+        })?;
         let nvs = pt
             .find_partition(partitions::PartitionType::Data(
                 partitions::DataPartitionSubType::Nvs,
@@ -120,7 +127,12 @@ pub async fn save(fl: &mut FlashBuffer, config: &SSHStampConfig) -> Result<(), S
         hash: config_hash(&config)?,
     };
 
-    FlashConfig::find_config_partition(fl).unwrap();
+    let Ok(()) = FlashConfig::find_config_partition(fl) else {
+        dbg!("Failed to find NVS partition");
+        return Err(SunsetError::Custom {
+            msg: "Failde to find NVS partition",
+        });
+    };
 
     //   dbg!("Saving config: ", &config);
     dbg!("Before write_ssh, with hash: ", &sc.hash.hex_dump());
