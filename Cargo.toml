@@ -38,7 +38,7 @@ heapless = "0.9"
 embassy-futures = "0.1"
 edge-dhcp = "0.6"
 edge-nal = "0.5"
-edge-nal-embassy = "0.6"
+edge-nal-embassy = "0.7"
 #sequential-storage = { version = "4", features = ["heapless"] }
 esp-storage = { version = "0.8" }
 embedded-storage = "0.3"
