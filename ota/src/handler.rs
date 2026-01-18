@@ -183,7 +183,7 @@ impl UpdateProcessor {
                                         );
                                         OtaError::InternalError
                                     })?;
-                                info!("Starting OTA update in slot {:?}", update_slot);
+                                info!("Starting OTA update in {update_slot:?}");
                                 self.state = UpdateProcessorState::Downloading {
                                     total_received_size: 0,
                                     writer: OtaWriter::new(update_slot),
@@ -260,10 +260,8 @@ impl UpdateProcessor {
                         OtaError::InternalError
                     })?;
 
-                    // Update hasher with the new data chunk
                     self.hasher.update(data_chunk);
 
-                    // TODO: Here you would write data_chunk to flash memory
                     debug!(
                         "Writing {} bytes to flash at offset {}",
                         data_chunk.len(),
@@ -316,7 +314,7 @@ impl UpdateProcessor {
                 }
                 UpdateProcessorState::Finished { writer: _ } => {
                     // Will ignore the data. It will be consumed and the file will be closed eventually
-                    // This behaviour will prevent any future file footer (e.g. signature?) to be discarded
+                    // This behaviour will allow any future file footer (e.g. signature?) to be discarded
                     //  without causing problems
                     warn!(
                         "UpdateProcessor: Received data in Finished state, ignoring additional data"

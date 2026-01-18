@@ -2,20 +2,17 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// use esp_storage::FlashStorage;
+use crate::handler::OtaError;
+
+use embedded_storage::Storage;
+use esp_bootloader_esp_idf;
+use esp_hal::system;
+use storage::flash;
 
 use log::{debug, error, info, warn};
-use storage::flash;
 
 /// This structure is meant to wrap the media access for writing the OTA firmware
 /// It will abstract the flash memory or other storage media so later we can implement it for different platforms
-use crate::handler::OtaError;
-
-use esp_bootloader_esp_idf;
-
-use embedded_storage::Storage;
-use esp_hal::system;
-
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct OtaWriter {
     target_slot: esp_bootloader_esp_idf::ota::Slot,
@@ -38,11 +35,9 @@ impl OtaWriter {
     pub async fn finalize(&mut self) -> Result<(), OtaError> {
         set_current(self.target_slot).await?;
         system::software_reset(); // TODO: Not the right place. I would need to signal the main app to reboot after closing the SFTP session
-        Ok(())
     }
 }
 
-// TODO: Not tested. Unlikely to crash but might be refactored
 /// Finds the next app slot to write the OTA update to.
 ///
 /// We use an slot since it does not require lifetimes and is easier to handle, but it does create
@@ -84,10 +79,11 @@ pub async fn get_next_app_slot() -> Result<esp_bootloader_esp_idf::ota::Slot, Ot
 
     Ok(next_slot)
 }
-// TODO: Not tested. May crash!!!
+
 /// Finds the next app slot to write the OTA update to.
 ///
 /// We use an slot since it does not require lifetimes and is easier to handle.
+// Tested with espflash md5 and espflash write-bin. Writing with SFTP seems to work fine.
 async fn write_to_target(
     target_slot: esp_bootloader_esp_idf::ota::Slot,
     offset: u32,
@@ -148,11 +144,11 @@ async fn write_to_target(
     Ok(())
 }
 
-// TODO: Not tested. May crash!!!
+// TODO: Does not crash but the OTADATA partition is invalid on boot
 /// The provided target slot will be marked as current and the image will be set as New so after
 /// the reboot it will boot from it and be validated if the bootloader requires it.
 ///
-/// We use an slot since it does not require lifetimes and is easier to handle.
+/// We use a slot since it does not require lifetimes and is easier to handle.
 async fn set_current(target_slot: esp_bootloader_esp_idf::ota::Slot) -> Result<(), OtaError> {
     let mut fb = flash::get_flash_n_buffer().lock().await;
     let (storage, buffer) = fb.split_ref_mut();
@@ -178,12 +174,26 @@ async fn set_current(target_slot: esp_bootloader_esp_idf::ota::Slot) -> Result<(
     debug!("Found ota data. Creating handle to modify properties");
     let mut ota = esp_bootloader_esp_idf::ota::Ota::new(&mut ota_data_part)
         .map_err(|_| OtaError::WriteError)?;
+    debug!("Ota dump: {:?}", ota);
+
+    debug!("Current ota slot: {:?}", ota.current_slot());
+    // a Debug on ota.current_ota_state() seems to crash if the result is Err
+    if let Ok(current_ota_state) = ota.current_ota_state() {
+        debug!("Current ota state: {:?}", current_ota_state);
+    } else {
+        debug!("Current ota state: could not be obtained (probably running factory partition)");
+    }
+
     info!("Setting current ota slot to {:?}", target_slot);
     ota.set_current_slot(target_slot)
         .map_err(|_| OtaError::WriteError)?;
-    debug!("setting current ota state to New");
-    ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::New)
-        .map_err(|_| OtaError::WriteError)
+
+    // Disable since the docs do not mention it is needed and it might cause issues with the bootloader?
+    // https://docs.rs/esp-bootloader-esp-idf/0.1.0/esp_bootloader_esp_idf/ota/index.html
+    debug!("setting current ota state to Pending Verify");
+    ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::PendingVerify)
+        .map_err(|_| OtaError::WriteError)?;
+    Ok(())
 }
 
 // TODO: build bootloader with auto-rollback to avoid invalid images rendering the device unbootable
@@ -229,8 +239,9 @@ pub async fn validate_current_ota_partition() -> Result<(), ()> {
     };
 
     let Ok(ota_image_state) = ota.current_ota_state() else {
-        error!("Could not obtain the ota image state");
-        return Err(());
+        // This happens when the running partition is factory
+        warn!("Could not obtain the ota image state. Running from Factory partition?");
+        return Ok(());
     };
 
     if current == esp_bootloader_esp_idf::ota::Slot::None {

@@ -135,11 +135,15 @@ async fn main(spawner: Spawner) -> ! {
     interrupt_spawner
         .spawn(uart_task(uart_buf, uart1, pin_channel_ref))
         .unwrap();
-    info!(
-        "Initialization done. Starting SSH server... version : v{}, build date: {}",
-        env!("CARGO_PKG_VERSION"),
-        env!("BUILD_DATE")
-    );
+
+    if let Some(build_date) = option_env!("BUILD_DATE") {
+        info!(
+            "Initialization done. Starting SSH server... version : v{}, build date: {}",
+            env!("CARGO_PKG_VERSION"),
+            build_date
+        );
+    }
+
     // Pass pin_channel_ref into accept_requests (so SSH handlers can use it).
     // NOTE: accept_requests signature must accept this arg; if it doesn't,
     // thread the reference into whatever code spawns handle_ssh_client.

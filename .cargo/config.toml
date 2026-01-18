@@ -52,7 +52,8 @@ rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s3"']
 
 # https://docs.espressif.com/projects/rust/esp-hal/1.0.0-beta.1/esp32c6/esp_hal/index.html#additional-configuration
 [env]
-ESP_LOG = "INFO"
+ESP_LOG = "info"
+# This wont work CONFIG_BOOTLOADER_LOG_LEVEL_VERBOSE = "y"
 #ESP_HAL_CONFIG_PLACE_SWITCH_TABLES_IN_RAM=true
 #ESP_HAL_CONFIG_PLACE_ANON_IN_RAM=false
 #ESP_HAL_CONFIG_FLIP_LINK=false
