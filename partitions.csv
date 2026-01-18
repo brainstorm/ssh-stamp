@@ -1,13 +1,9 @@
-# ESP-IDF Partition Table (4MB flash)
-# This partition table deliberately uses 4MB flash partition to accommodate the broader range of 
-# See [ESP32 ble ota tlv by mygnu](https://github.com/mygnu/esp32-ble-ota-tlv/)
-# MCU variants
-#
-# OTA configuration with two app partitions for firmware updates
-# **Explicit offsets for proper 64KB alignment of OTA partitions**
-# Name,     Type,   SubType,    Offset,     Size,       Flags
-app_config,        data,   nvs,        0x9000,     180K,
-otadata,    data,   ota,        0x36000,    8K,
-phy_init,   data,   phy,        0x38000,    4K,
-ota_0,      app,    ota_0,      0x40000,    1920K,
-ota_1,      app,    ota_1,      0x220000,   1920K,
+# ESP-IDF Partition Table (wont fit in 4MB targets)
+# Name,   Type, SubType, Offset,   Size,     Flags
+app_config,   data,  nvs,    0x9000,   0x2000,
+otadata,      data, ota,     0xd000,   0x2000,
+phy_init,     data, phy,     0xf000,   0x1000,
+factory,      app,  factory, 0x10000,  0x200000,
+ota_0,        app,  ota_0,   0x210000, 0x200000,
+ota_1,        app,  ota_1,   0x410000, 0x200000,
+# between app_config and otadata there is0x2000 bytes of free space
