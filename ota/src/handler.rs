@@ -285,14 +285,8 @@ impl UpdateProcessor {
                             return Err(OtaError::IllegalOperation);
                         };
 
-                        if original_hash
-                            != *self
-                                .hasher
-                                .clone()
-                                .finalize()
-                                .as_array()
-                                .ok_or(OtaError::VerificationFailed)?
-                        {
+                        let computed = self.hasher.clone().finalize();
+                        if &original_hash[..] != computed.as_slice() {
                             error!(
                                 "UpdateProcessor: Checksum mismatch after download! Expected: {:x?}`",
                                 original_hash

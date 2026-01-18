@@ -135,7 +135,7 @@ async fn main(spawner: Spawner) -> ! {
     interrupt_spawner
         .spawn(uart_task(uart_buf, uart1, pin_channel_ref))
         .unwrap();
-
+    // Optional version details logging
     if let Some(build_date) = option_env!("BUILD_DATE") {
         info!(
             "Initialization done. Starting SSH server... version : v{}, build date: {}",
