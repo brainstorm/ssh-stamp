@@ -74,7 +74,7 @@ async fn main(spawner: Spawner) -> ! {
     flash::init();
 
     // Careful here. There is a bug that might cause this call to crash
-    ota::validate_current_ota_partition()
+    ota::try_validating_current_ota_partition()
         .await
         .expect("Failed to validate the current ota partition");
 

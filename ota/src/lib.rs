@@ -25,7 +25,7 @@ mod sftpserver;
 mod target;
 
 #[cfg(target_os = "none")]
-pub use target::validate_current_ota_partition;
+pub use target::try_validating_current_ota_partition;
 /// Module defining TLV types and constants for OTA updates
 ///
 /// Re-exporting this module for easier access from outside the crate: ota-packer

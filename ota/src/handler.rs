@@ -175,18 +175,18 @@ impl UpdateProcessor {
 
                                 // Transition to Downloading state will be done after this match
 
-                                let update_slot =
-                                    target::get_next_app_slot().await.map_err(|e| {
-                                        error!(
-                                            "UpdateProcessor: Error getting OTA update slot: {:?}",
-                                            e
-                                        );
-                                        OtaError::InternalError
-                                    })?;
-                                info!("Starting OTA update in {update_slot:?}");
+                                // let update_slot =
+                                //     target::get_next_app_slot().await.map_err(|e| {
+                                //         error!(
+                                //             "UpdateProcessor: Error getting OTA update slot: {:?}",
+                                //             e
+                                //         );
+                                //         OtaError::InternalError
+                                //     })?;
+                                info!("Starting OTA update");
                                 self.state = UpdateProcessorState::Downloading {
                                     total_received_size: 0,
-                                    writer: OtaWriter::new(update_slot),
+                                    writer: OtaWriter::new(),
                                 };
                                 info!("Transitioning to Downloading state");
                             }
