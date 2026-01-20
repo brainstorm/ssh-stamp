@@ -4,11 +4,7 @@
 
 use sunset::sshwire::{SSHDecode, SSHSource, WireError};
 
-use crate::{
-    OtaHeader,
-    target::{self, OtaWriter},
-    tlv,
-};
+use crate::{OtaHeader, target::OtaWriter, tlv};
 
 use log::{debug, error, info, warn};
 use sha2::{Digest, Sha256};
@@ -173,16 +169,6 @@ impl UpdateProcessor {
 
                                 self.header.firmware_blob_size = Some(size);
 
-                                // Transition to Downloading state will be done after this match
-
-                                // let update_slot =
-                                //     target::get_next_app_slot().await.map_err(|e| {
-                                //         error!(
-                                //             "UpdateProcessor: Error getting OTA update slot: {:?}",
-                                //             e
-                                //         );
-                                //         OtaError::InternalError
-                                //     })?;
                                 info!("Starting OTA update");
                                 self.state = UpdateProcessorState::Downloading {
                                     total_received_size: 0,

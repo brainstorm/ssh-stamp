@@ -12,3 +12,4 @@ sunset-async.workspace = true
 
 embedded-storage.workspace = true
 esp-storage.workspace = true
+esp-hal.workspace = true

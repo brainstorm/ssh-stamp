@@ -55,7 +55,7 @@ async fn main(spawner: Spawner) -> ! {
 
     // System init
     let peripherals = esp_hal::init(esp_hal::Config::default());
-    let mut rng = Rng::new(peripherals.RNG);
+    let mut rng = Rng::new();
     let timg0 = TimerGroup::new(peripherals.TIMG0);
 
     rng::register_custom_rng(rng);
@@ -71,7 +71,7 @@ async fn main(spawner: Spawner) -> ! {
        }
     }
 
-    flash::init();
+    flash::init(peripherals.FLASH);
 
     // Careful here. There is a bug that might cause this call to crash
     ota::try_validating_current_ota_partition()

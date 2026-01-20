@@ -70,7 +70,7 @@ fn config_hash(config: &SSHStampConfig) -> Result<[u8; 32], SunsetError> {
 }
 
 /// Loads a SSHConfig at startup. Good for persisting hostkeys.
-pub async fn load_or_create(flash: &mut FlashBuffer) -> Result<SSHStampConfig, SunsetError> {
+pub async fn load_or_create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
     match load(flash).await {
         Ok(c) => {
             println!("Good existing config");
@@ -82,7 +82,7 @@ pub async fn load_or_create(flash: &mut FlashBuffer) -> Result<SSHStampConfig, S
     create(flash).await
 }
 
-pub async fn create(flash: &mut FlashBuffer) -> Result<SSHStampConfig, SunsetError> {
+pub async fn create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
     let c = SSHStampConfig::new()?;
     save(flash, &c).await?;
     dbg!("Created new config: ", &c);
@@ -90,7 +90,7 @@ pub async fn create(flash: &mut FlashBuffer) -> Result<SSHStampConfig, SunsetErr
     Ok(c)
 }
 
-pub async fn load(fl: &mut FlashBuffer) -> Result<SSHStampConfig, SunsetError> {
+pub async fn load(fl: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
     fl.flash
         .read(CONFIG_OFFSET as u32, &mut fl.buf)
         .map_err(|_e| {
@@ -120,7 +120,7 @@ pub async fn load(fl: &mut FlashBuffer) -> Result<SSHStampConfig, SunsetError> {
     }
 }
 
-pub async fn save(fl: &mut FlashBuffer, config: &SSHStampConfig) -> Result<(), SunsetError> {
+pub async fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(), SunsetError> {
     let sc = FlashConfig {
         version: SSHStampConfig::CURRENT_VERSION,
         config: OwnOrBorrow::Borrow(&config),

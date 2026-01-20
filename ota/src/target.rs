@@ -2,13 +2,12 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::handler::OtaError;
-
 use embedded_storage::Storage;
 use esp_bootloader_esp_idf;
 use esp_hal::system;
 use storage::flash;
 
+#[allow(unused_imports)]
 use log::{debug, error, info, warn};
 
 #[derive(Debug)]
@@ -51,39 +50,39 @@ impl OtaWriter {
 /// We use an slot since it does not require lifetimes and is easier to handle.
 // Tested with espflash md5 and espflash write-bin. Writing with SFTP seems to work fine.
 async fn write_to_target(offset: u32, data: &[u8]) -> FlashResult<()> {
-    let mut fb = flash::get_flash_n_buffer().lock().await;
-    let (storage, buffer) = fb.split_ref_mut();
-    let Ok(pt) = esp_bootloader_esp_idf::partitions::read_partition_table(
-        storage,
-        &mut buffer[..esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN],
-    ) else {
-        error!("Could not read partition table");
-        return Err(FlashError::ReadError);
+    let Some(fb) = flash::get_flash_n_buffer() else {
+        error!("Flash storage not initialized");
+        return Err(FlashError::InternalError);
     };
+    let mut fb = fb.lock().await;
 
-    // Next section requires a version bump to esp_storage to 0.8.1
-    // let mut ota =
-    //     esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_part_table)
-    //         .map_err(|e| {
-    //             error!("Could not create OtaUpdater: {:?}", e);
-    //             FlashError::InternalError
-    //         })?;
-    // let (mut target_partition, part_type) = ota.next_partition().map_err(|e| {
-    //     error!("Could not get next partition: {:?}", e);
-    //     FlashError::InternalError
-    // })?;
+    let (storage, _buffer) = fb.split_ref_mut();
 
-    // debug!("Flashing image to {:?}", part_type);
+    // OtaUpdater is very particular. It needs a mut ref of a buffer of the exact size of the partition table.
+    // This is why we create it here and did not reuse the buffer from fb.
+    let mut buff_ota = [0u8; esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN];
 
-    // debug!(
-    //     "Writing data to target_partition at offset {}, with len {}",
-    //     offset,
-    //     data.len()
-    // );
-    // target_partition.write(offset, data).map_err(|e| {
-    //     error!("Failed to write data to target_partition: {}", e);
-    //     FlashError::WriteError
-    // })?;
+    let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
+        .map_err(|e| {
+            error!("Could not create OtaUpdater: {:?}", e);
+            FlashError::InternalError
+        })?;
+    let (mut target_partition, part_type) = ota.next_partition().map_err(|e| {
+        error!("Could not get next partition: {:?}", e);
+        FlashError::InternalError
+    })?;
+
+    debug!("Flashing image to {:?}", part_type);
+
+    debug!(
+        "Writing data to target_partition at offset {}, with len {}",
+        offset,
+        data.len()
+    );
+    target_partition.write(offset, data).map_err(|e| {
+        error!("Failed to write data to target_partition: {}", e);
+        FlashError::WriteError
+    })?;
 
     Ok(())
 }
@@ -94,40 +93,32 @@ async fn write_to_target(offset: u32, data: &[u8]) -> FlashResult<()> {
 ///
 /// We use a slot since it does not require lifetimes and is easier to handle.
 async fn activate_next_ota_slot() -> FlashResult<()> {
-    let mut fb = flash::get_flash_n_buffer().lock().await;
-    let (storage, buffer) = fb.split_ref_mut();
+    let Some(fb) = flash::get_flash_n_buffer() else {
+        error!("Flash storage not initialized");
+        return Err(FlashError::InternalError);
+    };
+    let mut fb = fb.lock().await;
 
-    let (mut buff_part_table, _) = buffer
-        .split_at_mut_checked(esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN)
-        .ok_or({
-            error!("Could not split buffer for partition table");
+    let (storage, _buffer) = fb.split_ref_mut();
+
+    // OtaUpdater is very particular. It needs a mut ref of a buffer of the exact size of the partition table.
+    // This is why we create it here and did not reuse the buffer from fb.
+    let mut buff_ota = [0u8; esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN];
+
+    let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
+        .map_err(|e| {
+            error!("Could not create OtaUpdater: {:?}", e);
             FlashError::InternalError
         })?;
-    let pt =
-        esp_bootloader_esp_idf::partitions::read_partition_table(storage, &mut buff_part_table)
-            .map_err(|e| {
-                error!("Could not read partition table: {:?}", e);
-                FlashError::ReadError
-            })?;
-
-    debug!("Currently booted partition {:?}", pt.booted_partition());
-
-    // Next section requires a version bump to esp_storage to 0.8.1
-    // let mut ota =
-    //     esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_part_table)
-    //         .map_err(|e| {
-    //             error!("Could not create OtaUpdater: {:?}", e);
-    //             FlashError::InternalError
-    //         })?;
-    // ota.activate_next_partition().map_err(|e| {
-    //     error!("Could not activate next partition: {:?}", e);
-    //     FlashError::WriteError
-    // })?;
-    // ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::New)
-    //     .map_err(|e| {
-    //         error!("Could not set OTA image state to New: {:?}", e);
-    //         FlashError::WriteError
-    //     })?;
+    ota.activate_next_partition().map_err(|e| {
+        error!("Could not activate next partition: {:?}", e);
+        FlashError::WriteError
+    })?;
+    ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::New)
+        .map_err(|e| {
+            error!("Could not set OTA image state to New: {:?}", e);
+            FlashError::WriteError
+        })?;
 
     Ok(())
 }
@@ -140,55 +131,47 @@ async fn activate_next_ota_slot() -> FlashResult<()> {
 /// The default pre-compiled bootloader in espflash is NOT.
 ///
 pub async fn try_validating_current_ota_partition() -> FlashResult<()> {
-    /// Taken from [esp-rs ota_update example](https://github.com/esp-rs/esp-hal/blob/99042a7d60388580459eab6fe0d10e2f89d6ab6c/examples/src/bin/ota_update.rs)
-    let mut fb = flash::get_flash_n_buffer().lock().await;
-    let (storage, buffer) = fb.split_ref_mut();
+    // Taken from [esp-hal ota_update example](https://github.com/esp-rs/esp-hal/examples/src/bin/ota_update.rs)
+    let Some(fb) = flash::get_flash_n_buffer() else {
+        error!("Flash storage not initialized");
+        return Err(FlashError::InternalError);
+    };
+    let mut fb = fb.lock().await;
 
-    let (mut buff_part_table, _) = buffer
-        .split_at_mut_checked(esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN)
-        .ok_or({
-            error!("Could not split buffer for partition table");
+    let (storage, _buffer) = fb.split_ref_mut();
+
+    // OtaUpdater is very particular. It needs a mut ref of a buffer of the exact size of the partition table.
+    // This is why we create it here and did not reuse the buffer from fb.
+    let mut buff_ota = [0u8; esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN];
+
+    let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
+        .map_err(|e| {
+            error!("Could not create OtaUpdater: {:?}", e);
             FlashError::InternalError
         })?;
-    let pt =
-        esp_bootloader_esp_idf::partitions::read_partition_table(storage, &mut buff_part_table)
-            .map_err(|e| {
-                error!("Could not read partition table: {:?}", e);
-                FlashError::InternalError
-            })?;
+    let current = ota.selected_partition().map_err(|e| {
+        error!("Could not get selected partition: {:?}", e);
+        FlashError::InternalError
+    })?;
 
-    debug!("Currently booted partition {:?}", pt.booted_partition());
+    debug!(
+        "current image state {:?} (only relevant if the bootloader was built with auto-rollback support)",
+        ota.current_ota_state()
+    );
+    debug!("currently selected partition {:?}", current);
 
-    // Next section requires a version bump to esp_storage
-    // let mut ota =
-    //     esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_part_table)
-    //         .map_err(|e| {
-    //             error!("Could not create OtaUpdater: {:?}", e);
-    //             FlashError::InternalError
-    //         })?;
-    // let current = ota.selected_partition().map_err(|e| {
-    //     error!("Could not get selected partition: {:?}", e);
-    //     FlashError::InternalError
-    // })?;
-
-    // debug!(
-    //     "current image state {:?} (only relevant if the bootloader was built with auto-rollback support)",
-    //     ota.current_ota_state()
-    // );
-    // debug!("currently selected partition {:?}", current);
-
-    // if let Ok(state) = ota.current_ota_state() {
-    //     if state == esp_bootloader_esp_idf::ota::OtaImageState::New
-    //         || state == esp_bootloader_esp_idf::ota::OtaImageState::PendingVerify
-    //     {
-    //         ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::Valid)
-    //             .map_err(|e| {
-    //                 error!("Could not set OTA image state to Valid: {:?}", e);
-    //                 FlashError::WriteError
-    //             })?;
-    //         debug!("Changed state to VALID");
-    //     }
-    // }
+    if let Ok(state) = ota.current_ota_state() {
+        if state == esp_bootloader_esp_idf::ota::OtaImageState::New
+            || state == esp_bootloader_esp_idf::ota::OtaImageState::PendingVerify
+        {
+            ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::Valid)
+                .map_err(|e| {
+                    error!("Could not set OTA image state to Valid: {:?}", e);
+                    FlashError::WriteError
+                })?;
+            debug!("Changed state to VALID");
+        }
+    }
 
     Ok(())
 }
