@@ -15,9 +15,11 @@ use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_println::{dbg, println};
 
-use esp_wifi::EspWifiController;
-use esp_wifi::wifi::{AccessPointConfiguration, Configuration, WifiController, WifiDevice};
-use esp_wifi::wifi::{WifiEvent, WifiState};
+use esp_radio::Controller;
+use esp_radio::wifi::AccessPointConfig;
+use esp_radio::wifi::WifiController;
+use esp_radio::wifi::{ModeConfig, WifiDevice, WifiEvent};
+
 use sunset_async::SunsetMutex;
 
 use core::net::SocketAddrV4;
@@ -46,13 +48,15 @@ macro_rules! mk_static {
 
 pub async fn if_up(
     spawner: Spawner,
-    wifi_controller: EspWifiController<'static>,
+    wifi_controller: Controller<'static>,
     wifi: WIFI<'static>,
     rng: &mut Rng,
     config: &'static SunsetMutex<SSHStampConfig>,
 ) -> Result<Stack<'static>, sunset::Error> {
-    let wifi_init = &*mk_static!(EspWifiController<'static>, wifi_controller);
-    let (controller, interfaces) = esp_wifi::wifi::new(wifi_init, wifi).unwrap();
+    let wifi_init = &*mk_static!(Controller<'static>, wifi_controller);
+
+    let (controller, interfaces) =
+        esp_radio::wifi::new(wifi_init, wifi, Default::default()).unwrap();
 
     let gw_ip_addr_ipv4 = Ipv4Addr::from_str("192.168.0.1").expect("failed to parse gateway ip");
 
@@ -152,17 +156,16 @@ async fn wifi_up(
     //let wifi_password = config.lock().await.wifi_pw;
 
     loop {
-        if esp_wifi::wifi::wifi_state() == WifiState::ApStarted {
+        if matches!(controller.is_connected(), Ok(true)) {
             // wait until we're no longer connected
-            controller.wait_for_event(WifiEvent::ApStop).await;
+            controller.wait_for_event(WifiEvent::StaDisconnected).await;
             Timer::after(Duration::from_millis(5000)).await
         }
         if !matches!(controller.is_started(), Ok(true)) {
-            let client_config = Configuration::AccessPoint(AccessPointConfiguration {
-                ssid: wifi_ssid.to_ascii_lowercase(),
-                ..Default::default()
-            });
-            controller.set_configuration(&client_config).unwrap();
+            let client_config = ModeConfig::AccessPoint(
+                AccessPointConfig::default().with_ssid(wifi_ssid.as_str().into()), // Ugly
+            );
+            controller.set_config(&client_config).unwrap();
             println!("Starting wifi");
             controller.start_async().await.unwrap();
             println!("Wifi started!");

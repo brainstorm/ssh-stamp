@@ -4,7 +4,6 @@
 
 use core::option::Option::{self, None, Some};
 use core::result::Result;
-use core::writeln;
 
 use crate::espressif::buffered_uart::BufferedUart;
 use crate::keys;
