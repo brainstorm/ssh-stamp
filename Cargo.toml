@@ -28,10 +28,10 @@ sha2 = { version = "0.10", default-features = false }
 rustc-hash = { version = "2.1", default-features = false } # For hash in the OTA SFTP server TODO: For the optimisation task: Remove this dependency and use sha2 instead?
 log = "0.4"
 
-esp-hal = { version = "1.0.0-beta.1", features = ["unstable"] }
+esp-hal = { version = "1.0.0", features = ["unstable"] }
 embedded-storage = "0.3.1"
-esp-storage = { version = "0.6" }
-esp-bootloader-esp-idf = "0.4"
+esp-storage = { version = "0.8.1" }
+esp-bootloader-esp-idf = { version = "0.4" }
 
 static_cell = { version = "2", features = ["nightly"] }
 # Used for storage::flash singleton
@@ -60,16 +60,12 @@ smoltcp = { version = "0.12", default-features = false, features = [
 ] }
 embassy-time = { version = "0.4" }
 embedded-io-async = "0.6"
-esp-alloc = "0.8"
-esp-backtrace = { version = "0.16", features = [
-    "exception-handler",
-    "panic-handler",
-    "println",
-] }
+esp-alloc = "0.9.0"
+esp-backtrace = { version = "0.18.1", features = ["panic-handler", "println"] }
 esp-hal = { workspace = true }
-esp-hal-embassy = { version = "0.8" }
-esp-println = { version = "0.14", features = ["log-04"] }
-esp-wifi = { version = "0.14", features = ["wifi", "esp-alloc"] }
+esp-rtos = { version = "0.2.0", features = ["embassy", "log-04"] }
+esp-println = { version = "0.16.1", features = ["log-04"] }
+esp-radio = { version = "0.17.0", features = ["wifi"] }
 hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { workspace = true }
@@ -127,7 +123,7 @@ opt-level = "s"      # Optimize for size.
 [profile.dev.package.esp-storage]
 opt-level = "s"
 
-[profile.dev.package.esp-wifi]
+[profile.dev.package.esp-radio]
 opt-level = "s"
 
 [features]
@@ -136,9 +132,10 @@ default = ["esp32c6"]
 # MCU options
 esp32 = [
     "esp-hal/esp32",
+    "esp-alloc/esp32",
     "esp-backtrace/esp32",
-    "esp-wifi/esp32",
-    "esp-hal-embassy/esp32",
+    "esp-radio/esp32",
+    "esp-rtos/esp32",
     "esp-println/esp32",
     "esp-storage/esp32",
     "esp-bootloader-esp-idf/esp32",
@@ -146,9 +143,10 @@ esp32 = [
 ]
 esp32c2 = [
     "esp-hal/esp32c2",
+    "esp-alloc/esp32c2",
     "esp-backtrace/esp32c2",
-    "esp-wifi/esp32c2",
-    "esp-hal-embassy/esp32c2",
+    "esp-radio/esp32c2",
+    "esp-rtos/esp32c2",
     "esp-println/esp32c2",
     "esp-storage/esp32c2",
     "esp-bootloader-esp-idf/esp32c2",
@@ -156,19 +154,21 @@ esp32c2 = [
 ]
 esp32c3 = [
     "esp-hal/esp32c3",
+    "esp-alloc/esp32c3",
     "esp-backtrace/esp32c3",
-    "esp-wifi/esp32c3",
-    "esp-hal-embassy/esp32c3",
+    "esp-radio/esp32c3",
+    "esp-rtos/esp32c3",
     "esp-println/esp32c3",
     "esp-storage/esp32c3",
     "esp-bootloader-esp-idf/esp32c3",
     "embassy-executor/task-arena-size-40960",
 ]
 #esp32c5 = [
-#    "esp-hal/esp32c5",
+#    "esp-hal/esp32c5", 
+#    "esp-alloc/esp32c5",
 #    "esp-backtrace/esp32c5",
-#    "esp-wifi/esp32c5",
-#    "esp-hal-embassy/esp32c5",
+#    "esp-radio/esp32c5",
+#    "esp-rtos/esp32c5",
 #    "esp-println/esp32c5",
 #    "esp-storage/esp32c5",
 #    "esp-bootloader-esp-idf/esp32c5",
@@ -176,9 +176,10 @@ esp32c3 = [
 #]
 esp32c6 = [
     "esp-hal/esp32c6",
+    "esp-alloc/esp32c6",
     "esp-backtrace/esp32c6",
-    "esp-wifi/esp32c6",
-    "esp-hal-embassy/esp32c6",
+    "esp-radio/esp32c6",
+    "esp-rtos/esp32c6",
     "esp-println/esp32c6",
     "esp-storage/esp32c6",
     "esp-bootloader-esp-idf/esp32c6",
@@ -186,9 +187,10 @@ esp32c6 = [
 ]
 esp32s2 = [
     "esp-hal/esp32s2",
+    "esp-alloc/esp32s2",
     "esp-backtrace/esp32s2",
-    "esp-wifi/esp32s2",
-    "esp-hal-embassy/esp32s2",
+    "esp-radio/esp32s2",
+    "esp-rtos/esp32s2",
     "esp-println/esp32s2",
     "esp-storage/esp32s2",
     "esp-bootloader-esp-idf/esp32s2",
@@ -196,9 +198,10 @@ esp32s2 = [
 ]
 esp32s3 = [
     "esp-hal/esp32s3",
+    "esp-alloc/esp32s3",
     "esp-backtrace/esp32s3",
-    "esp-wifi/esp32s3",
-    "esp-hal-embassy/esp32s3",
+    "esp-radio/esp32s3",
+    "esp-rtos/esp32s3",
     "esp-println/esp32s3",
     "esp-storage/esp32s3",
     "esp-bootloader-esp-idf/esp32s3",
