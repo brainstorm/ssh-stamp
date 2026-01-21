@@ -8,17 +8,20 @@
 use core::marker::Sized;
 use esp_alloc as _;
 use esp_backtrace as _;
+#[cfg(feature = "esp32")]
+use esp_hal::timer::timg::TimerGroup;
 use esp_hal::{
     gpio::Pin,
     interrupt::{Priority, software::SoftwareInterruptControl},
     peripherals::UART1,
     rng::Rng,
-    timer::timg::TimerGroup,
     uart::{Config, RxConfig, Uart},
 };
-use esp_hal_embassy::InterruptExecutor;
 
 use embassy_executor::Spawner;
+// use esp_rtos::embassy::Executor;
+use esp_rtos::embassy::InterruptExecutor;
+
 use esp_println::dbg;
 
 use log::info;
@@ -39,7 +42,7 @@ use storage::flash;
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
 
-#[esp_hal_embassy::main]
+#[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
     cfg_if::cfg_if!(
         if #[cfg(feature = "esp32s2")] {
@@ -56,18 +59,18 @@ async fn main(spawner: Spawner) -> ! {
     // System init
     let peripherals = esp_hal::init(esp_hal::Config::default());
     let mut rng = Rng::new();
-    let timg0 = TimerGroup::new(peripherals.TIMG0);
+    // let timg0 = TimerGroup::new(peripherals.TIMG0); dhcp example uses it for esp_rtos as timg0.timer0
 
     rng::register_custom_rng(rng);
-
+    let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     cfg_if::cfg_if! {
        if #[cfg(feature = "esp32")] {
             let timg1 = TimerGroup::new(peripherals.TIMG1);
-            esp_hal_embassy::init(timg1.timer0);
+            esp_rtos::start(timg1.timer0, sw_int);
        } else {
            use esp_hal::timer::systimer::SystemTimer;
            let systimer = SystemTimer::new(peripherals.SYSTIMER);
-           esp_hal_embassy::init(systimer.alarm0);
+           esp_rtos::start(systimer.alarm0, sw_int.software_interrupt0);
        }
     }
 
@@ -80,7 +83,11 @@ async fn main(spawner: Spawner) -> ! {
 
     // Read SSH configuration from Flash (if it exists)
     let config = {
-        let mut flash_storage = flash::get_flash_n_buffer().lock().await;
+        // let rrr = flash::get_flash_n_buffer();
+        let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
+            panic!("Could not acquire flash storage lock");
+        };
+        let mut flash_storage = flash_storage_guard.lock().await;
         // TODO: Migrate this function/test to embedded-test.
         // Quick roundtrip test for SSHStampConfig
         // ssh_stamp::config::roundtrip_config();
@@ -91,7 +98,7 @@ async fn main(spawner: Spawner) -> ! {
     static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
     let config = CONFIG.init(SunsetMutex::new(config));
 
-    let wifi_controller = esp_wifi::init(timg0.timer0, rng, peripherals.RADIO_CLK).unwrap();
+    let wifi_controller = esp_radio::init().unwrap();
 
     // Bring up the network interface and start accepting SSH connections.
     // Clone the reference to config to avoid borrow checker issues.
@@ -101,9 +108,8 @@ async fn main(spawner: Spawner) -> ! {
 
     // Set up software buffered UART to run in a higher priority InterruptExecutor
     let uart_buf = UART_BUF.init_with(BufferedUart::new);
-    let software_interrupts = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     let interrupt_executor =
-        INT_EXECUTOR.init_with(|| InterruptExecutor::new(software_interrupts.software_interrupt0));
+        INT_EXECUTOR.init_with(|| InterruptExecutor::new(sw_int.software_interrupt1));
     cfg_if::cfg_if! {
         if #[cfg(any(feature = "esp32", feature = "esp32s2", feature = "esp32s3"))] {
             let interrupt_spawner = interrupt_executor.start(Priority::Priority1);
@@ -151,7 +157,7 @@ async fn main(spawner: Spawner) -> ! {
 }
 
 static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();
-static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
+static INT_EXECUTOR: StaticCell<InterruptExecutor<1>> = StaticCell::new(); // 0 is used for esp_rtos.
 
 #[embassy_executor::task()]
 async fn uart_task(

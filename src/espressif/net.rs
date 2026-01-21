@@ -16,9 +16,7 @@ use esp_hal::rng::Rng;
 use esp_println::{dbg, println};
 
 use esp_radio::Controller;
-use esp_radio::wifi::AccessPointConfig;
-use esp_radio::wifi::WifiController;
-use esp_radio::wifi::{ModeConfig, WifiDevice, WifiEvent};
+use esp_radio::wifi::{AccessPointConfig, ModeConfig, WifiController, WifiDevice, WifiEvent};
 
 use sunset_async::SunsetMutex;
 
@@ -53,10 +51,11 @@ pub async fn if_up(
     rng: &mut Rng,
     config: &'static SunsetMutex<SSHStampConfig>,
 ) -> Result<Stack<'static>, sunset::Error> {
-    let wifi_init = &*mk_static!(Controller<'static>, wifi_controller);
+    let _wifi_init = &*mk_static!(Controller<'static>, wifi_controller);
 
     let (controller, interfaces) =
-        esp_radio::wifi::new(wifi_init, wifi, Default::default()).unwrap();
+        esp_radio::wifi::new(_wifi_init, wifi, Default::default()).unwrap();
+    // esp_radio::wifi::new(wifi_init, wifi, Default::default()).unwrap();
 
     let gw_ip_addr_ipv4 = Ipv4Addr::from_str("192.168.0.1").expect("failed to parse gateway ip");
 

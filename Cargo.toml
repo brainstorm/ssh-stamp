@@ -28,9 +28,9 @@ sha2 = { version = "0.10", default-features = false }
 rustc-hash = { version = "2.1", default-features = false } # For hash in the OTA SFTP server TODO: For the optimisation task: Remove this dependency and use sha2 instead?
 log = "0.4"
 
-esp-hal = { version = "1.0.0", features = ["unstable"] }
+esp-hal = { version = "1.0.0", features = ["unstable", "log-04"] }
 embedded-storage = "0.3.1"
-esp-storage = { version = "0.8.1" }
+esp-storage = { version = "0.8.0" }
 esp-bootloader-esp-idf = { version = "0.4" }
 
 static_cell = { version = "2", features = ["nightly"] }
@@ -47,8 +47,8 @@ rustc-hash = { workspace = true }
 
 cfg-if = "1"
 ed25519-dalek = { version = "2", default-features = false }
-embassy-executor = { version = "0.7" }
-embassy-net = { version = "0.7", features = [
+embassy-executor = { version = "0.9.0" }
+embassy-net = { version = "0.7.0", features = [
     "tcp",
     "udp",
     "dhcpv4",
@@ -58,14 +58,14 @@ smoltcp = { version = "0.12", default-features = false, features = [
     "medium-ethernet",
     "socket-raw",
 ] }
-embassy-time = { version = "0.4" }
-embedded-io-async = "0.6"
+embassy-time = { version = "0.5.0" }
+embedded-io-async = "0.6.1"
 esp-alloc = "0.9.0"
-esp-backtrace = { version = "0.18.1", features = ["panic-handler", "println"] }
+esp-backtrace = { version = "0.18.0", features = ["panic-handler", "println"] }
 esp-hal = { workspace = true }
-esp-rtos = { version = "0.2.0", features = ["embassy", "log-04"] }
-esp-println = { version = "0.16.1", features = ["log-04"] }
-esp-radio = { version = "0.17.0", features = ["wifi"] }
+esp-rtos = { version = "0.2.0", features = ["embassy", "log-04", "esp-radio"] }
+esp-radio = { version = "0.17.0", features = ["wifi", "log-04"] }
+esp-println = { version = "0.16", features = ["log-04"] }
 hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { workspace = true }
@@ -139,7 +139,7 @@ esp32 = [
     "esp-println/esp32",
     "esp-storage/esp32",
     "esp-bootloader-esp-idf/esp32",
-    "embassy-executor/task-arena-size-40960",
+    # "embassy-executor/task-arena-size-40960",
 ]
 esp32c2 = [
     "esp-hal/esp32c2",
@@ -150,7 +150,7 @@ esp32c2 = [
     "esp-println/esp32c2",
     "esp-storage/esp32c2",
     "esp-bootloader-esp-idf/esp32c2",
-    "embassy-executor/task-arena-size-40960",
+    # "embassy-executor/task-arena-size-40960",
 ]
 esp32c3 = [
     "esp-hal/esp32c3",
@@ -161,7 +161,7 @@ esp32c3 = [
     "esp-println/esp32c3",
     "esp-storage/esp32c3",
     "esp-bootloader-esp-idf/esp32c3",
-    "embassy-executor/task-arena-size-40960",
+    # "embassy-executor/task-arena-size-40960",
 ]
 #esp32c5 = [
 #    "esp-hal/esp32c5", 
@@ -172,7 +172,6 @@ esp32c3 = [
 #    "esp-println/esp32c5",
 #    "esp-storage/esp32c5",
 #    "esp-bootloader-esp-idf/esp32c5",
-#    "embassy-executor/task-arena-size-40960",
 #]
 esp32c6 = [
     "esp-hal/esp32c6",
@@ -183,7 +182,7 @@ esp32c6 = [
     "esp-println/esp32c6",
     "esp-storage/esp32c6",
     "esp-bootloader-esp-idf/esp32c6",
-    "embassy-executor/task-arena-size-40960",
+    # "embassy-executor/task-arena-size-40960",
 ]
 esp32s2 = [
     "esp-hal/esp32s2",
@@ -194,7 +193,7 @@ esp32s2 = [
     "esp-println/esp32s2",
     "esp-storage/esp32s2",
     "esp-bootloader-esp-idf/esp32s2",
-    "embassy-executor/task-arena-size-32768",
+    # "embassy-executor/task-arena-size-32768",
 ]
 esp32s3 = [
     "esp-hal/esp32s3",
@@ -205,5 +204,5 @@ esp32s3 = [
     "esp-println/esp32s3",
     "esp-storage/esp32s3",
     "esp-bootloader-esp-idf/esp32s3",
-    "embassy-executor/task-arena-size-40960",
+    # "embassy-executor/task-arena-size-40960",
 ]
