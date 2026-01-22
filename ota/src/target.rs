@@ -32,6 +32,13 @@ impl OtaWriter {
     pub(crate) fn new() -> Self {
         OtaWriter {}
     }
+
+    /// Gets the size of the target OTA partition.
+    pub(crate) async fn ota_partition_size() -> FlashResult<u32> {
+        let partition_size =
+            u32::try_from(next_ota_size().await?).map_err(|_| FlashError::InternalError)?;
+        Ok(partition_size)
+    }
     // TODO: Not tested. May crash!
     /// Writes data to the target OTA partition at the given offset.
     pub(crate) async fn write(&self, offset: u32, data: &[u8]) -> FlashResult<()> {
@@ -43,6 +50,33 @@ impl OtaWriter {
         activate_next_ota_slot().await?;
         system::software_reset(); // TODO: Not the right place. I would need to signal the main app to reboot after closing the SFTP session
     }
+}
+
+/// Gets the size of the next OTA partition.
+async fn next_ota_size() -> FlashResult<usize> {
+    let Some(fb) = flash::get_flash_n_buffer() else {
+        error!("Flash storage not initialized");
+        return Err(FlashError::InternalError);
+    };
+    let mut fb = fb.lock().await;
+
+    let (storage, _buffer) = fb.split_ref_mut();
+
+    // OtaUpdater is very particular. It needs a mut ref of a buffer of the exact size of the partition table.
+    // This is why we create it here and did not reuse the buffer from fb.
+    let mut buff_ota = [0u8; esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN];
+
+    let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
+        .map_err(|e| {
+            error!("Could not create OtaUpdater: {:?}", e);
+            FlashError::InternalError
+        })?;
+    let (mut target_partition, part_type) = ota.next_partition().map_err(|e| {
+        error!("Could not get next partition: {:?}", e);
+        FlashError::InternalError
+    })?;
+
+    Ok(target_partition.partition_size())
 }
 
 /// Finds the next app slot to write the OTA update to.
@@ -110,6 +144,7 @@ async fn activate_next_ota_slot() -> FlashResult<()> {
             error!("Could not create OtaUpdater: {:?}", e);
             FlashError::InternalError
         })?;
+
     ota.activate_next_partition().map_err(|e| {
         error!("Could not activate next partition: {:?}", e);
         FlashError::WriteError

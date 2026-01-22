@@ -166,7 +166,18 @@ impl UpdateProcessor {
                                         UpdateProcessorState::Error(OtaError::IllegalOperation);
                                     return Err(OtaError::IllegalOperation);
                                 }
-
+                                let max_size = OtaWriter::ota_partition_size()
+                                    .await
+                                    .map_err(|_| OtaError::InternalError)?;
+                                if size > max_size {
+                                    error!(
+                                        "UpdateProcessor: Firmware blob size {} exceeds OTA partition size {}",
+                                        size, max_size
+                                    );
+                                    self.state =
+                                        UpdateProcessorState::Error(OtaError::IllegalOperation);
+                                    return Err(OtaError::IllegalOperation);
+                                }
                                 self.header.firmware_blob_size = Some(size);
 
                                 info!("Starting OTA update");

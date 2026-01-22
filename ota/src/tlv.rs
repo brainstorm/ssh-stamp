@@ -193,7 +193,7 @@ impl<'a> TlvsSource<'a> {
                     .try_into()
                     .unwrap(),
             ) as usize;
-            info!(
+            debug!(
                 "value length: {}, Source remaining bytes: {}",
                 val_len,
                 self.remaining()
