@@ -51,22 +51,12 @@ pub async fn if_up(
     rng: &mut Rng,
     config: &'static SunsetMutex<SSHStampConfig>,
 ) -> Result<Stack<'static>, sunset::Error> {
-    let _wifi_init = &*mk_static!(Controller<'static>, wifi_controller);
+    let wifi_init = &*mk_static!(Controller<'static>, wifi_controller);
 
     let (controller, interfaces) =
-        esp_radio::wifi::new(_wifi_init, wifi, Default::default()).unwrap();
-    // esp_radio::wifi::new(wifi_init, wifi, Default::default()).unwrap();
+        esp_radio::wifi::new(wifi_init, wifi, Default::default()).unwrap();
 
     let gw_ip_addr_ipv4 = Ipv4Addr::from_str("192.168.0.1").expect("failed to parse gateway ip");
-
-    // let _gw_ip_addr = {
-    //     let guard = config.lock().await;
-    //     if let Some(ref s) = guard.ip4_static {
-    //         embassy_net::Config::ipv4_static(s.clone())
-    //     } else {
-    //         embassy_net::Config::dhcpv4(Default::default())
-    //     }
-    // };
 
     let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(gw_ip_addr_ipv4, 24),
