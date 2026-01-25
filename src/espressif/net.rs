@@ -12,6 +12,7 @@ use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_println::{dbg, println};
 
+use esp_radio::Controller;
 use esp_radio::wifi::{AccessPointConfig, ModeConfig, WifiController, WifiDevice};
 use esp_radio::wifi::{WifiEvent, WifiApState};
 use heapless::String;
@@ -44,14 +45,13 @@ macro_rules! mk_static {
 
 pub async fn if_up(
     spawner: Spawner,
-    wifi_controller: WifiController<'static>,
+    wifi_controller: Controller<'static>,
     wifi: WIFI<'static>,
     rng: &mut Rng,
     config: &'static SunsetMutex<SSHStampConfig>,
 ) -> Result<Stack<'static>, sunset::Error> {
-    let hal_config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
-    let wifi_init = &*mk_static!(WifiController<'static>, wifi_controller);
-    let (controller, interfaces) = esp_radio::wifi::new(wifi.reborrow(), hal_config).unwrap();
+    let wifi_init = &*mk_static!(Controller<'static>, wifi_controller);
+    let (mut controller, interfaces) = esp_radio::wifi::new(wifi_init, wifi, Default::default()).unwrap();
 
     let ap_config =
         ModeConfig::AccessPoint(AccessPointConfig::default().with_ssid(DEFAULT_SSID.into()));
@@ -59,15 +59,6 @@ pub async fn if_up(
     println!("wifi_set_configuration returned {:?}", res);
 
     let gw_ip_addr_ipv4 = settings::DEFAULT_IP.clone();
-
-    // let _gw_ip_addr = {
-    //     let guard = config.lock().await;
-    //     if let Some(ref s) = guard.ip4_static {
-    //         embassy_net::Config::ipv4_static(s.clone())
-    //     } else {
-    //         embassy_net::Config::dhcpv4(Default::default())
-    //     }
-    // };
 
     let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(gw_ip_addr_ipv4, 24),
