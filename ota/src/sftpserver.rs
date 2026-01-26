@@ -4,7 +4,7 @@
 
 use core::hash::Hasher;
 
-use crate::handler::UpdateProcessor;
+use crate::{handler::UpdateProcessor, storagetraits::OtaActions};
 
 use sunset::sshwire::{BinString, WireError};
 use sunset_async::ChanInOut;
@@ -18,7 +18,10 @@ use sunset_sftp::{
 use log::{debug, error, info, warn};
 use rustc_hash::FxHasher;
 
-pub async fn run_ota_server(stdio: ChanInOut<'_>) -> Result<(), sunset::Error> {
+pub async fn run_ota_server<W: OtaActions>(
+    stdio: ChanInOut<'_>,
+    ota_writer: W,
+) -> Result<(), sunset::Error> {
     // Placeholder for OTA server logic
     // This function would handle the SFTP session and perform OTA updates
     warn!("WIP SFTP OTA Under tests");
@@ -26,9 +29,9 @@ pub async fn run_ota_server(stdio: ChanInOut<'_>) -> Result<(), sunset::Error> {
     let mut request_buffer = [0u8; 512];
 
     match {
-        let mut file_server = SftpOtaServer::new();
+        let mut file_server = SftpOtaServer::new(ota_writer);
 
-        SftpHandler::<OtaOpaqueFileHandle, SftpOtaServer<OtaOpaqueFileHandle>, 512>::new(
+        SftpHandler::<OtaOpaqueFileHandle, SftpOtaServer<OtaOpaqueFileHandle, W>, 512>::new(
             &mut file_server,
             &mut request_buffer,
         )
@@ -94,25 +97,25 @@ impl OpaqueFileHandle for OtaOpaqueFileHandle {
 ///
 /// This struct implements the SftpServer trait for handling OTA updates over SFTP
 /// For now, all methods log an error and return unsupported operation as this is a placeholder
-struct SftpOtaServer<T> {
+struct SftpOtaServer<T, W: OtaActions> {
     // Add fields as necessary for OTA server state
     file_handle: Option<T>,
     write_permission: bool,
-    processor: UpdateProcessor,
+    processor: UpdateProcessor<W>,
 }
 
-impl<T> SftpOtaServer<T> {
-    pub fn new() -> Self {
+impl<T, W: OtaActions> SftpOtaServer<T, W> {
+    pub fn new(ota_writer: W) -> Self {
         Self {
             // Initialize fields as necessary
             file_handle: None,
             write_permission: false,
-            processor: UpdateProcessor::new(),
+            processor: UpdateProcessor::new(ota_writer),
         }
     }
 }
 
-impl<'a, T: OpaqueFileHandle> SftpServer<'a, T> for SftpOtaServer<T> {
+impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer<T, W> {
     async fn open(
         &'_ mut self,
         path: &str,

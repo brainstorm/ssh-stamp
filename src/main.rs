@@ -19,13 +19,12 @@ use esp_hal::{
 };
 
 use embassy_executor::Spawner;
-// use esp_rtos::embassy::Executor;
 use esp_rtos::embassy::InterruptExecutor;
 
 use esp_println::dbg;
 
 use log::info;
-use ota;
+
 use ssh_stamp::pins;
 use ssh_stamp::pins::GPIOConfig;
 use ssh_stamp::pins::PinChannel;
@@ -37,6 +36,8 @@ use ssh_stamp::{
         rng,
     },
 };
+
+use ota::storagetraits::OtaActions;
 use storage::flash;
 
 use static_cell::StaticCell;
@@ -76,8 +77,8 @@ async fn main(spawner: Spawner) -> ! {
 
     flash::init(peripherals.FLASH);
 
-    // Careful here. There is a bug that might cause this call to crash
-    ota::try_validating_current_ota_partition()
+    // TODO: Based on compilation flags, use the right OtaActions implementer
+    storage::esp::OtaWriter::try_validating_current_ota_partition()
         .await
         .expect("Failed to validate the current ota partition");
 

@@ -16,14 +16,6 @@ log.workspace = true
 sha2.workspace = true
 rustc-hash.workspace = true
 
-
-# Avoids issues with ota-packer building for x86_64-unknown-linux-gnu target
-[target.'cfg(target_os = "none")'.dependencies]
-esp-hal.workspace = true
-storage = { path = "../storage" }
-esp-bootloader-esp-idf.workspace = true
-embedded-storage.workspace = true
-
 # Only for ota-packer binary
 [target.'cfg(not(target_os = "none"))'.dependencies]
 clap = "4.5"

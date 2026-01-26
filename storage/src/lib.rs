@@ -3,23 +3,31 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// Module defining the ESP32-specific storage traits implementations for OTA updates
+#[cfg(any(
+    feature = "esp32",
+    feature = "esp32s2",
+    feature = "esp32s3",
+    feature = "esp32c3",
+    feature = "esp32c6"
+))]
+pub mod esp;
+
+// TODO: When the time comes, generalise the flash so it can be used with all supported targets
 /// [[flash]] is a packet to provide safe access to the Flash storage used by SSH-Stamp
 ///
 /// It does so by storing the FlashStorage and a buffer for read/write operations in a single structure
 /// protected by a SunsetMutex for safe concurrent access in async contexts.
 pub mod flash {
     use esp_hal::peripherals::FLASH;
+    use esp_storage::FlashStorage;
+    const FLASH_BUF_SIZE: usize = esp_storage::FlashStorage::SECTOR_SIZE as usize;
+    static FLASH_STORAGE: OnceCell<SunsetMutex<FlashBuffer>> = OnceCell::new();
+
     #[allow(unused_imports)]
     use log::{debug, error, info, warn};
     use once_cell::sync::OnceCell;
-
-    use esp_storage::FlashStorage;
-
     use sunset_async::SunsetMutex;
-
-    const FLASH_BUF_SIZE: usize = esp_storage::FlashStorage::SECTOR_SIZE as usize;
-
-    static FLASH_STORAGE: OnceCell<SunsetMutex<FlashBuffer>> = OnceCell::new();
 
     /// A structure that holds both the FlashStorage and a buffer for read/write operations
     ///

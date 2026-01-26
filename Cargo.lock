@@ -1519,13 +1519,9 @@ name = "ota"
 version = "0.1.0"
 dependencies = [
  "clap",
- "embedded-storage",
- "esp-bootloader-esp-idf",
- "esp-hal",
  "log",
  "rustc-hash",
  "sha2",
- "storage",
  "sunset",
  "sunset-async",
  "sunset-sftp",
@@ -1997,10 +1993,12 @@ name = "storage"
 version = "0.1.0"
 dependencies = [
  "embedded-storage",
+ "esp-bootloader-esp-idf",
  "esp-hal",
  "esp-storage",
  "log",
  "once_cell",
+ "ota",
  "sunset-async",
 ]
 
