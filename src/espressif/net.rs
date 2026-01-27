@@ -6,7 +6,6 @@ use embassy_net::{tcp::TcpSocket, Stack, StackResources};
 use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, StaticConfigV4};
 use embassy_time::{Duration, Timer};
 
-use esp_hal::clock::CpuClock;
 use esp_hal::peripherals::WIFI;
 
 use esp_hal::rng::Rng;
