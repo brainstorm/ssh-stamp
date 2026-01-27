@@ -9,10 +9,10 @@ license = "MIT OR Apache-2.0"
 cfg-if = "1"
 ed25519-dalek = { version = "2", default-features = false }
 embassy-executor = { version = "0.9"}
-embassy-net = { path = "../embassy/embassy-net", version = "0.8", features = ["tcp", "udp", "dhcpv4", "medium-ethernet"] }
+embassy-net = { version = "0.7", features = ["tcp", "udp", "dhcpv4", "medium-ethernet"] }
 smoltcp = { version = "0.12", default-features = false, features = ["medium-ethernet", "socket-raw"]}
-embassy-time = { path = "../embassy/embassy-time", version = "0.5" }
-embedded-io-async = { path = "../embedded-hal/embedded-io-async", version = "0.7" }
+embassy-time = { version = "0.5" }
+embedded-io-async = "0.7"
 esp-alloc = "0.9"
 esp-backtrace = { version = "0.18", features = [
     "panic-handler",
@@ -33,18 +33,17 @@ sunset-sshwire-derive = { git = "https://github.com/mkj/sunset", rev = "e05ffb6"
 # sunset-async = { path = "../sunset/async", default-features = false, features = ["multi-thread"]}
 # sunset-sshwire-derive = { path = "../sunset/sshwire-derive", default-features = false }
 getrandom = { version = "0.2.10", features = ["custom"] }
-embassy-sync = { path = "../embassy/embassy-sync", version="0.7" }
+embassy-sync = "0.7"
 heapless = "0.9"
 embassy-futures = "0.1"
-edge-dhcp = { path = "../edge-net/edge-dhcp", version = "0.7" }
-edge-nal = { path = "../edge-net/edge-nal", version = "0.6" }
-# edge-nal-embassy = "0.8"
-edge-nal-embassy = { path = "../edge-net/edge-nal-embassy", version = "0.8" }
+edge-dhcp = "0.6"
+edge-nal = "0.5"
+edge-nal-embassy = "0.7"
 #sequential-storage = { version = "4", features = ["heapless"] }
 esp-storage = { version = "0.8" }
 embedded-storage = "0.3"
 embassy-embedded-hal = "0.5"
-bcrypt = { version = "0.18", default-features = false }
+bcrypt = { version = "0.17", default-features = false }
 subtle = { version = "2", default-features = false }
 hmac = { version = "0.12", default-features = false }
 sha2 = { version = "0.10", default-features = false }
