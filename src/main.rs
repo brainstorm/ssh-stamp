@@ -7,7 +7,7 @@ use core::result::Result::Err;
 use core::future::Future;
 use embassy_futures::select::{select3, Either3};
 use embassy_executor::Spawner;
-use embassy_net::{ Stack, tcp::TcpSocket};
+use embassy_net::{ Stack, tcp::TcpSocket, IpListenEndpoint};
 use embassy_sync::{
     blocking_mutex::raw::NoopRawMutex,
     channel::Channel
@@ -118,6 +118,11 @@ pub async fn tcp_wait_for_initialisation<'a>(s: WifiEnabledConsumed<'a>) ->  Sta
 pub async fn tcp_disable() -> (){
     // drop tcp stack
 }
+
+pub async fn socket_disable() -> (){
+    // drop socket
+}
+
 
 pub async fn ssh_wait_for_initialisation<'server>(inbuf: &'server mut [u8; UART_BUFFER_SIZE], outbuf: &'server mut [u8; UART_BUFFER_SIZE]) -> SSHServer<'server>{
     let ssh_server = SSHServer::new(inbuf, outbuf);
@@ -311,8 +316,8 @@ async fn peripherals_enabled<'a>(s: SshStampInit<'a>) -> Result<(), sunset::Erro
         }
     }
 
-    tcp_disable().await;
     Ok(())
+    wifi_disable().await;
 }
 
 pub struct WifiEnabledConsumed<'a> {
@@ -331,54 +336,96 @@ pub struct WifiEnabled<'a> {
     pub gpio11: GPIO11<'a>,
 }
 async fn wifi_enabled<'a>(s: PeripheralsEnabled<'a>) -> Result<(), sunset::Error> {
-        let wifi_ssid_config = {
-            let guard = s.config.lock().await;
-            guard.wifi_ssid.clone()
+    let wifi_ssid_config = {
+        let guard = s.config.lock().await;
+        guard.wifi_ssid.clone()
+    };
+    let wifi_enabled_consumed = WifiEnabledConsumed {
+        rng: s.rng,
+        wifi: s.wifi,
+        // config: s.config,
+        wifi_ssid: wifi_ssid_config,
+        spawner: s.spawner,
+        wifi_controller: s.wifi_controller,
         };
-        let wifi_enabled_consumed = WifiEnabledConsumed {
-            rng: s.rng,
-            wifi: s.wifi,
-            // config: s.config,
-            wifi_ssid: wifi_ssid_config,
-            spawner: s.spawner,
-            wifi_controller: s.wifi_controller,
-            };
-        let tcp_stack = tcp_wait_for_initialisation(wifi_enabled_consumed).await;
-        let wifi_enabled_struct = WifiEnabled {
-            rng: s.rng,
-            config: s.config,
-            tcp_stack: tcp_stack,
-            gpio10: s.gpio10,
-            gpio11: s.gpio11,
-            };
-        match tcp_enabled(wifi_enabled_struct).await {
-            Ok(_) => (),
-            Err(e) => {
-                println!("SSH error: {}", e);
-            }
+    let tcp_stack = tcp_wait_for_initialisation(wifi_enabled_consumed).await;
+    let wifi_enabled_struct = WifiEnabled {
+        rng: s.rng,
+        config: s.config,
+        tcp_stack: tcp_stack,
+        gpio10: s.gpio10,
+        gpio11: s.gpio11,
+        };
+    match tcp_enabled(wifi_enabled_struct).await {
+        Ok(_) => (),
+        Err(e) => {
+            println!("SSH error: {}", e);
         }
-        ssh_disable().await;
     Ok(())
-
+    }
+    tcp_disable().await;
 }
 
 pub struct TCPEnabled<'a> {
     pub rng: Rng,
     pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub tcp_stack: Stack<'a>,
-    pub ssh_server: SSHServer<'a>,
+    pub tcp_socket: TcpSocket<'a>,
     pub gpio10: GPIO10<'a>,
     pub gpio11: GPIO11<'a>,
 }
 async fn tcp_enabled<'a>(s: WifiEnabled<'a>) -> Result<(), sunset::Error> {
+
+    let mut rx_buffer = [0u8; 1536];
+    let mut tx_buffer = [0u8; 1536];
+    let mut tcp_socket = TcpSocket::new(s.tcp_stack, &mut rx_buffer, &mut tx_buffer);
+
+    println!("Waiting for SSH client...");
+    if let Err(e) = tcp_socket
+        .accept(IpListenEndpoint {
+            addr: None,
+            port: 22,
+        })
+        .await
+    {
+        println!("connect error: {:?}", e);
+        socket_disable().await;
+    }
+    println!("Connected, port 22");
+    let tcp_enabled_struct = TCPEnabled {
+        rng: s.rng,
+        config: s.config,
+        tcp_socket: tcp_socket,
+        gpio10: s.gpio10,
+        gpio11: s.gpio11,
+        };
+    match socket_enabled(tcp_enabled_struct).await {
+        Ok(_) => (),
+        Err(e) => {
+            println!("Wifi error: {}", e);
+        }
+    }
+    socket_disable().await;
+    Ok(()) // todo!() return relevant value
+ }
+
+pub struct SocketEnabled<'a> {
+    pub rng: Rng,
+    pub config: &'a SunsetMutex<SSHStampConfig>,
+    pub tcp_socket: TcpSocket<'a>,
+    pub ssh_server: SSHServer<'a>,
+    pub gpio10: GPIO10<'a>,
+    pub gpio11: GPIO11<'a>,
+}
+async fn socket_enabled<'a>(s: TCPEnabled<'a>) -> Result<(), sunset::Error> {
     // loop {
+        // Spawn network tasks to handle incoming connections with demo_common::session()
         let mut inbuf = [0u8; UART_BUFFER_SIZE];
         let mut outbuf = [0u8; UART_BUFFER_SIZE];
         let ssh_server = ssh_wait_for_initialisation(&mut inbuf, &mut outbuf).await;
-        let wifi_enabled_struct = TCPEnabled {
+        let wifi_enabled_struct = SocketEnabled {
             rng: s.rng,
             config: s.config,
-            tcp_stack: s.tcp_stack,
+            tcp_socket: s.tcp_socket,
             ssh_server: ssh_server,
             gpio10: s.gpio10,
             gpio11: s.gpio11,
@@ -390,7 +437,7 @@ async fn tcp_enabled<'a>(s: WifiEnabled<'a>) -> Result<(), sunset::Error> {
             }
         }
 
-        wifi_disable().await;
+        ssh_disable().await;
     // }
     Ok(())
 
@@ -405,12 +452,12 @@ pub struct SshEnabledConsumed<'a> {
 
 pub struct SshEnabled<'a> {
     pub rng: Rng,
-    pub tcp_stack: Stack<'a>,
+    pub tcp_socket: TcpSocket<'a>,
     pub ssh_server: SSHServer<'a>,
     pub uart_pins: PinChannel<'a>,
 }
 
-async fn ssh_enabled<'a>(s: TCPEnabled<'a>) -> Result<(), sunset::Error> {
+async fn ssh_enabled<'a>(s: SocketEnabled<'a>) -> Result<(), sunset::Error> {
     // loop {
         let ssh_enabled_consumed = SshEnabledConsumed {
             config: s.config,
@@ -422,7 +469,7 @@ async fn ssh_enabled<'a>(s: TCPEnabled<'a>) -> Result<(), sunset::Error> {
 
         let ssh_enabled_struct = SshEnabled {
             rng: s.rng,
-            tcp_stack: s.tcp_stack,
+            tcp_socket: s.tcp_socket,
             ssh_server: s.ssh_server,
             uart_pins: uart_pins,
         };
@@ -441,17 +488,17 @@ async fn ssh_enabled<'a>(s: TCPEnabled<'a>) -> Result<(), sunset::Error> {
 
 pub struct UartConfigured<'a> {
     pub rng: Rng,
-    pub tcp_stack: Stack<'a>,
+    pub tcp_socket: TcpSocket<'a>,
     pub ssh_server: SSHServer<'a>,
     pub uart_pins: PinChannel<'a>,
     pub uart_buff: &'a BufferedUart,
 }
-async fn uart_configured<'a>(s: SshEnabled<'a>) -> Result<(), sunset::Error> {
+async fn uart_configured<'a>(s: SshEnabled<'a>) -> Result<(), sunset::Error> {// where 'b: 'a {
     // loop {
         let uart_buff = uart_buffer_wait_for_initialisation().await;
         let uart_configured_struct = UartConfigured {
             rng: s.rng,
-            tcp_stack: s.tcp_stack,
+            tcp_socket: s.tcp_socket,
             ssh_server: s.ssh_server,
             uart_pins: s.uart_pins,
             uart_buff: uart_buff,
@@ -472,13 +519,12 @@ async fn uart_configured<'a>(s: SshEnabled<'a>) -> Result<(), sunset::Error> {
 
 pub struct UartEnabledConsumed<'a>{
     pub rng: Rng,
-    pub tcp_stack: Stack<'a>,
     pub uart_buff: &'a BufferedUart,
     pub chan_pipe: Channel<NoopRawMutex, serve::SessionType, 1>,
 }
 pub struct UartEnabled<'a, 'b, CL> where CL: Future<Output = Result<(), sunset::Error>>{
     pub rng: Rng,
-    pub tcp_stack: Stack<'a>,
+    pub tcp_socket: TcpSocket<'a>,
     pub ssh_server: &'b SSHServer<'a>,
     pub uart_buff: &'a BufferedUart,
     pub connection_loop:  CL,
@@ -489,15 +535,16 @@ async fn uart_enabled<'a, 'b>(s: UartConfigured<'a>) -> Result<(), sunset::Error
 
         let uart_enabled_consumed = UartEnabledConsumed {
             rng: s.rng,
-            tcp_stack: s.tcp_stack,
             uart_buff: s.uart_buff,
             chan_pipe: chan_pipe,
         };
+
+        println!("Calling connection_loop from uart_enabled");
         let connection = idle_wait_for_connection(uart_enabled_consumed, &s.ssh_server, s.uart_pins);
 
         let uart_enabled_struct = UartEnabled {
             rng: s.rng,
-            tcp_stack: s.tcp_stack,
+            tcp_socket: s.tcp_socket,
             ssh_server: &s.ssh_server,
             uart_buff: s.uart_buff,
             connection_loop: connection,
@@ -509,9 +556,9 @@ async fn uart_enabled<'a, 'b>(s: UartConfigured<'a>) -> Result<(), sunset::Error
             }
         }
 
-        bridge_disable().await;
+        idle_disable().await;
     // }
-    Ok(())
+    Ok(()) // todo!() return relevant value
 }
 
 pub struct ClientConnectedConsumed<'a, 'b> {
@@ -523,7 +570,7 @@ pub struct ClientConnected<'a, 'b, CL, BR> where CL: Future<Output = Result<(), 
     pub ssh_server: &'b SSHServer<'a>,
     pub bridge:  BR,
     pub connection_loop: CL,
-    pub tcp_socket: TcpSocket<'b>,
+    pub tcp_socket: TcpSocket<'a>,
 
 }
 
@@ -561,9 +608,11 @@ async fn client_connected<'a, 'b, CL>(s: UartEnabled<'a, 'b, CL> )  -> Result<()
 async fn bridge_connected<'a, 'b, CL, BR>(s:ClientConnected<'a, 'b, CL, BR>) -> Result<(), sunset::Error> where CL: Future<Output = Result<(), sunset::Error>>, BR: Future<Output = Result<(), sunset::Error>>, 'a:'b{
     let mut tcp_socket = s.tcp_socket;
     let (mut rsock, mut wsock) = tcp_socket.split();
+    println!("Running server from handle_ssh_client()");
     let server = s.ssh_server.run(&mut rsock, &mut wsock);
     let connection_loop = s.connection_loop;
     let bridge = s.bridge;
+    println!("Main select() in bridge_connected()");
     match select3(server, connection_loop, bridge).await {
         Either3::First(r) => r,
         Either3::Second(r) => r,
