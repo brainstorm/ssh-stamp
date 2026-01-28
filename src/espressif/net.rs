@@ -106,9 +106,9 @@ pub async fn if_up<'a>(
 
 pub async fn accept_requests<'a>(
     stack: Stack<'a>,
-    uart: &BufferedUart,
+    _uart: &BufferedUart,
     // pin_channel_ref: &'a sunset_async::SunsetMutex<crate::pins::PinChannel<'_>>,
-    pin_channel_ref: &crate::pins::PinChannel<'a>,
+    _pin_channel_ref: &crate::pins::PinChannel<'a>,
 ) -> ! {
     // let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
     // let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
@@ -132,12 +132,12 @@ pub async fn accept_requests<'a>(
         }
 
         println!("Connected, port 22");
-        match crate::serve::handle_ssh_client(&mut socket, uart, pin_channel_ref).await {
-            Ok(_) => (),
-            Err(e) => {
-                println!("SSH client fatal error: {}", e);
-            }
-        };
+        // match crate::serve::handle_ssh_client(&mut socket, uart, pin_channel_ref).await {
+        //     Ok(_) => (),
+        //     Err(e) => {
+        //         println!("SSH client fatal error: {}", e);
+        //     }
+        // };
     }
 }
 
@@ -170,7 +170,7 @@ async fn wifi_up(
             });
             controller.set_configuration(&client_config).unwrap();
             println!("Starting wifi");
-            // controller.start_async().await.unwrap();
+            controller.start_async().await.unwrap();
             println!("Wifi started!");
         }
         Timer::after(Duration::from_millis(10)).await;

@@ -1793,7 +1793,9 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "sunset"
-version = "0.3.0"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fae1be9253047b033ccbedf6da75657b1c0f83e99e3c7953cbccf064e534bb10"
 dependencies = [
  "aes",
  "ascii",
@@ -1823,7 +1825,9 @@ dependencies = [
 
 [[package]]
 name = "sunset-async"
-version = "0.3.0"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f38504564d099a37a2bf3ef6a7c5ae4f268fadf2e30819c59fc736bf4a6c7382"
 dependencies = [
  "embassy-futures",
  "embassy-sync 0.7.0",
@@ -1835,7 +1839,9 @@ dependencies = [
 
 [[package]]
 name = "sunset-sshwire-derive"
-version = "0.2.0"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fe2cd7ddcc98aed78da9ed97bcd2630b761f1ea4377d9922dc4097f76a8bdff"
 dependencies = [
  "virtue",
 ]

@@ -3,13 +3,9 @@ use core::result::Result;
 use core::writeln;
 
 use crate::pins::PinChannel;
-use crate::espressif::buffered_uart::BufferedUart;
 use crate::keys;
-use crate::serial::serial_bridge;
 
 // Embassy
-use embassy_futures::select::{select3, Either3};
-use embassy_net::tcp::TcpSocket;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
@@ -20,6 +16,7 @@ use sunset::{error, ChanHandle, ServEvent, SignKey};
 use sunset_async::{ProgressHolder, SSHServer};
 
 use esp_println::{dbg, println};
+use esp_hal::system::software_reset;
 
 pub enum SessionType {
     Bridge(ChanHandle),
@@ -31,6 +28,7 @@ pub async fn connection_loop<'a>(
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
     // pin_channel_ref: &'a SunsetMutex<PinChannel<'a>>,
     // pin_channel_ref: &PinChannel<'a>,
+    pin_channel: PinChannel<'a>,
 ) -> Result<(), sunset::Error> {
     let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
     let mut session: Option<ChanHandle> = None;
@@ -81,64 +79,67 @@ pub async fn connection_loop<'a>(
                     }
                 }
             }
-            // ServEvent::Environment(a) => {
-            //     dbg!("Got ENV request");
-            //     dbg!(a.name()?);
-            //     dbg!(a.value()?);
+            ServEvent::SessionEnv(a) => {
+                dbg!("Got ENV request");
+                dbg!(a.name()?);
+                dbg!(a.value()?);
 
-            //     // TODO: Logic to serialise/validate env vars? I.e:
-            //     // a.name.validate(); // Checks the input variable, sanitizes, assigns a target subsystem
-            //     //
-            //     // config.change(c): Apply the config change to the relevant subsystem.
-            //     // i.e: if UART_TX_PIN or UART_RX_PIN, we update the PinChannel with with_channel() to change pins live.
-            //     match a.name()? {
-            //         "SAVE_CONFIG" => {
-            //             if a.value()? == "1" {
-            //                 dbg!("Triggering config save...");
-            //                 todo!("Implement config save to flash");
-            //             }
-            //         }
-            //         // If the env var is UART_TX_PIN or UART_RX_PIN
-            //         "UART_TX_PIN" => {
-            //             let val = a.value()?;
-            //             dbg!("Updating UART TX pin to ", val);
-            //             if let Ok(pin_num) = val.parse::<u8>() {
-            //                 let mut ch = pin_channel_ref.lock().await;
-            //                 if ch.set_tx_pin(pin_num).is_err() {
-            //                     dbg!("Failed to update TX pin");
-            //                 } else {
-            //                     dbg!("TX pin updated");
-            //                 }
-            //             } else {
-            //                 dbg!("Invalid TX pin value");
-            //             }
-            //         }
-            //         "UART_RX_PIN" => {
-            //             let val = a.value()?;
-            //             dbg!("Updating UART RX pin to ", val);
-            //             if let Ok(pin_num) = val.parse::<u8>() {
-            //                 let mut ch = pin_channel_ref.lock().await;
-            //                 if ch.set_rx_pin(pin_num).is_err() {
-            //                     dbg!("Failed to update RX pin");
-            //                 } else {
-            //                     dbg!("RX pin updated");
-            //                 }
-            //             } else {
-            //                 dbg!("Invalid RX pin value");
-            //             }
-            //         }
-            //         _ => {
-            //             dbg!("Unknown/unsupported ENV var");
-            //         }
-            //     }
+                // TODO: Logic to serialise/validate env vars? I.e:
+                // a.name.validate(); // Checks the input variable, sanitizes, assigns a target subsystem
+                //
+                // config.change(c): Apply the config change to the relevant subsystem.
+                // i.e: if UART_TX_PIN or UART_RX_PIN, we update the PinChannel with with_channel() to change pins live.
+                match a.name()? {
+                    "SAVE_CONFIG" => {
+                        if a.value()? == "1" {
+                            dbg!("Triggering config save...");
+                            todo!("Implement config save to flash");
+                        }
+                    }
+                    // If the env var is UART_TX_PIN or UART_RX_PIN
+                    "UART_TX_PIN" => {
+                        let val = a.value()?;
+                        dbg!("Updating UART TX pin to ", val);
+                        if let Ok(pin_num) = val.parse::<u8>() {
+                            // let mut ch = pin_channel_ref.lock().await;
+                            // let mut ch: &mut PinChannel<'_>  = pin_channel_ref;
+                            let mut ch  = pin_channel;
+                            if ch.set_tx_pin(pin_num).is_err() {
+                                dbg!("Failed to update TX pin");
+                            } else {
+                                dbg!("TX pin updated");
+                            }
+                            software_reset();
+                        } else {
+                            dbg!("Invalid TX pin value");
+                        }
+                    }
+                    "UART_RX_PIN" => {
+                        let val = a.value()?;
+                        dbg!("Updating UART RX pin to ", val);
+                        if let Ok(pin_num) = val.parse::<u8>() {
+                            // let mut ch = pin_channel_ref.lock().await;
+                            let mut ch  = pin_channel;
+                            if ch.set_rx_pin(pin_num).is_err() {
+                                dbg!("Failed to update RX pin");
+                            } else {
+                                dbg!("RX pin updated");
+                            }
+                            software_reset();
+                        } else {
+                            dbg!("Invalid RX pin value");
+                        }
+                    }
+                    _ => {
+                        dbg!("Unknown/unsupported ENV var");
+                    }
+                }
 
+                // config.save(a): Potentially an optional special environment variable SAVE_CONFIG=1
+                // that serialises current config to flash
 
-
-            // //     // config.save(a): Potentially an optional special environment variable SAVE_CONFIG=1
-            // //     // that serialises current config to flash
-
-            //     a.succeed()?;
-            // }
+                a.succeed()?;
+            }
             ServEvent::SessionPty(a) => {
                 a.succeed()?;
             }
@@ -152,54 +153,4 @@ pub async fn connection_loop<'a>(
             _ => (),
         };
     }
-}
-
-pub(crate) async fn handle_ssh_client(
-    stream: &mut TcpSocket<'_>,
-    uart: &BufferedUart,
-    _pin_channel_ref: &PinChannel<'_>,
-) -> Result<(), sunset::Error> {
-    // Spawn network tasks to handle incoming connections with demo_common::session()
-    let mut inbuf = [0u8; 4096];
-    let mut outbuf = [0u8; 4096];
-
-    let ssh_server = SSHServer::new(&mut inbuf, &mut outbuf);
-    let (mut rsock, mut wsock) = stream.split();
-
-    let chan_pipe = Channel::<NoopRawMutex, SessionType, 1>::new();
-
-    println!("Calling connection_loop from handle_ssh_client");
-    // let conn_loop = connection_loop(&ssh_server, &chan_pipe, pin_channel_ref);
-    let conn_loop = connection_loop(&ssh_server, &chan_pipe);
-    println!("Running server from handle_ssh_client()");
-    let server = ssh_server.run(&mut rsock, &mut wsock);
-
-    println!("Setting up serial bridge");
-
-    // TODO: Maybe loop forever here and/or handle disconnection/terminations gracefully?
-    let bridge = async {
-        let session_type = chan_pipe.receive().await;
-
-        match session_type {
-            SessionType::Bridge(ch) => {
-                let stdio = ssh_server.stdio(ch).await?;
-                let stdio2 = stdio.clone();
-                serial_bridge(stdio, stdio2, uart).await?
-            }
-            // SessionType::Sftp(_ch) => {
-            //     // Handle SFTP session
-            //     todo!()
-            // }
-        };
-        Ok(())
-    };
-
-    println!("Main select() in handle_ssh_client()");
-    match select3(conn_loop, server, bridge).await {
-        Either3::First(r) => r,
-        Either3::Second(r) => r,
-        Either3::Third(r) => r,
-    }?;
-
-    Ok(())
 }
