@@ -41,6 +41,7 @@ use ssh_stamp::{
     storage::Fl,
     serve,
 };
+use esp_hal::system::software_reset;
 
 const UART_BUFFER_SIZE: usize = 4096;
 static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();
@@ -85,6 +86,7 @@ pub async fn peripherals_wait_for_initialisation<'a>() -> SshStampPeripherals<'a
 
 pub async fn peripherals_disable() -> (){
     // drop peripherals
+    software_reset();
 }
 
 pub async fn wifi_wait_for_initialisation(s:  PeripheralsEnabledConsumed<'_>) -> Result<EspWifiController<'_>, InitializationError>{
@@ -96,7 +98,12 @@ pub async fn wifi_wait_for_initialisation(s:  PeripheralsEnabledConsumed<'_>) ->
 }
 
 pub async fn wifi_disable() -> (){
+    // TODO: Correctly disable wifi controller
+// pub async fn wifi_disable(wifi_controller: EspWifiController<'_>) -> (){
     // drop wifi controller
+    // esp_wifi::deinit_unchecked()
+    // wifi_controller.deinit_unchecked()
+    software_reset();
 }
 
 pub struct TcpStackReturn<'a> {
@@ -117,10 +124,12 @@ pub async fn tcp_wait_for_initialisation<'a>(s: WifiEnabledConsumed<'a>) ->  Sta
 
 pub async fn tcp_disable() -> (){
     // drop tcp stack
+    software_reset();
 }
 
 pub async fn socket_disable() -> (){
     // drop socket
+    software_reset();
 }
 
 
@@ -130,8 +139,8 @@ pub async fn ssh_wait_for_initialisation<'server>(inbuf: &'server mut [u8; UART_
 }
 
 pub async fn ssh_disable() -> (){
-
     // drop wifi controller
+    software_reset();
 }
 
 pub async fn uart_pins_wait_for_config<'a>(s: SshEnabledConsumed<'a>) ->  PinChannel<'a> {
@@ -152,6 +161,7 @@ pub async fn uart_pins_wait_for_config<'a>(s: SshEnabledConsumed<'a>) ->  PinCha
 
 pub async fn uart_pins_disable() -> (){
     // disable uart pins
+    software_reset();
 }
 
 pub async fn uart_buffer_wait_for_initialisation() -> &'static BufferedUart {
@@ -160,6 +170,7 @@ pub async fn uart_buffer_wait_for_initialisation() -> &'static BufferedUart {
 
 pub async fn uart_buffer_disable() -> () {
     // disable uart buffer
+    software_reset();
 }
 
 pub async fn idle_wait_for_connection<'a, 'b>(s: UartEnabledConsumed<'a>,  ssh_server: &'b SSHServer<'a>, pin_channel: PinChannel<'a>) -> Result<(), sunset::Error> where 'a:'b{
@@ -169,6 +180,7 @@ pub async fn idle_wait_for_connection<'a, 'b>(s: UartEnabledConsumed<'a>,  ssh_s
 
 pub async fn idle_disable() -> () {
     // disable idle
+    software_reset();
 }
 
 use ssh_stamp::serial::serial_bridge;
@@ -196,6 +208,7 @@ pub async fn bridge_wait_for_initialisation<'a, 'b>(s: ClientConnectedConsumed<'
 
 pub async fn bridge_disable() -> () {
     // disable bridge
+    software_reset();
 }
 
 
@@ -272,9 +285,8 @@ async fn main(spawner: Spawner) -> ! {
     }
 
     peripherals_disable().await;
-    loop{}
-    //reset?
-
+    // loop{}
+    software_reset();
 }
 
 
@@ -316,8 +328,8 @@ async fn peripherals_enabled<'a>(s: SshStampInit<'a>) -> Result<(), sunset::Erro
         }
     }
 
-    Ok(())
     wifi_disable().await;
+    Ok(()) // todo!() return relevant value
 }
 
 pub struct WifiEnabledConsumed<'a> {
@@ -361,9 +373,9 @@ async fn wifi_enabled<'a>(s: PeripheralsEnabled<'a>) -> Result<(), sunset::Error
         Err(e) => {
             println!("SSH error: {}", e);
         }
-    Ok(())
     }
     tcp_disable().await;
+    Ok(()) // todo!() return relevant value
 }
 
 pub struct TCPEnabled<'a> {
@@ -439,8 +451,7 @@ async fn socket_enabled<'a>(s: TCPEnabled<'a>) -> Result<(), sunset::Error> {
 
         ssh_disable().await;
     // }
-    Ok(())
-
+    Ok(()) // todo!() return relevant value
 }
 
 
@@ -482,8 +493,7 @@ async fn ssh_enabled<'a>(s: SocketEnabled<'a>) -> Result<(), sunset::Error> {
 
         uart_pins_disable().await;
     // }
-    Ok(())
-
+    Ok(()) // todo!() return relevant value
 }
 
 pub struct UartConfigured<'a> {
@@ -512,7 +522,7 @@ async fn uart_configured<'a>(s: SshEnabled<'a>) -> Result<(), sunset::Error> {//
 
         uart_buffer_disable().await;
     // }
-    Ok(())
+    Ok(()) // todo!() return relevant value
 }
 
 
@@ -602,7 +612,7 @@ async fn client_connected<'a, 'b, CL>(s: UartEnabled<'a, 'b, CL> )  -> Result<()
         bridge_disable().await;
     // }
 
-    Ok(())
+    Ok(()) // todo!() return relevant value
 }
 
 async fn bridge_connected<'a, 'b, CL, BR>(s:ClientConnected<'a, 'b, CL, BR>) -> Result<(), sunset::Error> where CL: Future<Output = Result<(), sunset::Error>>, BR: Future<Output = Result<(), sunset::Error>>, 'a:'b{
