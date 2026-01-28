@@ -48,7 +48,7 @@ pub async fn if_up<'a>(
     wifi: WIFI<'a>,
     rng: &mut Rng,
     // config:  &'static SunsetMutex<SSHStampConfig>,
-    wifi_ssid:  String<32>,
+    wifi_ssid: String<32>,
 ) -> Result<Stack<'a>, sunset::Error> {
     // let wifi_init = &*mk_static!(EspWifiController<'static>, wifi_controller);
     // let (controller, interfaces) = esp_wifi::wifi::new(wifi_init, wifi).unwrap();
@@ -146,7 +146,7 @@ async fn wifi_up(
     // mut controller: WifiController<'static>,
     mut controller: WifiController<'_>,
     // config: &'static SunsetMutex<SSHStampConfig>,
-    wifi_ssid:  String<32>,
+    wifi_ssid: String<32>,
 ) {
     println!("Device capabilities: {:?}", controller.capabilities());
     // let wifi_ssid = {
@@ -179,8 +179,8 @@ async fn wifi_up(
 
 // #[embassy_executor::task]
 // async fn net_up<'a>(mut runner: Runner<'a, WifiDevice<'a>>) {
-    // println!("Bringing up network stack...\n");
-    // runner.run().await
+// println!("Bringing up network stack...\n");
+// runner.run().await
 // }
 
 // #[embassy_executor::task]

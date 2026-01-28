@@ -2,8 +2,8 @@ use core::option::Option::{self, None, Some};
 use core::result::Result;
 use core::writeln;
 
-use crate::pins::PinChannel;
 use crate::keys;
+use crate::pins::PinChannel;
 
 // Embassy
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
@@ -15,8 +15,8 @@ use heapless::String;
 use sunset::{error, ChanHandle, ServEvent, SignKey};
 use sunset_async::{ProgressHolder, SSHServer};
 
-use esp_println::{dbg, println};
 use esp_hal::system::software_reset;
+use esp_println::{dbg, println};
 
 pub enum SessionType {
     Bridge(ChanHandle),
@@ -103,7 +103,7 @@ pub async fn connection_loop<'a>(
                         if let Ok(pin_num) = val.parse::<u8>() {
                             // let mut ch = pin_channel_ref.lock().await;
                             // let mut ch: &mut PinChannel<'_>  = pin_channel_ref;
-                            let mut ch  = pin_channel;
+                            let mut ch = pin_channel;
                             if ch.set_tx_pin(pin_num).is_err() {
                                 dbg!("Failed to update TX pin");
                             } else {
@@ -119,7 +119,7 @@ pub async fn connection_loop<'a>(
                         dbg!("Updating UART RX pin to ", val);
                         if let Ok(pin_num) = val.parse::<u8>() {
                             // let mut ch = pin_channel_ref.lock().await;
-                            let mut ch  = pin_channel;
+                            let mut ch = pin_channel;
                             if ch.set_rx_pin(pin_num).is_err() {
                                 dbg!("Failed to update RX pin");
                             } else {
