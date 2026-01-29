@@ -174,15 +174,14 @@ pub async fn uart_buffer_disable() -> () {
 }
 
 pub async fn idle_wait_for_connection<'a, 'b>(
-    s: UartEnabledConsumed<'a>,
     ssh_server: &'b SSHServer<'a>,
     pin_channel: PinChannel<'a>,
+    chan_pipe: &Channel<NoopRawMutex, serve::SessionType, 1>,
 ) -> Result<(), sunset::Error>
 where
     'a: 'b,
 {
-    let chan_pipe = s.chan_pipe;
-    serve::connection_loop(ssh_server, &chan_pipe, pin_channel).await
+    serve::connection_loop(ssh_server, chan_pipe, pin_channel).await
 }
 
 pub async fn idle_disable() -> () {
@@ -195,8 +194,8 @@ use sunset_async::ChanInOut;
 pub async fn bridge_wait_for_initialisation<'a, 'b>(
     s: ClientConnectedConsumed<'a, 'b>,
 ) -> Result<(), sunset::Error> {
-    let chan_pipe = Channel::<NoopRawMutex, serve::SessionType, 1>::new();
     let bridge = {
+        let chan_pipe = s.chan_pipe;
         let session_type = chan_pipe.receive().await;
 
         match session_type {
@@ -530,11 +529,6 @@ async fn uart_configured<'a>(s: SshEnabled<'a>) -> Result<(), sunset::Error> {
     Ok(()) // todo!() return relevant value
 }
 
-pub struct UartEnabledConsumed<'a> {
-    pub rng: Rng,
-    pub uart_buff: &'a BufferedUart,
-    pub chan_pipe: Channel<NoopRawMutex, serve::SessionType, 1>,
-}
 pub struct UartEnabled<'a, 'b, CL>
 where
     CL: Future<Output = Result<(), sunset::Error>>,
@@ -543,6 +537,7 @@ where
     pub tcp_socket: TcpSocket<'a>,
     pub ssh_server: &'b SSHServer<'a>,
     pub uart_buff: &'a BufferedUart,
+    pub chan_pipe: &'b Channel<NoopRawMutex, serve::SessionType, 1>,
     pub connection_loop: CL,
 }
 async fn uart_enabled<'a, 'b>(s: UartConfigured<'a>) -> Result<(), sunset::Error>
@@ -552,20 +547,15 @@ where
     // loop {
     let chan_pipe = Channel::<NoopRawMutex, serve::SessionType, 1>::new();
 
-    let uart_enabled_consumed = UartEnabledConsumed {
-        rng: s.rng,
-        uart_buff: s.uart_buff,
-        chan_pipe: chan_pipe,
-    };
-
     println!("Calling connection_loop from uart_enabled");
-    let connection = idle_wait_for_connection(uart_enabled_consumed, &s.ssh_server, s.uart_pins);
+    let connection = idle_wait_for_connection(&s.ssh_server, s.uart_pins, &chan_pipe);
 
     let uart_enabled_struct = UartEnabled {
         rng: s.rng,
         tcp_socket: s.tcp_socket,
         ssh_server: &s.ssh_server,
         uart_buff: s.uart_buff,
+        chan_pipe: &chan_pipe,
         connection_loop: connection,
     };
     match client_connected(uart_enabled_struct).await {
@@ -584,6 +574,7 @@ pub struct ClientConnectedConsumed<'a, 'b> {
     pub rng: Rng,
     pub uart_buff: &'a BufferedUart,
     pub ssh_server: &'b SSHServer<'a>,
+    pub chan_pipe: &'b Channel<NoopRawMutex, serve::SessionType, 1>,
 }
 pub struct ClientConnected<'a, 'b, CL, BR>
 where
@@ -607,6 +598,7 @@ where
         rng: s.rng,
         uart_buff: s.uart_buff,
         ssh_server: s.ssh_server,
+        chan_pipe: s.chan_pipe,
     };
 
     println!("Setting up serial bridge");
