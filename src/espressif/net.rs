@@ -6,7 +6,6 @@ use embassy_net::{tcp::TcpSocket, Stack, StackResources};
 use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, StaticConfigV4};
 use embassy_time::{Duration, Timer};
 
-use esp_hal::clock::CpuClock;
 use esp_hal::peripherals::WIFI;
 
 use esp_hal::rng::Rng;
@@ -151,7 +150,7 @@ async fn wifi_up(
             Timer::after(Duration::from_millis(5000)).await
         }
         if !matches!(controller.is_started(), Ok(true)) {
-            let ssid_string = String::<63>::from_str(wifi_ssid).unwrap().to_ascii_lowercase();
+            let ssid_string = String::<63>::from_str(&wifi_ssid).unwrap().to_ascii_lowercase();
             let client_config = ModeConfig::AccessPoint(AccessPointConfig::default().with_ssid(ssid_string));
             controller.set_config(&client_config).unwrap();
             println!("Starting wifi");

@@ -12,8 +12,8 @@ embassy-executor = { version = "0.9"}
 embassy-net = { version = "0.7", features = ["tcp", "udp", "dhcpv4", "medium-ethernet"] }
 smoltcp = { version = "0.12", default-features = false, features = ["medium-ethernet", "socket-raw"]}
 embassy-time = { version = "0.5" }
-embedded-io-async = "0.7"
-esp-alloc = "0.9"
+embedded-io-async = "0.6"
+esp-alloc = "0.8"
 esp-backtrace = { version = "0.18", features = [
     "panic-handler",
     "println",
@@ -22,6 +22,7 @@ esp-hal = { version = "1.0.0", features = [ "unstable" ] }
 #esp-hal-embassy = { version = "0.9" }
 esp-println = { version = "0.16", features = ["log-04"]}
 esp-radio = { version = "0.17", features = ["wifi"] }
+esp-rtos = { version = "0.2.0", features = ["embassy", "log-04", "esp-radio"] }
 hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { version = "2", features = ["nightly"] }
@@ -34,7 +35,7 @@ sunset-sshwire-derive = { git = "https://github.com/mkj/sunset", rev = "e05ffb6"
 # sunset-sshwire-derive = { path = "../sunset/sshwire-derive", default-features = false }
 getrandom = { version = "0.2.10", features = ["custom"] }
 embassy-sync = "0.7"
-heapless = "0.9"
+heapless = "0.8"
 embassy-futures = "0.1"
 edge-dhcp = "0.6"
 edge-nal = "0.5"
@@ -90,6 +91,7 @@ esp32 = [
     "esp-hal/esp32",
     "esp-backtrace/esp32",
     "esp-radio/esp32",
+    "esp-rtos/esp32",
     "esp-rom-sys/esp32",
     "esp-bootloader-esp-idf/esp32",
     "esp-println/esp32",
@@ -99,6 +101,7 @@ esp32c2 = [
     "esp-hal/esp32c2",
     "esp-backtrace/esp32c2",
     "esp-radio/esp32c2",
+    "esp-rtos/esp32c2",
     "esp-rom-sys/esp32c2",
     "esp-bootloader-esp-idf/esp32c2",
     "esp-println/esp32c2",
@@ -108,6 +111,7 @@ esp32c3 = [
     "esp-hal/esp32c3",
     "esp-backtrace/esp32c3",
     "esp-radio/esp32c3",
+    "esp-rtos/esp32c3",
     "esp-rom-sys/esp32c3",
     "esp-bootloader-esp-idf/esp32c3",
     "esp-println/esp32c3",
@@ -126,6 +130,7 @@ esp32c6 = [
     "esp-hal/esp32c6",
     "esp-backtrace/esp32c6",
     "esp-radio/esp32c6",
+    "esp-rtos/esp32c6",
     "esp-rom-sys/esp32c6",
     "esp-bootloader-esp-idf/esp32c6",
     "esp-println/esp32c6",
@@ -135,6 +140,7 @@ esp32s2 = [
     "esp-hal/esp32s2",
     "esp-backtrace/esp32s2",
     "esp-radio/esp32s2",
+    "esp-rtos/esp32s2",
     "esp-rom-sys/esp32s2",
     "esp-bootloader-esp-idf/esp32s2",
 #    "esp-hal-embassy/esp32s2",
@@ -145,6 +151,7 @@ esp32s3 = [
     "esp-hal/esp32s3",
     "esp-backtrace/esp32s3",
     "esp-radio/esp32s3",
+    "esp-rtos/esp32s3",
     "esp-rom-sys/esp32s3",
     "esp-bootloader-esp-idf/esp32s3",
     "esp-println/esp32s3",

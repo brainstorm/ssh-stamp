@@ -13,7 +13,8 @@ use esp_hal::{
     timer::timg::TimerGroup,
     uart::{Config, RxConfig, Uart},
 };
-use esp_hal_embassy::InterruptExecutor;
+//use esp_radio::wifi::event;
+use esp_rtos::embassy::InterruptExecutor;
 
 use embassy_executor::Spawner;
 use esp_println::dbg;
@@ -33,7 +34,7 @@ use ssh_stamp::{
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
 
-#[esp_hal_embassy::main]
+#[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
     cfg_if::cfg_if!(
         if #[cfg(feature = "esp32s2")] {
@@ -50,38 +51,61 @@ async fn main(spawner: Spawner) -> ! {
     // System init
     let peripherals = esp_hal::init(esp_hal::Config::default());
     let mut rng = Rng::new();
+    let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
 
     // Set event handlers for wifi before init to avoid missing any.
-    let mut connections = 0u32;
-    _ = event::ApStart::replace_handler(|_| println!("ap start event"));
-    event::ApStaConnected::update_handler(move |event| {
-        connections += 1;
-        esp_println::println!("connected {}, mac: {:?}", connections, event.mac());
-    });
-    event::ApStaConnected::update_handler(|event| {
-        esp_println::println!("connected aid: {}", event.aid());
-    });
-    event::ApStaDisconnected::update_handler(|event| {
-        println!(
-            "disconnected mac: {:?}, reason: {:?}",
-            event.mac(),
-            event.reason()
-        );
-    });
+    // let mut connections = 0u32;
+    // _ = event::ApStart::replace_handler(|_| println!("ap start event"));
+    // event::ApStaConnected::update_handler(move |event| {
+    //     connections += 1;
+    //     esp_println::println!("connected {}, mac: {:?}", connections, event.mac());
+    // });
+    // event::ApStaConnected::update_handler(|event| {
+    //     esp_println::println!("connected aid: {}", event.aid());
+    // });
+    // event::ApStaDisconnected::update_handler(|event| {
+    //     println!(
+    //         "disconnected mac: {:?}, reason: {:?}",
+    //         event.mac(),
+    //         event.reason()
+    //     );
+    // });
 
     rng::register_custom_rng(rng);
 
     cfg_if::cfg_if! {
        if #[cfg(feature = "esp32")] {
             let timg1 = TimerGroup::new(peripherals.TIMG1);
-            esp_hal_embassy::init(timg1.timer0);
+            esp_rtos::start(timg1.timer0, sw_int);
        } else {
            use esp_hal::timer::systimer::SystemTimer;
            let systimer = SystemTimer::new(peripherals.SYSTIMER);
-           esp_hal_embassy::init(systimer.alarm0);
+           esp_rtos::start(systimer.alarm0, sw_int);
        }
     }
+
+    // Read SSH configuration from Flash (if it exists)
+    let config = {
+
+        // let rrr = flash::get_flash_n_buffer();
+        let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
+            panic!("Could not acquire flash storage lock");
+        };
+
+        let mut flash_storage = flash_storage_guard.lock().await;
+        // TODO: Migrate this function/test to embedded-test.
+        // Quick roundtrip test for SSHStampConfig
+        // ssh_stamp::config::roundtrip_config();
+
+        ssh_stamp::storage::load_or_create(&mut flash_storage).await
+
+    }
+
+    .expect("Could not load or create SSHStampConfig");
+    static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
+	
+    let config = CONFIG.init(SunsetMutex::new(config));
 
     // Read SSH configuration from Flash (if it exists)
     let mut flash_storage = Fl::new(FlashStorage::new(flash::Flash::new()));
@@ -90,10 +114,9 @@ async fn main(spawner: Spawner) -> ! {
     static FLASH: StaticCell<SunsetMutex<Fl>> = StaticCell::new();
     let _flash = FLASH.init(SunsetMutex::new(flash_storage));
 
-    static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
     let config = CONFIG.init(SunsetMutex::new(config.unwrap()));
 
-    let wifi_controller = esp_wifi::init(timg0.timer0, rng, peripherals.RADIO_CLK).unwrap();
+    let wifi_controller = esp_radio::init().unwrap();
 
     // Bring up the network interface and start accepting SSH connections.
     let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng, config)

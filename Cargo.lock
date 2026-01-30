@@ -514,6 +514,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "embassy-time-queue-utils"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80e2ee86063bd028a420a5fb5898c18c87a8898026da1d4c852af2c443d0a454"
+dependencies = [
+ "embassy-executor-timer-queue",
+ "heapless 0.8.0",
+]
+
+[[package]]
 name = "embassy-usb-driver"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -660,6 +670,20 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "esp-alloc"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e95f1de57ce5a6600368f3d3c931b0dfe00501661e96f5ab83bc5cdee031784"
+dependencies = [
+ "allocator-api2",
+ "cfg-if",
+ "critical-section",
+ "document-features",
+ "enumset",
+ "linked_list_allocator",
+]
+
+[[package]]
+name = "esp-alloc"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "641e43d6a60244429117ef2fa7a47182120c7561336ea01f6fb08d634f46bae1"
@@ -764,6 +788,7 @@ dependencies = [
  "esp32s3",
  "fugit",
  "instability",
+ "log",
  "nb 1.1.0",
  "paste",
  "portable-atomic",
@@ -838,7 +863,7 @@ dependencies = [
  "document-features",
  "embassy-net-driver",
  "enumset",
- "esp-alloc",
+ "esp-alloc 0.9.0",
  "esp-config",
  "esp-hal",
  "esp-hal-procmacros",
@@ -882,6 +907,29 @@ dependencies = [
  "cfg-if",
  "document-features",
  "esp-metadata-generated",
+]
+
+[[package]]
+name = "esp-rtos"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "162ec711c8d06e79c67b75d01595539e86b0aac209643af98ca87a12250428b3"
+dependencies = [
+ "allocator-api2",
+ "cfg-if",
+ "document-features",
+ "embassy-executor",
+ "embassy-sync 0.7.2",
+ "embassy-time-driver",
+ "embassy-time-queue-utils",
+ "esp-config",
+ "esp-hal",
+ "esp-hal-procmacros",
+ "esp-metadata-generated",
+ "esp-radio-rtos-driver",
+ "esp-sync",
+ "log",
+ "portable-atomic",
 ]
 
 [[package]]
@@ -1727,19 +1775,20 @@ dependencies = [
  "embassy-net",
  "embassy-sync 0.7.2",
  "embassy-time 0.5.0",
- "embedded-io-async 0.7.0",
+ "embedded-io-async 0.6.1",
  "embedded-storage",
  "embedded-storage-async",
- "esp-alloc",
+ "esp-alloc 0.8.0",
  "esp-backtrace",
  "esp-bootloader-esp-idf",
  "esp-hal",
  "esp-println",
  "esp-radio",
  "esp-rom-sys",
+ "esp-rtos",
  "esp-storage",
  "getrandom",
- "heapless 0.9.2",
+ "heapless 0.8.0",
  "hex",
  "hmac",
  "log",

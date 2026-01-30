@@ -34,7 +34,7 @@ pub struct SSHStampConfig {
     pub admin_keys: [Option<Ed25519PubKey>; KEY_SLOTS],
 
     /// WiFi
-    pub wifi_ssid: &'static str,
+    pub wifi_ssid: String<32>,
     pub wifi_pw: Option<String<63>>,
 
     /// Networking
@@ -60,7 +60,7 @@ impl SSHStampConfig {
         let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
 
         // TODO: Those env events come from system's std::env / core::env (if any)... so it shouldn't be unsafe()
-        let wifi_ssid=  DEFAULT_SSID;
+        let wifi_ssid = Self::default_ssid();
         let mac = random_mac()?;
         let wifi_pw = None;
 
@@ -142,6 +142,15 @@ where
     S: SSHSource<'de>,
 {
     bool::dec(s)?.then(|| SSHDecode::dec(s)).transpose()
+}
+
+// encode Option<heapless::String<N>> as a bool then the &str contents (heapless::String doesn't implement SSHEncode)
+pub(crate) fn enc_option_str<const N: usize>(v: &Option<String<N>>, s: &mut dyn SSHSink) -> WireResult<()> {
+    v.is_some().enc(s)?;
+    if let Some(ref st) = v {
+        st.as_str().enc(s)?;
+    }
+    Ok(())
 }
 
 fn enc_ipv4_config(v: &Option<StaticConfigV4>, s: &mut dyn SSHSink) -> WireResult<()> {
@@ -230,8 +239,8 @@ impl SSHEncode for SSHStampConfig {
             enc_option(k, s)?;
         }
 
-        self.wifi_ssid.enc(s)?;
-        enc_option(&self.wifi_pw, s)?;
+        self.wifi_ssid.as_str().enc(s)?;
+        enc_option_str::<63>(&self.wifi_pw, s)?;
         self.mac.enc(s)?;
 
         enc_ipv4_config(&self.ipv4_static, s)?;
@@ -262,7 +271,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
 
         let wifi_ssid = SSHDecode::dec(s)?;
         let wifi_pw = dec_option(s)?;
-
+        
         let mac = SSHDecode::dec(s)?;
 
         let ipv4_static = dec_ipv4_config(s)?;
