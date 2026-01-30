@@ -25,7 +25,7 @@ pub const CHECKSUM_LEN: u32 = 32;
 /// Maximum size for LTV (Length-Type-Value) entries in OTA metadata. Used during the reading of OTA parameters.
 pub const MAX_TLV_SIZE: u32 = (core::mem::size_of::<OtaTlvType>()
     + core::mem::size_of::<OtaTlvLen>()
-    + u8::max_value() as usize) as u32; // type + length + value
+    + u8::MAX as usize) as u32; // type + length + value
 
 /// Encodes the length and value of a sized values
 fn enc_len_val<SE>(

@@ -28,25 +28,22 @@ pub async fn run_ota_server<W: OtaActions>(
     let mut buffer_in = [0u8; 512];
     let mut request_buffer = [0u8; 512];
 
-    match {
-        let mut file_server = SftpOtaServer::new(ota_writer);
+    let mut file_server = SftpOtaServer::new(ota_writer);
 
-        SftpHandler::<OtaOpaqueFileHandle, SftpOtaServer<OtaOpaqueFileHandle, W>, 512>::new(
-            &mut file_server,
-            &mut request_buffer,
-        )
-        .process_loop(stdio, &mut buffer_in)
-        .await?;
-
-        Ok::<_, sunset::Error>(())
-    } {
+    match SftpHandler::<OtaOpaqueFileHandle, SftpOtaServer<OtaOpaqueFileHandle, W>, 512>::new(
+        &mut file_server,
+        &mut request_buffer,
+    )
+    .process_loop(stdio, &mut buffer_in)
+    .await
+    {
         Ok(_) => {
             debug!("sftp server loop finished gracefully");
             Ok(())
         }
         Err(e) => {
-            warn!("sftp server loop finished with an error: {}", &e);
-            Err(e)
+            warn!("sftp server loop finished with an error: {:?}", &e);
+            Err(e.into())
         }
     }
 }
@@ -134,13 +131,13 @@ impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer
                 "SftpServer Open operation: path = {:?}, write_permission = {:?}, handle = {:?}",
                 path, self.write_permission, &handle
             );
-            return Ok(handle);
+            Ok(handle)
         } else {
             error!(
                 "SftpServer Open operation failed: already writing OTA, path = {:?}, attrs = {:?}",
                 path, mode
             );
-            return Err(sunset_sftp::protocol::StatusCode::SSH_FX_PERMISSION_DENIED);
+            Err(sunset_sftp::protocol::StatusCode::SSH_FX_PERMISSION_DENIED)
         }
     }
 
@@ -167,21 +164,20 @@ impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer
                 self.file_handle = None;
                 self.write_permission = false;
 
-                // Good place to finalize the OTA update process
-                return ret_val;
+                ret_val
             } else {
                 warn!(
                     "SftpServer Close operation failed: handle mismatch = {:?}",
                     handle
                 );
-                return Err(sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE);
+                Err(sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE)
             }
         } else {
             warn!(
                 "SftpServer Close operation granted on untracked handle: {:?}",
                 handle
             );
-            return Ok(()); // TODO: Handle close properly. You will need this for the OTA server
+            Ok(()) // TODO: Handle close properly. You will need this for the OTA server
         }
     }
 
@@ -208,41 +204,41 @@ impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer
         offset: u64,
         buf: &[u8],
     ) -> sunset_sftp::server::SftpOpResult<()> {
-        if let Some(current_handle) = &self.file_handle {
-            if current_handle == opaque_file_handle {
-                if !self.write_permission {
-                    warn!(
-                        "SftpServer Write operation denied: no write permission for handle = {:?}",
-                        opaque_file_handle
-                    );
-                    return Err(sunset_sftp::protocol::StatusCode::SSH_FX_PERMISSION_DENIED);
-                }
-                debug!(
-                    "SftpServer Write operation for OTA: handle = {:?}, offset = {:?}, buf_len = {:?}",
-                    opaque_file_handle,
-                    offset,
-                    buf.len()
+        if let Some(current_handle) = (&self.file_handle)
+            && current_handle == opaque_file_handle
+        {
+            if !self.write_permission {
+                warn!(
+                    "SftpServer Write operation denied: no write permission for handle = {:?}",
+                    opaque_file_handle
                 );
-
-                self.processor
-                    .process_data_chunk(offset, buf)
-                    .await
-                    .map_err(|e| {
-                        error!(
-                            "SftpServer Write operation failed during OTA processing: {:?}",
-                            e
-                        );
-                        sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE
-                    })?;
-                return Ok(());
+                return Err(sunset_sftp::protocol::StatusCode::SSH_FX_PERMISSION_DENIED);
             }
+            debug!(
+                "SftpServer Write operation for OTA: handle = {:?}, offset = {:?}, buf_len = {:?}",
+                opaque_file_handle,
+                offset,
+                buf.len()
+            );
+
+            self.processor
+                .process_data_chunk(offset, buf)
+                .await
+                .map_err(|e| {
+                    error!(
+                        "SftpServer Write operation failed during OTA processing: {:?}",
+                        e
+                    );
+                    sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE
+                })?;
+            return Ok(());
         }
 
         warn!(
             "SftpServer Write operation failed: handle mismatch = {:?}",
             opaque_file_handle
         );
-        return Err(sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE);
+        Err(sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE)
     }
 
     async fn opendir(&mut self, dir: &str) -> sunset_sftp::server::SftpOpResult<T> {

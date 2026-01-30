@@ -16,8 +16,8 @@ use sha2::{Digest, Sha256};
 enum UpdateProcessorState {
     /// ReadingParameters state, OTA has started and the processor is obtaining metadata values until the firmware blob is reached
     ReadingParameters {
-        tlv_holder: [u8; tlv::MAX_TLV_SIZE as usize],
-        current_len: usize,
+        // tlv_holder: [u8; tlv::MAX_TLV_SIZE as usize],
+        // current_len: usize,
     },
     /// Downloading state, receiving firmware data, computing hash on the fly and writing to flash
     Downloading { total_received_size: u32 },
@@ -30,8 +30,8 @@ enum UpdateProcessorState {
 impl Default for UpdateProcessorState {
     fn default() -> Self {
         UpdateProcessorState::ReadingParameters {
-            tlv_holder: [0; tlv::MAX_TLV_SIZE as usize],
-            current_len: 0,
+                // tlv_holder: [0; tlv::MAX_TLV_SIZE as usize],
+                // current_len: 0,
         }
     }
 }
@@ -49,6 +49,8 @@ pub(crate) struct UpdateProcessor<W: OtaActions> {
     hasher: Sha256,
     header: OtaHeader,
     ota_writer: W,
+    tlv_holder: [u8; tlv::MAX_TLV_SIZE as usize],
+    current_len: usize,
 }
 
 impl<W: OtaActions> UpdateProcessor<W> {
@@ -62,6 +64,8 @@ impl<W: OtaActions> UpdateProcessor<W> {
                 sha256_checksum: None,
             },
             ota_writer,
+            tlv_holder: [0; tlv::MAX_TLV_SIZE as usize],
+            current_len: 0,
         }
     }
 
@@ -77,21 +81,21 @@ impl<W: OtaActions> UpdateProcessor<W> {
             data.len(),
             self.state
         );
-        let mut source = tlv::TlvsSource::new(&data);
+        let mut source = tlv::TlvsSource::new(data);
         while source.remaining() > 0 {
             debug!("processor state : {:?}", self.state);
 
             match self.state {
                 UpdateProcessorState::ReadingParameters {
-                    mut tlv_holder,
-                    mut current_len,
+                    // mut tlv_holder,
+                    // mut current_len,
                 } => {
-                    match source.try_taking_bytes_for_tlv(&mut tlv_holder, &mut current_len) {
+                    match source.try_taking_bytes_for_tlv(&mut self.tlv_holder, &mut self.current_len) {
                         Err(WireError::RanOut) => {
                             // Not enough data to complete TLV, wait for more data
                             self.state = UpdateProcessorState::ReadingParameters {
-                                tlv_holder,
-                                current_len,
+                                // tlv_holder,
+                                // current_len,
                             };
                             return Ok(());
                         }
@@ -107,9 +111,9 @@ impl<W: OtaActions> UpdateProcessor<W> {
                     // At this point there should be a complete TLV to be decoded
                     debug!(
                         "Decoding TLV from tlv_holder: {:?},  current_len: {}",
-                        &tlv_holder, &current_len
+                        &self.tlv_holder, &self.current_len
                     );
-                    let mut singular_source = tlv::TlvsSource::new(&tlv_holder[..current_len]);
+                    let mut singular_source = tlv::TlvsSource::new(&self.tlv_holder[..self.current_len]);
 
                     match tlv::Tlv::dec(&mut singular_source) {
                         Ok(tlv) => match tlv {
@@ -124,10 +128,12 @@ impl<W: OtaActions> UpdateProcessor<W> {
                                 }
                                 info!("Received Ota type: {:?}", ota_type);
                                 self.header.ota_type = Some(ota_type);
-                                self.state = UpdateProcessorState::ReadingParameters {
-                                    tlv_holder: [0; tlv::MAX_TLV_SIZE as usize],
-                                    current_len: 0,
-                                };
+                                self.tlv_holder.fill(0);
+                                self.current_len = 0;
+                                // self.state = UpdateProcessorState::ReadingParameters {
+                                //     tlv_holder: [0; tlv::MAX_TLV_SIZE as usize],
+                                //     current_len: 0,
+                                // };
                             }
 
                             tlv::Tlv::Sha256Checksum { checksum } => {
@@ -141,10 +147,8 @@ impl<W: OtaActions> UpdateProcessor<W> {
                                     return Err(OtaError::IllegalOperation);
                                 }
                                 self.header.sha256_checksum = Some(checksum);
-                                self.state = UpdateProcessorState::ReadingParameters {
-                                    tlv_holder: [0; tlv::MAX_TLV_SIZE as usize],
-                                    current_len: 0,
-                                };
+                                                                self.tlv_holder.fill(0);
+                                self.current_len = 0;
                             }
                             tlv::Tlv::FirmwareBlob { size } => {
                                 info!("Received FirmwareBlob size: {:?}", size);
@@ -200,17 +204,18 @@ impl<W: OtaActions> UpdateProcessor<W> {
                                 return Err(OtaError::IllegalOperation);
                             }
                             // Skip this TLV and continue
-                            self.state = UpdateProcessorState::ReadingParameters {
-                                tlv_holder: [0; tlv::MAX_TLV_SIZE as usize],
-                                current_len: 0,
-                            }
+                                                            self.tlv_holder.fill(0);
+                                self.current_len = 0;
+                            // self.state = UpdateProcessorState::ReadingParameters {
+                            //     tlv_holder: [0; tlv::MAX_TLV_SIZE as usize],
+                            //     current_len: 0,
+                            // }
                         }
                         Err(WireError::RanOut) => {
                             // Keep current data and wait for more
-                            self.state = UpdateProcessorState::ReadingParameters {
-                                tlv_holder,
-                                current_len,
-                            };
+                            self.tlv_holder.fill(0);
+                            self.current_len = 0;
+
                             error!("UpdateProcessor: RanOut should not be happening");
                             return Err(OtaError::MoreDataRequired);
                         }

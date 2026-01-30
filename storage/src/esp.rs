@@ -21,6 +21,12 @@ impl OtaWriter {
     }
 }
 
+impl Default for OtaWriter {
+    fn default() -> Self {
+        OtaWriter::new()
+    }
+}
+
 impl OtaActions for OtaWriter {
     // TODO: build bootloader with auto-rollback to avoid invalid images rendering the device unbootable
     // TODO: Report bug in OtaImageState to esp
@@ -59,17 +65,16 @@ impl OtaActions for OtaWriter {
         );
         debug!("currently selected partition {:?}", current);
 
-        if let Ok(state) = ota.current_ota_state() {
-            if state == esp_bootloader_esp_idf::ota::OtaImageState::New
-                || state == esp_bootloader_esp_idf::ota::OtaImageState::PendingVerify
-            {
-                ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::Valid)
-                    .map_err(|e| {
-                        error!("Could not set OTA image state to Valid: {:?}", e);
-                        StorageError::WriteError
-                    })?;
-                debug!("Changed state to VALID");
-            }
+        if let Ok(state) = ota.current_ota_state()
+            && (state == esp_bootloader_esp_idf::ota::OtaImageState::New
+                || state == esp_bootloader_esp_idf::ota::OtaImageState::PendingVerify)
+        {
+            ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::Valid)
+                .map_err(|e| {
+                    error!("Could not set OTA image state to Valid: {:?}", e);
+                    StorageError::WriteError
+                })?;
+            debug!("Changed state to VALID");
         }
 
         Ok(())
@@ -237,17 +242,16 @@ pub async fn try_validating_current_ota_partition() -> StorageResult<()> {
     );
     debug!("currently selected partition {:?}", current);
 
-    if let Ok(state) = ota.current_ota_state() {
-        if state == esp_bootloader_esp_idf::ota::OtaImageState::New
-            || state == esp_bootloader_esp_idf::ota::OtaImageState::PendingVerify
-        {
-            ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::Valid)
-                .map_err(|e| {
-                    error!("Could not set OTA image state to Valid: {:?}", e);
-                    StorageError::WriteError
-                })?;
-            debug!("Changed state to VALID");
-        }
+    if let Ok(state) = ota.current_ota_state()
+        && (state == esp_bootloader_esp_idf::ota::OtaImageState::New
+            || state == esp_bootloader_esp_idf::ota::OtaImageState::PendingVerify)
+    {
+        ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::Valid)
+            .map_err(|e| {
+                error!("Could not set OTA image state to Valid: {:?}", e);
+                StorageError::WriteError
+            })?;
+        debug!("Changed state to VALID");
     }
 
     Ok(())

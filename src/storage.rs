@@ -123,8 +123,8 @@ pub async fn load(fl: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetErro
 pub async fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(), SunsetError> {
     let sc = FlashConfig {
         version: SSHStampConfig::CURRENT_VERSION,
-        config: OwnOrBorrow::Borrow(&config),
-        hash: config_hash(&config)?,
+        config: OwnOrBorrow::Borrow(config),
+        hash: config_hash(config)?,
     };
 
     let Ok(()) = FlashConfig::find_config_partition(fl) else {
@@ -144,7 +144,7 @@ pub async fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(
 
     dbg!("Erasing flash");
 
-    assert!(CONFIG_AREA_SIZE > FlashConfig::BUF_SIZE);
+    const { assert!(CONFIG_AREA_SIZE > FlashConfig::BUF_SIZE) };
 
     fl.flash
         .erase(

@@ -75,12 +75,12 @@ impl<'de> SSHDecode<'de> for SerdePinConfig {
         S: SSHSource<'de>,
     {
         // Decoding Options is problematic since encode only writes them if they exist.
-        let mut pin_config = SerdePinConfig::default();
-        pin_config.tx = u8::dec(s)?;
-        pin_config.rx = u8::dec(s)?;
-
-        pin_config.rts = dec_option(s)?;
-        pin_config.cts = dec_option(s)?;
+        let pin_config = SerdePinConfig {
+            tx: u8::dec(s)?,
+            rx: u8::dec(s)?,
+            rts: dec_option(s)?,
+            cts: dec_option(s)?,
+        };
 
         Ok(pin_config)
     }
@@ -115,16 +115,8 @@ impl PinChannel {
         //self.tx.receive().await;
 
         Ok(match self.config.tx {
-            10 => self
-                .gpios
-                .gpio10
-                .take()
-                .ok_or_else(|| errors::Error::InvalidPin)?,
-            11 => self
-                .gpios
-                .gpio11
-                .take()
-                .ok_or_else(|| errors::Error::InvalidPin)?,
+            10 => self.gpios.gpio10.take().ok_or(errors::Error::InvalidPin)?,
+            11 => self.gpios.gpio11.take().ok_or(errors::Error::InvalidPin)?,
             _ => return Err(errors::Error::InvalidPin),
         })
     }
@@ -142,25 +134,16 @@ impl PinChannel {
     }
 
     pub async fn recv_rx(&mut self) -> errors::Result<AnyPin<'static>> {
-        let res = Ok(match self.config.rx {
-            10 => self
-                .gpios
-                .gpio10
-                .take()
-                .ok_or_else(|| errors::Error::InvalidPin)?,
-            11 => self
-                .gpios
-                .gpio11
-                .take()
-                .ok_or_else(|| errors::Error::InvalidPin)?,
-            _ => return Err(errors::Error::InvalidPin),
-        });
         // rx needs to lock here.
         // dbg!("recv_rx: before rx.receive.await");
         // self.rx.receive().await;
         // dbg!("recv_rx: after rx.receive.await");
 
-        res
+        match self.config.rx {
+            10 => self.gpios.gpio10.take().ok_or(errors::Error::InvalidPin),
+            11 => self.gpios.gpio11.take().ok_or(errors::Error::InvalidPin),
+            _ => Err(errors::Error::InvalidPin),
+        }
     }
 
     pub async fn send_rx(&mut self, pin: AnyPin<'static>) -> errors::Result<()> {
@@ -262,13 +245,13 @@ impl PinConfig {
         // SAFETY: Safe because moved in peripherals.
         Ok(Self {
             rx: match config_inner.rx {
-                10 => gpio_config.gpio10.take().unwrap().into(),
-                11 => gpio_config.gpio11.take().unwrap().into(),
+                10 => gpio_config.gpio10.take().unwrap(),
+                11 => gpio_config.gpio11.take().unwrap(),
                 _ => return Err(errors::Error::InvalidPin),
             },
             tx: match config_inner.tx {
-                10 => gpio_config.gpio10.take().unwrap().into(),
-                11 => gpio_config.gpio11.take().unwrap().into(),
+                10 => gpio_config.gpio10.take().unwrap(),
+                11 => gpio_config.gpio11.take().unwrap(),
                 _ => return Err(errors::Error::InvalidPin),
             },
         })

@@ -33,7 +33,7 @@ embedded-storage = "0.3.1"
 esp-storage = { version = "0.8.0" }
 esp-bootloader-esp-idf = { version = "0.4.0" }
 
-static_cell = { version = "2", features = ["nightly"] }
+static_cell = { version = "2.1" }
 # Used for storage::flash singleton
 once_cell = { version = "1", features = [
     "critical-section",
