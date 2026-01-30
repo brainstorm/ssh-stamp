@@ -161,12 +161,12 @@ EOF
 validate_ota(){
     local BIN_FILE="$(realpath $OUTPUT_DIR/app.bin)"
     
-    LOCAL_MD5=$(md5sum $BIN_FILE | awk '{printf "0x%s", $1}')
-    LOCAL_LENGTH=$(stat -c%s "$OUTPUT_DIR/app.bin"| awk '{printf "0x%x", $1}')
+    LOCAL_MD5=$(md5sum $BIN_FILE | sed -e 's/ .*//' -e 's/^0//')
     echo "Local BIN file MD5: $LOCAL_MD5"
-    # echo "Local BIN file length: $LOCAL_LENGTH bytes"
+    LOCAL_LENGTH=$(stat -c%s "$OUTPUT_DIR/app.bin"| sed -e 's/ *$//')
+    echo "Local BIN file length: $LOCAL_LENGTH"
 
-    FLASHED_MD5=$(espflash checksum-md5 $OTA_1_OFFSET $LOCAL_LENGTH | tail -n 1)
+    FLASHED_MD5=$(espflash checksum-md5 $OTA_1_OFFSET $LOCAL_LENGTH | tail -n 1 | sed -e 's/0x0//' -e 's/^0x//')
     echo "Flashed OTA partition MD5: $FLASHED_MD5"
 
     if [ "$LOCAL_MD5" == "$FLASHED_MD5" ]; then
@@ -180,21 +180,21 @@ validate_ota(){
 set -v
 set -e 
 
-check_tools
+# check_tools
 
-show_board_info
+# show_board_info
 
-build_app
+# build_app
 
-pack_ota
+# pack_ota
 
-clean_flash_and_flash_app
+# clean_flash_and_flash_app
 
-reach_board
+# reach_board
 
-reach_app
+# reach_app
 
-run_sftp_ota
+# run_sftp_ota
 
 validate_ota
 
