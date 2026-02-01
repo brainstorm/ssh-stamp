@@ -1364,6 +1364,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "once_cell"
+version = "1.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
+dependencies = [
+ "critical-section",
+ "portable-atomic",
+]
+
+[[package]]
 name = "opaque-debug"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1822,6 +1832,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "storage"
+version = "0.1.0"
+dependencies = [
+ "embedded-storage",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "esp-storage",
+ "log",
+ "once_cell",
+ "sunset-async",
+]
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1857,8 +1880,8 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "sunset"
-version = "0.3.0"
-source = "git+https://github.com/mkj/sunset?rev=e05ffb6#e05ffb6cb96e173b306f41bf31b87f6a20fff5b2"
+version = "0.4.0"
+source = "git+https://github.com/mkj/sunset#6b4e77f5210fd375f7ba7bf49940d7f1ac80c230"
 dependencies = [
  "aes",
  "ascii",
@@ -1888,8 +1911,8 @@ dependencies = [
 
 [[package]]
 name = "sunset-async"
-version = "0.3.0"
-source = "git+https://github.com/mkj/sunset?rev=e05ffb6#e05ffb6cb96e173b306f41bf31b87f6a20fff5b2"
+version = "0.4.0"
+source = "git+https://github.com/mkj/sunset#6b4e77f5210fd375f7ba7bf49940d7f1ac80c230"
 dependencies = [
  "embassy-futures",
  "embassy-sync 0.7.2",
@@ -1901,8 +1924,8 @@ dependencies = [
 
 [[package]]
 name = "sunset-sshwire-derive"
-version = "0.2.0"
-source = "git+https://github.com/mkj/sunset?rev=e05ffb6#e05ffb6cb96e173b306f41bf31b87f6a20fff5b2"
+version = "0.2.1"
+source = "git+https://github.com/mkj/sunset#6b4e77f5210fd375f7ba7bf49940d7f1ac80c230"
 dependencies = [
  "virtue",
 ]
