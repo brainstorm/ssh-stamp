@@ -85,14 +85,14 @@ pub async fn if_up(
             break;
         }
         Timer::after(Duration::from_millis(500)).await;
+    
     }
-
     // TODO: Use wifi_manager instead?
     println!(
         "Connect to the AP `ssh-stamp` as a DHCP client with IP: {}",
         gw_ip_addr_ipv4
     );
-
+    
     Ok(ap_stack)
 }
 

@@ -5,6 +5,32 @@ authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
+[workspace]
+members = ["storage"]
+
+[workspace.dependencies]
+sha2 = { version = "0.10", default-features = false }
+log = "0.4"
+
+esp-hal = { version = "1.0.0", features = ["unstable", "log-04"] }
+embedded-storage = "0.3.1"
+esp-storage = { version = "0.8.0" }
+esp-bootloader-esp-idf = { version = "0.4.0" }
+
+sunset = { git = "https://github.com/mkj/sunset", default-features = false, features = ["openssh-key", "embedded-io"]}
+sunset-async = { git = "https://github.com/mkj/sunset", default-features = false, features = ["multi-thread"]}
+sunset-sshwire-derive = { git = "https://github.com/mkj/sunset", default-features = false }
+# sunset = { path = "../sunset", default-features = false, features = ["openssh-key", "embedded-io"]}
+# sunset-async = { path = "../sunset/async", default-features = false, features = ["multi-thread"]}
+# sunset-sshwire-derive = { path = "../sunset/sshwire-derive", default-features = false }
+
+static_cell = { version = "2.1" }
+# Used for storage::flash singleton
+once_cell = { version = "1", features = [
+    "critical-section",
+], default-features = false }
+
+
 [dependencies]
 cfg-if = "1"
 ed25519-dalek = { version = "2", default-features = false }
@@ -27,12 +53,9 @@ hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { version = "2", features = ["nightly"] }
 ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
-sunset = { git = "https://github.com/mkj/sunset", rev = "e05ffb6", default-features = false, features = ["openssh-key", "embedded-io"]}
-sunset-async = { git = "https://github.com/mkj/sunset", rev = "e05ffb6", default-features = false, features = ["multi-thread"]}
-sunset-sshwire-derive = { git = "https://github.com/mkj/sunset", rev = "e05ffb6", default-features = false }
-# sunset = { path = "../sunset", default-features = false, features = ["openssh-key", "embedded-io"]}
-# sunset-async = { path = "../sunset/async", default-features = false, features = ["multi-thread"]}
-# sunset-sshwire-derive = { path = "../sunset/sshwire-derive", default-features = false }
+sunset = { workspace = true }
+sunset-async = { workspace = true }
+sunset-sshwire-derive = { workspace = true }
 getrandom = { version = "0.2.10", features = ["custom"] }
 embassy-sync = "0.7"
 heapless = "0.8"

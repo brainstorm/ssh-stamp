@@ -2,7 +2,6 @@
 #![no_main]
 
 use core::marker::Sized;
-use embassy_embedded_hal::flash;
 use esp_alloc as _;
 use esp_backtrace as _;
 use esp_hal::{
@@ -31,6 +30,9 @@ use ssh_stamp::{
     },
     storage::Fl,
 };
+
+use ssh_stamp::storage::flash;
+
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
 
@@ -73,7 +75,7 @@ async fn main(spawner: Spawner) -> ! {
     // });
 
     rng::register_custom_rng(rng);
-
+    let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     cfg_if::cfg_if! {
        if #[cfg(feature = "esp32")] {
             let timg1 = TimerGroup::new(peripherals.TIMG1);
@@ -85,6 +87,8 @@ async fn main(spawner: Spawner) -> ! {
        }
     }
 
+    flash::init(peripherals.FLASH);
+    
     // Read SSH configuration from Flash (if it exists)
     let config = {
 
@@ -108,7 +112,7 @@ async fn main(spawner: Spawner) -> ! {
     let config = CONFIG.init(SunsetMutex::new(config));
 
     // Read SSH configuration from Flash (if it exists)
-    let mut flash_storage = Fl::new(FlashStorage::new(flash::Flash::new()));
+    let mut flash_storage = Fl::new(FlashStorage::new(flash::new()));
     let config = ssh_stamp::storage::load_or_create(&mut flash_storage).await;
 
     static FLASH: StaticCell<SunsetMutex<Fl>> = StaticCell::new();

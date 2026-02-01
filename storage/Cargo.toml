@@ -1,0 +1,28 @@
+[package]
+name = "storage"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+log.workspace = true
+once_cell.workspace = true
+sunset-async.workspace = true
+
+# Avoids issues with ota-packer building for x86_64-unknown-linux-gnu target
+[target.'cfg(target_os = "none")'.dependencies]
+esp-bootloader-esp-idf.workspace = true
+embedded-storage.workspace = true
+esp-storage.workspace = true
+esp-hal.workspace = true
+
+[features]
+
+default = ["esp32c6"]
+
+esp32 = []
+esp32s2 = []
+esp32s3 = []
+esp32c2 = []
+esp32c3 = []
+esp32c6 = []
