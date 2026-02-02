@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [toolchain]
-#channel = "stable-2025-04-03"
-channel = "nightly"
+# channel = "stable-2025-04-03"
+# channel = "nightly"
 components = ["rust-src"]
 targets = ["riscv32imac-unknown-none-elf"]

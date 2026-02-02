@@ -139,7 +139,6 @@ esp32 = [
     "esp-println/esp32",
     "esp-storage/esp32",
     "esp-bootloader-esp-idf/esp32",
-    # "embassy-executor/task-arena-size-40960",
 ]
 esp32c2 = [
     "esp-hal/esp32c2",
@@ -150,7 +149,6 @@ esp32c2 = [
     "esp-println/esp32c2",
     "esp-storage/esp32c2",
     "esp-bootloader-esp-idf/esp32c2",
-    # "embassy-executor/task-arena-size-40960",
 ]
 esp32c3 = [
     "esp-hal/esp32c3",
@@ -161,7 +159,6 @@ esp32c3 = [
     "esp-println/esp32c3",
     "esp-storage/esp32c3",
     "esp-bootloader-esp-idf/esp32c3",
-    # "embassy-executor/task-arena-size-40960",
 ]
 #esp32c5 = [
 #    "esp-hal/esp32c5", 
@@ -182,7 +179,6 @@ esp32c6 = [
     "esp-println/esp32c6",
     "esp-storage/esp32c6",
     "esp-bootloader-esp-idf/esp32c6",
-    # "embassy-executor/task-arena-size-40960",
 ]
 esp32s2 = [
     "esp-hal/esp32s2",
@@ -193,7 +189,6 @@ esp32s2 = [
     "esp-println/esp32s2",
     "esp-storage/esp32s2",
     "esp-bootloader-esp-idf/esp32s2",
-    # "embassy-executor/task-arena-size-32768",
 ]
 esp32s3 = [
     "esp-hal/esp32s3",
@@ -204,5 +199,4 @@ esp32s3 = [
     "esp-println/esp32s3",
     "esp-storage/esp32s3",
     "esp-bootloader-esp-idf/esp32s3",
-    # "embassy-executor/task-arena-size-40960",
 ]

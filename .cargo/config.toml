@@ -3,28 +3,30 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [alias]
-build-esp32 = "build --release --target xtensa-esp32-none-elf --features esp32 -Z build-std=core,alloc"
-build-esp32c2 = "build --release --target riscv32imc-unknown-none-elf --features esp32c2 -Z build-std=core,alloc"
-build-esp32c3 = "build --release --target riscv32imc-unknown-none-elf --features esp32c3 -Z build-std=core,alloc"
-# Available but not supported by esp-hal (yet).
-#build-esp32c5 = "build --release --target riscv32imac-unknown-none-elf --features esp32c5"
-build-esp32c6 = "build --release --target riscv32imac-unknown-none-elf --features esp32c6 -Z build-std=core,alloc"
-# Debug build (too big for target and probe-rs doesn't work anyway)
-#build-esp32c6 = "build --target riscv32imac-unknown-none-elf --features esp32c6"
-build-esp32s2 = "build --profile esp32s2 --target xtensa-esp32s2-none-elf --features esp32s2 -Z build-std=core,alloc"
-build-esp32s3 = "build --release --target xtensa-esp32s3-none-elf --features esp32s3 -Z build-std=core,alloc"
+# No default features avoids selecting the default target (esp32c6) which would conflict with other target features.
 
-run-esp32 = "run --release --target xtensa-esp32-none-elf --features esp32 -Z build-std=core,alloc"
-run-esp32c2 = "run --release --target riscv32imc-unknown-none-elf --features esp32c2 -Z build-std=core,alloc"
-run-esp32c3 = "run --release --target riscv32imc-unknown-none-elf --features esp32c3 -Z build-std=core,alloc"
+build-esp32 = "build --release --target xtensa-esp32-none-elf --no-default-features --features esp32 -Z build-std=core,alloc"
+build-esp32c2 = "build --release --target riscv32imc-unknown-none-elf --no-default-features --features esp32c2 "
+build-esp32c3 = "build --release --target riscv32imc-unknown-none-elf --no-default-features --features esp32c3 "
 # Available but not supported by esp-hal (yet).
-#run-esp32c5 = "run --release --target riscv32imac-unknown-none-elf --features esp32c5"
-run-esp32c6 = "run --release --target riscv32imac-unknown-none-elf --features esp32c6 -Z build-std=core,alloc"
+#build-esp32c5 = "build --release --target riscv32imac-unknown-none-elf --no-default-features --features esp32c5"
+build-esp32c6 = "build --release --target riscv32imac-unknown-none-elf --no-default-features --features esp32c6"
+# Debug build (too big for target and probe-rs doesn't work anyway)
+#build-esp32c6 = "build --target riscv32imac-unknown-none-elf --no-default-features --features esp32c6"
+build-esp32s2 = "build --profile esp32s2 --target xtensa-esp32s2-none-elf --no-default-features --features esp32s2 -Z build-std=core,alloc"
+build-esp32s3 = "build --release --target xtensa-esp32s3-none-elf --no-default-features --features esp32s3 -Z build-std=core,alloc"
+
+run-esp32 = "run --release --target xtensa-esp32-none-elf --no-default-features --features esp32 "
+run-esp32c2 = "run --release --target riscv32imc-unknown-none-elf --no-default-features --features esp32c2 "
+run-esp32c3 = "run --release --target riscv32imc-unknown-none-elf --no-default-features --features esp32c3 "
+# Available but not supported by esp-hal (yet).
+#run-esp32c5 = "run --release --target riscv32imac-unknown-none-elf --no-default-features --features esp32c5"
+run-esp32c6 = "run --release --target riscv32imac-unknown-none-elf --no-default-features --features esp32c6"
 
 # Debug build (too big for target and probe-rs doesn't work anyway)
-#run-esp32c6 = "run --target riscv32imac-unknown-none-elf --features esp32c6"
-run-esp32s2 = "run --profile esp32s2 --target xtensa-esp32s2-none-elf --features esp32s2 -Z build-std=core,alloc"
-run-esp32s3 = "run --release --target xtensa-esp32s3-none-elf --features esp32s3 -Z build-std=core,alloc"
+#run-esp32c6 = "run --target riscv32imac-unknown-none-elf --no-default-features --features esp32c6"
+run-esp32s2 = "run --profile esp32s2 --target xtensa-esp32s2-none-elf --no-default-features --features esp32s2 "
+run-esp32s3 = "run --release --target xtensa-esp32s3-none-elf --no-default-features --features esp32s3 "
 
 # Build ota-packer alias: I might need to modify it so when run it can run a build for target architecture, extract the binary from the elf image and then pack the ota file.
 ota-packer = "run --package ota --bin ota-packer --target x86_64-unknown-linux-gnu"
