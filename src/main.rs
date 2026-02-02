@@ -49,7 +49,8 @@ async fn main(spawner: Spawner) -> ! {
         if #[cfg(feature = "esp32s2")] {
             // TODO: This heap size will crash at runtime (only for the ESP32S2), we need to fix this
             // applying ideas from https://github.com/brainstorm/ssh-stamp/pull/41#issuecomment-2964775170
-                esp_alloc::heap_allocator!(size: 69 * 1024);
+            esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 72 * 1024);
+
         } else {
                 esp_alloc::heap_allocator!(size: 72 * 1024);
         }
@@ -66,8 +67,14 @@ async fn main(spawner: Spawner) -> ! {
     let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     cfg_if::cfg_if! {
        if #[cfg(feature = "esp32")] {
+            // TODO: Test this feature configuration
             let timg1 = TimerGroup::new(peripherals.TIMG1);
-            esp_rtos::start(timg1.timer0, sw_int);
+            esp_rtos::start(timg1.timer0);
+       } else if #[cfg(any(feature = "esp32s2", feature = "esp32s3"))] {
+            // TODO: Test this feature configuration
+           use esp_hal::timer::systimer::SystemTimer;
+           let systimer = SystemTimer::new(peripherals.SYSTIMER);
+           esp_rtos::start(systimer.alarm0);
        } else {
            use esp_hal::timer::systimer::SystemTimer;
            let systimer = SystemTimer::new(peripherals.SYSTIMER);
@@ -124,9 +131,35 @@ async fn main(spawner: Spawner) -> ! {
         guard.uart_pins.clone()
     };
 
-    let available_gpios = GPIOConfig {
-        gpio10: Some(peripherals.GPIO10.degrade()),
-        gpio11: Some(peripherals.GPIO11.degrade()),
+    cfg_if::cfg_if! {
+        if #[cfg(any(feature = "esp32c2", feature = "esp32c3"))] {
+           // TODO: ESPC2/C3: GPIO pin configuration not yet implemented
+           let available_gpios = GPIOConfig {
+               gpio10: Some(peripherals.GPIO10.degrade()),
+               gpio11: Some(peripherals.GPIO9.degrade()),
+            };
+        }else if #[cfg(feature = "esp32c6")] {
+
+            let available_gpios = GPIOConfig {
+                gpio10: Some(peripherals.GPIO10.degrade()),
+                gpio11: Some(peripherals.GPIO11.degrade()),
+            };
+        } else if #[cfg(feature = "esp32")]{
+            // TODO: ESP32: GPIO pin configuration not yet implemented
+            let available_gpios = GPIOConfig {
+                gpio10: Some(peripherals.GPIO12.degrade()),
+                gpio11: Some(peripherals.GPIO13.degrade()),
+            };
+        } else if #[cfg(any( feature = "esp32s2", feature = "esp32s3"))]{
+            // TODO: ESP32/S2/S3: GPIO pin configuration not yet implemented
+            let available_gpios = GPIOConfig {
+                gpio10: Some(peripherals.GPIO10.degrade()),
+                gpio11: Some(peripherals.GPIO11.degrade()),
+            };
+        } else {
+            // No fallback
+            panic!("Unsupported target for PinChannel GPIOConfig initialization");
+        }
     };
 
     // Initialize the global pin channel and keep the &'static reference so we can
