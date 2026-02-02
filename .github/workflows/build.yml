@@ -18,12 +18,12 @@ jobs:
       matrix:
         device: [
             # RISC-V devices:
-            # { soc: "esp32c2", toolchain: "stable" },
-            # { soc: "esp32c3", toolchain: "stable" },
+            { soc: "esp32c2", toolchain: "stable" },
+            { soc: "esp32c3", toolchain: "stable" },
 ##            { soc: "esp32c5", toolchain: "stable" },
-            # { soc: "esp32c6", toolchain: "stable" },
+            { soc: "esp32c6", toolchain: "stable" },
             # Xtensa devices:
-            # { soc: "esp32", toolchain: "esp" },
+            { soc: "esp32", toolchain: "esp" },
             { soc: "esp32s2", toolchain: "esp" },
             { soc: "esp32s3", toolchain: "esp" },
         ]
