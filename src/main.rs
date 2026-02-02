@@ -85,7 +85,7 @@ async fn main(spawner: Spawner) -> ! {
     flash::init(peripherals.FLASH);
 
     // TODO: Based on compilation flags, use the right OtaActions implementer
-    storage::esp::OtaWriter::try_validating_current_ota_partition()
+    storage::esp_ota::OtaWriter::try_validating_current_ota_partition()
         .await
         .expect("Failed to validate the current ota partition");
 

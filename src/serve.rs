@@ -204,8 +204,8 @@ pub(crate) async fn handle_ssh_client(
             SessionType::Sftp(ch) => {
                 let stdio = ssh_server.stdio(ch).await?;
                 // TODO: Use a configuration flag to select the hardware specific OtaActions implementer
-                let ota_writer = storage::esp::OtaWriter::new();
-                ota::run_ota_server::<storage::esp::OtaWriter>(stdio, ota_writer).await?
+                let ota_writer = storage::esp_ota::OtaWriter::new();
+                ota::run_ota_server::<storage::esp_ota::OtaWriter>(stdio, ota_writer).await?
             }
         };
         Ok(())

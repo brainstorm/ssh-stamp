@@ -180,21 +180,21 @@ validate_ota(){
 set -v
 set -e 
 
-# check_tools
+check_tools
 
-# show_board_info
+show_board_info
 
-# build_app
+build_app
 
-# pack_ota
+pack_ota
 
-# clean_flash_and_flash_app
+clean_flash_and_flash_app
 
-# reach_board
+reach_board
 
-# reach_app
+reach_app
 
-# run_sftp_ota
+run_sftp_ota
 
 validate_ota
 

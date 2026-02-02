@@ -11,7 +11,7 @@
     feature = "esp32c3",
     feature = "esp32c6"
 ))]
-pub mod esp;
+pub mod esp_ota;
 
 // TODO: When the time comes, generalise the flash so it can be used with all supported targets
 /// [[flash]] is a packet to provide safe access to the Flash storage used by SSH-Stamp
