@@ -47,6 +47,8 @@ pub struct SSHStampConfig {
     pub ipv6_static: Option<StaticConfigV6>,
     /// UART
     pub uart_pins: SerdePinConfig,
+    pub tx_pin: u8,
+    pub rx_pin: u8,
 }
 
 impl SSHStampConfig {
@@ -66,6 +68,8 @@ impl SSHStampConfig {
         let wifi_pw = None;
 
         let uart_pins = SerdePinConfig::default();
+        let tx_pin = 10;
+        let rx_pin = 11;
 
         Ok(SSHStampConfig {
             hostkey,
@@ -79,6 +83,8 @@ impl SSHStampConfig {
             #[cfg(feature = "ipv6")]
             ipv6_static: None,
             uart_pins,
+            tx_pin,
+            rx_pin,
         })
     }
 
@@ -267,6 +273,8 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         // Not supported by sshwire-derive nor virtue (no Option<u8> support)
         // let uart_pins = SSHDecode::dec(s)?;
         let uart_pins = SSHDecode::dec(s)?;
+        let tx_pin = 10;
+        let rx_pin = 11;
 
         Ok(Self {
             hostkey,
@@ -280,6 +288,8 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
             #[cfg(feature = "ipv6")]
             ipv6_static,
             uart_pins,
+            tx_pin,
+            rx_pin,
         })
     }
 }
