@@ -1,6 +1,11 @@
 {
-    "rust-analyzer.check.allTargets": false,
-    // "rust-analyzer.cargo.features": [
-    //     "esp32c6"
-    // ]
+    "rust-analyzer.cargo.target": "riscv32imac-unknown-none-elf",
+    "rust-analyzer.cargo.noDefaultFeatures": true,
+    "rust-analyzer.cargo.features": [
+        "esp32c6"
+    ],
+    "rust-analyzer.cargo.extraArgs": [
+        "--release"
+    ],
+    "rust-analyzer.check.allTargets": false
 }
