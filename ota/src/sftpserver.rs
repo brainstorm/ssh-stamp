@@ -4,7 +4,7 @@
 
 use core::hash::Hasher;
 
-use crate::{handler::UpdateProcessor, storagetraits::OtaActions};
+use crate::{handler::UpdateProcessor, otatraits::OtaActions};
 
 use sunset::sshwire::{BinString, WireError};
 use sunset_async::ChanInOut;
@@ -22,9 +22,6 @@ pub async fn run_ota_server<W: OtaActions>(
     stdio: ChanInOut<'_>,
     ota_writer: W,
 ) -> Result<(), sunset::Error> {
-    // Placeholder for OTA server logic
-    // This function would handle the SFTP session and perform OTA updates
-    warn!("WIP SFTP OTA Under tests");
     let mut buffer_in = [0u8; 512];
     let mut request_buffer = [0u8; 512];
 
@@ -46,6 +43,8 @@ pub async fn run_ota_server<W: OtaActions>(
             Err(e.into())
         }
     }
+    // TODO: reset here instead of in the SftpOtaServer. Maybe use an Embassy Signal instead of a return value.
+    // If the signal reader contains a reset device, the device shall be reset. Easy
 }
 
 /// This length is chosen to keep the file handle small
@@ -150,6 +149,7 @@ impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer
                 let ret_val = match self.processor.finalize().await {
                     Ok(_) => {
                         info!("OTA update finalized successfully.");
+                        self.processor.reset_device();
                         Ok(())
                     }
                     Err(e) => {
@@ -177,7 +177,7 @@ impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer
                 "SftpServer Close operation granted on untracked handle: {:?}",
                 handle
             );
-            Ok(()) // TODO: Handle close properly. You will need this for the OTA server
+            Ok(())
         }
     }
 
@@ -222,7 +222,7 @@ impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer
             );
 
             self.processor
-                .process_data_chunk(offset, buf)
+                .process_data(offset, buf)
                 .await
                 .map_err(|e| {
                     error!(

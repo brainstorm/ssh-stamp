@@ -45,4 +45,9 @@ pub trait OtaActions {
     fn finalize_ota_update(
         &mut self,
     ) -> impl core::future::Future<Output = StorageResult<()>> + Send;
+
+    /// Resets the target device to apply the OTA update
+    ///
+    /// This function should not return
+    fn reset_device(&self) -> !;
 }

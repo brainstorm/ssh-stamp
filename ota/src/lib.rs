@@ -14,13 +14,13 @@ pub use sftpserver::run_ota_server;
 /// It will be called from the sftpserver module to handle the OTA update process
 #[cfg(target_os = "none")]
 mod handler;
-/// Module implementing the OTA SFTP server
-#[cfg(target_os = "none")]
-mod sftpserver;
 /// Defining the target hardware abstraction for OTA updates
 ///
 /// This module defines traits for platform specific implementations
-pub mod storagetraits;
+pub mod otatraits;
+/// Module implementing the OTA SFTP server
+#[cfg(target_os = "none")]
+mod sftpserver;
 
 /// Module defining TLV types and constants for OTA updates
 ///

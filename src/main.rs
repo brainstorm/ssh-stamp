@@ -37,7 +37,7 @@ use ssh_stamp::{
     },
 };
 
-use ota::storagetraits::OtaActions;
+use ota::otatraits::OtaActions;
 use storage::flash;
 
 use static_cell::StaticCell;

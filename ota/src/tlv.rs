@@ -66,14 +66,17 @@ pub const SHA256_CHECKSUM: OtaTlvType = 2;
 #[derive(Debug)]
 #[repr(u8)] // Must match the type of OtaTlvType
 pub enum Tlv {
-    /// Type of OTA update. This MUST be the first Tlv.
+    /// Type of OTA update. This **MUST be the first Tlv**.
     /// For SSH Stamp, this must be OTA_FIRMWARE_BLOB_TYPE
     OtaType { ota_type: u32 },
     /// Expected SHA256 checksum of the firmware blob
     Sha256Checksum {
         checksum: [u8; CHECKSUM_LEN as usize],
     },
-    /// This MUST be the last Tlv. What follows is the firmware blob. the length of the blob is the payload value.
+    /// Contains the length in bytes of the firmware blob.
+    /// The firmware blob follows immediately after this TLV.
+    ///
+    /// This **MUST be the last Tlv**. What follows is the firmware blob. the length of the blob is the payload value.
     FirmwareBlob { size: u32 },
 }
 

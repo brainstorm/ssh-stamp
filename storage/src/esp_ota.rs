@@ -5,7 +5,7 @@ use crate::flash;
 use embedded_storage::Storage;
 use esp_bootloader_esp_idf;
 use esp_hal::system;
-use ota::storagetraits::{OtaActions, StorageError, StorageResult};
+use ota::otatraits::{OtaActions, StorageError, StorageResult};
 
 /// This structure is meant to wrap the media access for writing the OTA firmware
 /// It will abstract the flash memory or other storage media so later we can implement it for different platforms
@@ -29,7 +29,6 @@ impl Default for OtaWriter {
 
 impl OtaActions for OtaWriter {
     // TODO: build bootloader with auto-rollback to avoid invalid images rendering the device unbootable
-    // TODO: Report bug in OtaImageState to esp
     /// Validate the current OTA partition
     ///
     /// Mark the current OTA slot as VALID - this is only needed if the bootloader was built with auto-rollback support.
@@ -86,16 +85,20 @@ impl OtaActions for OtaWriter {
             u32::try_from(next_ota_size().await?).map_err(|_| StorageError::InternalError)?;
         Ok(partition_size)
     }
-    // TODO: Not tested. May crash!
+
     /// Writes data to the target OTA partition at the given offset.
     async fn write_ota_data(&self, offset: u32, data: &[u8]) -> StorageResult<()> {
         write_to_target(offset, data).await
     }
-    // TODO: Not tested. May crash!
+
     /// Finalizes the OTA update by setting the target slot as current.
     async fn finalize_ota_update(&mut self) -> StorageResult<()> {
         activate_next_ota_slot().await?;
-        system::software_reset(); // TODO: Not the right place. I would need to signal the main app to reboot after closing the SFTP session
+        Ok(())
+    }
+
+    fn reset_device(&self) -> ! {
+        system::software_reset()
     }
 }
 
@@ -168,7 +171,6 @@ async fn write_to_target(offset: u32, data: &[u8]) -> StorageResult<()> {
     Ok(())
 }
 
-// TODO: Does not crash but the OTADATA partition is invalid on boot
 /// The provided target slot will be marked as current and the image will be set as New so after
 /// the reboot it will boot from it and be validated if the bootloader requires it.
 ///
@@ -206,7 +208,7 @@ async fn activate_next_ota_slot() -> StorageResult<()> {
 }
 
 // TODO: build bootloader with auto-rollback to avoid invalid images rendering the device unbootable
-// TODO: Report bug in OtaImageState to esp
+
 /// Validate the current OTA partition
 ///
 /// Mark the current OTA slot as VALID - this is only needed if the bootloader was built with auto-rollback support.

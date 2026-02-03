@@ -4,7 +4,7 @@
 
 use sunset::sshwire::{SSHDecode, SSHSource, WireError};
 
-use crate::{OtaHeader, storagetraits::OtaActions, tlv};
+use crate::{OtaHeader, otatraits::OtaActions, tlv};
 
 use log::{debug, error, info, warn};
 use sha2::{Digest, Sha256};
@@ -54,6 +54,9 @@ pub(crate) struct UpdateProcessor<W: OtaActions> {
 }
 
 impl<W: OtaActions> UpdateProcessor<W> {
+    /// Creates a new UpdateProcessor instance with the given OtaActions implementation
+    ///
+    /// Use this ota_writer to perform platform-specific OTA actions
     pub fn new(ota_writer: W) -> Self {
         Self {
             state: UpdateProcessorState::default(),
@@ -74,7 +77,7 @@ impl<W: OtaActions> UpdateProcessor<W> {
     /// It processes data based on the current state of the update processor [[UpdateProcessorState]]. To first, read most metadata parameters, after that, write the data to the appropriate location. as it is received.
     ///
     /// It will try to consume as much data as possible from the provided buffer and return the number of bytes used.
-    pub async fn process_data_chunk(&mut self, _offset: u64, data: &[u8]) -> Result<(), OtaError> {
+    pub async fn process_data(&mut self, _offset: u64, data: &[u8]) -> Result<(), OtaError> {
         debug!(
             "UpdateProcessor: Processing data chunk at offset {}, length {} in state {:?}",
             _offset,
@@ -118,7 +121,6 @@ impl<W: OtaActions> UpdateProcessor<W> {
                     match tlv::Tlv::dec(&mut singular_source) {
                         Ok(tlv) => match tlv {
                             tlv::Tlv::OtaType { ota_type } => {
-                                // TODO: If the received ota_type does not match tlv::OTA_TYPE_VALUE_SSH_STAMP go to error state.
                                 if ota_type != tlv::OTA_TYPE_VALUE_SSH_STAMP {
                                     self.state =
                                         UpdateProcessorState::Error(OtaError::IllegalOperation);
@@ -326,12 +328,15 @@ impl<W: OtaActions> UpdateProcessor<W> {
         Ok(())
     }
 
+    /// Finalizes the OTA update process
+    ///
+    /// This function should be called once all data has been processed.
+    /// It will verify the final state and complete the OTA update if everything is correct.
     pub async fn finalize(&mut self) -> Result<(), OtaError> {
         let ret_val = match self.state {
             UpdateProcessorState::Finished {} => {
                 info!("Finalizing OTA update process successfully.");
 
-                // Here you would trigger the application of the update, e.g., rebooting into the new firmware
                 self.ota_writer.finalize_ota_update().await.map_err(|e| {
                     error!("Error finalizing OTA update: {:?}", e);
                     OtaError::InternalError
@@ -346,12 +351,16 @@ impl<W: OtaActions> UpdateProcessor<W> {
                     "Cannot finalize OTA update, current state is not Finished: {:?}",
                     self.state
                 );
-                Err(OtaError::IllegalOperation)
+                Err(OtaError::IllegalOperation) // Illegal finalizing in error state
             }
         };
 
         self.reset_ota_state();
         ret_val
+    }
+
+    pub fn reset_device(&mut self) {
+        self.ota_writer.reset_device();
     }
 
     fn reset_ota_state(&mut self) {
