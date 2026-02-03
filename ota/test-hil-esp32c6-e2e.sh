@@ -52,8 +52,6 @@ check_tools() {
     echo "All required tools are installed"
 }
 
-check_tools
-
 show_board_info(){
     echo "Trying to contact board via espflash"
     espflash board-info
@@ -62,7 +60,7 @@ show_board_info(){
 
 build_app(){
     echo "Building esp32c6 binary"
-    cargo build-esp32c6
+    cargo build-esp32c6 --features sftp-ota
 }
 
 pack_ota(){

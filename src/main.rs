@@ -37,6 +37,7 @@ use ssh_stamp::{
     },
 };
 
+#[cfg(feature = "sftp-ota")]
 use ota::otatraits::OtaActions;
 use storage::flash;
 
@@ -83,11 +84,13 @@ async fn main(spawner: Spawner) -> ! {
     }
 
     flash::init(peripherals.FLASH);
-
-    // TODO: Based on compilation flags, use the right OtaActions implementer
-    storage::esp_ota::OtaWriter::try_validating_current_ota_partition()
-        .await
-        .expect("Failed to validate the current ota partition");
+    #[cfg(feature = "sftp-ota")]
+    {
+        // TODO: Based on compilation flags, use the right OtaActions implementer
+        storage::esp_ota::OtaWriter::try_validating_current_ota_partition()
+            .await
+            .expect("Failed to validate the current ota partition");
+    }
 
     // Read SSH configuration from Flash (if it exists)
     let config = {

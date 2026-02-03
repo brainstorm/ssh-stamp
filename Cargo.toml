@@ -128,7 +128,11 @@ opt-level = "s"
 
 [features]
 ipv6 = []
-default = ["esp32c6"]
+default = ["esp32c6", "sftp-ota"]
+
+# Enables the SFTP OTA Subsystem. Use ota-packer to pack a binary and PUT it over sftp
+sftp-ota = []
+
 # MCU options
 esp32 = [
     "esp-hal/esp32",

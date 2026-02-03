@@ -9,6 +9,7 @@ use crate::espressif::buffered_uart::BufferedUart;
 use crate::keys;
 use crate::pins::PinChannel;
 use crate::serial::serial_bridge;
+#[cfg(feature = "sftp-ota")]
 use ota;
 
 // Embassy
@@ -27,6 +28,7 @@ use esp_println::{dbg, println};
 
 enum SessionType {
     Bridge(ChanHandle),
+    #[cfg(feature = "sftp-ota")]
     Sftp(ChanHandle),
 }
 
@@ -46,6 +48,7 @@ async fn connection_loop(
         // dbg!(&ev);
         #[allow(unreachable_patterns)]
         match ev {
+            #[cfg(feature = "sftp-ota")]
             ServEvent::SessionSubsystem(a) => {
                 if a.command()?.to_lowercase().as_str() == "sftp" {
                     if let Some(ch) = session.take() {
@@ -201,6 +204,7 @@ pub(crate) async fn handle_ssh_client(
                 let stdio2 = stdio.clone();
                 serial_bridge(stdio, stdio2, uart).await?
             }
+            #[cfg(feature = "sftp-ota")]
             SessionType::Sftp(ch) => {
                 let stdio = ssh_server.stdio(ch).await?;
                 // TODO: Use a configuration flag to select the hardware specific OtaActions implementer
