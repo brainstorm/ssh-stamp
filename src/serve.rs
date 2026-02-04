@@ -1,7 +1,7 @@
 use core::option::Option::{self, None, Some};
 use core::result::Result;
 
-use crate::pins::PinChannel;
+use crate::config::UartPins;
 use crate::espressif::buffered_uart::BufferedUart;
 use crate::keys;
 use crate::serial::serial_bridge;
@@ -12,7 +12,6 @@ use embassy_net::tcp::TcpSocket;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
-use sunset_async::SunsetMutex;
 
 use heapless::String;
 use sunset::{error, ChanHandle, ServEvent, SignKey};
@@ -28,7 +27,7 @@ enum SessionType {
 async fn connection_loop(
     serv: &SSHServer<'_>,
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
-    pin_channel_ref: &'static SunsetMutex<PinChannel>,
+    uart_pins: &'static UartPins,
 ) -> Result<(), sunset::Error> {
     let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
     let mut session: Option<ChanHandle> = None;
@@ -155,7 +154,7 @@ async fn connection_loop(
 pub(crate) async fn handle_ssh_client(
     stream: &mut TcpSocket<'_>,
     uart: &BufferedUart,
-    pin_channel_ref: &'static SunsetMutex<PinChannel>,
+    uart_pins: &'static UartPins,
 ) -> Result<(), sunset::Error> {
     // Spawn network tasks to handle incoming connections with demo_common::session()
     let mut inbuf = [0u8; 4096];
@@ -167,7 +166,7 @@ pub(crate) async fn handle_ssh_client(
     let chan_pipe = Channel::<NoopRawMutex, SessionType, 1>::new();
 
     println!("Calling connection_loop from handle_ssh_client");
-    let conn_loop = connection_loop(&ssh_server, &chan_pipe, pin_channel_ref);
+    let conn_loop = connection_loop(&ssh_server, &chan_pipe, uart_pins);
     println!("Running server from handle_ssh_client()");
     let server = ssh_server.run(&mut rsock, &mut wsock);
 

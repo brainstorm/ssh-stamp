@@ -4,7 +4,7 @@ use core::net::Ipv6Addr;
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 #[cfg(feature = "ipv6")]
 use embassy_net::{Ipv6Cidr, StaticConfigV6};
-use heapless::{String};
+use heapless::String;
 
 use esp_println::dbg;
 
@@ -20,8 +20,20 @@ use sunset::{
     SignKey,
 };
 
-use crate::pins::SerdePinConfig;
-use crate::settings::{DEFAULT_SSID, KEY_SLOTS};
+use crate::settings::{DEFAULT_SSID, DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS};
+
+#[derive(Debug, PartialEq)]
+pub struct UartPins {
+    rx: u8,
+    tx: u8,
+}
+
+impl Default for UartPins {
+    fn default() -> Self {
+        // sensible defaults for UART pins; adjust if your board uses different pins
+        UartPins { rx: DEFAULT_UART_RX_PIN, tx: DEFAULT_UART_TX_PIN }
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub struct SSHStampConfig {
@@ -46,7 +58,7 @@ pub struct SSHStampConfig {
     #[cfg(feature = "ipv6")]
     pub ipv6_static: Option<StaticConfigV6>,
     /// UART
-    pub uart_pins: SerdePinConfig,
+    pub uart_pins: UartPins,
 }
 
 impl SSHStampConfig {
@@ -64,7 +76,7 @@ impl SSHStampConfig {
         let mac = random_mac()?;
         let wifi_pw = None;
 
-        let uart_pins = SerdePinConfig::default();
+        let uart_pins = UartPins::default();
 
         Ok(SSHStampConfig {
             hostkey,
@@ -145,7 +157,10 @@ where
 }
 
 // encode Option<heapless::String<N>> as a bool then the &str contents (heapless::String doesn't implement SSHEncode)
-pub(crate) fn enc_option_str<const N: usize>(v: &Option<String<N>>, s: &mut dyn SSHSink) -> WireResult<()> {
+pub(crate) fn enc_option_str<const N: usize>(
+    v: &Option<String<N>>,
+    s: &mut dyn SSHSink,
+) -> WireResult<()> {
     v.is_some().enc(s)?;
     if let Some(ref st) = v {
         st.as_str().enc(s)?;
@@ -271,7 +286,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
 
         let wifi_ssid = SSHDecode::dec(s)?;
         let wifi_pw = dec_option(s)?;
-        
+
         let mac = SSHDecode::dec(s)?;
 
         let ipv4_static = dec_ipv4_config(s)?;
