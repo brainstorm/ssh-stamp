@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - main
+      - build-ota-packer
   pull_request:
-    branches:
+      branches:
       - main
+      - build-ota-packer
   workflow_dispatch:
 
 jobs:
@@ -54,3 +56,20 @@ jobs:
         run: |
           cargo +${{ matrix.device.toolchain }} clippy --features ${{ matrix.device.soc }} --target riscv32imac-unknown-none-elf -- -D warnings
           cargo +${{ matrix.device.toolchain }} fmt -- --check
+
+  build-ota-packer:
+    name: Check OTA Packer
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Stable Rust Toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          target: riscv32imac-unknown-none-elf
+          # toolchain: nightly # Avoids issues with rust-src not available on stable
+          toolchain: stable # Avoids issues with rust-src not available on stable
+      - name: Build ota-packer
+        run: cargo build --package ota --bin ota-packer --target x86_64-unknown-linux-gnu
