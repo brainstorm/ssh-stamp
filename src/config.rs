@@ -4,7 +4,7 @@ use core::net::Ipv6Addr;
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 #[cfg(feature = "ipv6")]
 use embassy_net::{Ipv6Cidr, StaticConfigV6};
-use heapless::{String, Vec};
+use heapless::{String};
 
 use esp_println::dbg;
 
@@ -20,8 +20,7 @@ use sunset::{
     SignKey,
 };
 
-use crate::pins::SerdePinConfig;
-use crate::settings::{DEFAULT_SSID, KEY_SLOTS};
+use crate::settings::{DEFAULT_SSID, DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS};
 
 #[derive(Debug, PartialEq)]
 pub struct SSHStampConfig {
@@ -35,7 +34,7 @@ pub struct SSHStampConfig {
 
     /// WiFi
     pub wifi_ssid: String<32>,
-    pub wifi_pw: Option<String<63>>, // TODO: Why not 64?
+    pub wifi_pw: Option<String<63>>,
 
     /// Networking
     /// TODO: Populate this field from esp's hardware info or just refer it from HAL?
@@ -46,9 +45,20 @@ pub struct SSHStampConfig {
     #[cfg(feature = "ipv6")]
     pub ipv6_static: Option<StaticConfigV6>,
     /// UART
-    pub uart_pins: SerdePinConfig,
-    pub tx_pin: u8,
-    pub rx_pin: u8,
+    pub uart_pins: UartPins,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct UartPins {
+    rx: u8,
+    tx: u8,
+}
+
+impl Default for UartPins {
+    fn default() -> Self {
+        // sensible defaults for UART pins; adjust if your board uses different pins
+        UartPins { rx: DEFAULT_UART_RX_PIN, tx: DEFAULT_UART_TX_PIN }
+    }
 }
 
 impl SSHStampConfig {
@@ -62,14 +72,11 @@ impl SSHStampConfig {
         let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
 
         // TODO: Those env events come from system's std::env / core::env (if any)... so it shouldn't be unsafe()
-        let wifi_ssid_str = String::try_from(DEFAULT_SSID).unwrap();
-        let wifi_ssid: String<32> = wifi_ssid_str.into();
+        let wifi_ssid = Self::default_ssid();
         let mac = random_mac()?;
         let wifi_pw = None;
 
-        let uart_pins = SerdePinConfig::default();
-        let tx_pin = 10;
-        let rx_pin = 11;
+        let uart_pins = UartPins::default();
 
         Ok(SSHStampConfig {
             hostkey,
@@ -83,8 +90,6 @@ impl SSHStampConfig {
             #[cfg(feature = "ipv6")]
             ipv6_static: None,
             uart_pins,
-            tx_pin,
-            rx_pin,
         })
     }
 
@@ -99,6 +104,12 @@ impl SSHStampConfig {
         } else {
             false
         }
+    }
+
+    pub(crate) fn default_ssid() -> String<32> {
+        let mut s = String::<32>::new();
+        s.push_str(DEFAULT_SSID).unwrap();
+        s
     }
 
     // pub fn config_change(&mut self, conf: SSHConfig) -> Result<()> {
@@ -145,6 +156,15 @@ where
     bool::dec(s)?.then(|| SSHDecode::dec(s)).transpose()
 }
 
+// encode Option<heapless::String<N>> as a bool then the &str contents (heapless::String doesn't implement SSHEncode)
+pub(crate) fn enc_option_str<const N: usize>(v: &Option<String<N>>, s: &mut dyn SSHSink) -> WireResult<()> {
+    v.is_some().enc(s)?;
+    if let Some(ref st) = v {
+        st.as_str().enc(s)?;
+    }
+    Ok(())
+}
+
 fn enc_ipv4_config(v: &Option<StaticConfigV4>, s: &mut dyn SSHSink) -> WireResult<()> {
     v.is_some().enc(s)?;
     if let Some(v) = v {
@@ -188,7 +208,7 @@ where
         Ok(StaticConfigV4 {
             address: Ipv4Cidr::new(ad, prefix),
             gateway,
-            dns_servers: Vec::new(),
+            dns_servers: Default::default(),
         })
     })
     .transpose()
@@ -232,15 +252,16 @@ impl SSHEncode for SSHStampConfig {
         }
 
         self.wifi_ssid.as_str().enc(s)?;
-        enc_option(&self.wifi_pw, s)?;
+        enc_option_str::<63>(&self.wifi_pw, s)?;
         self.mac.enc(s)?;
 
         enc_ipv4_config(&self.ipv4_static, s)?;
         #[cfg(feature = "ipv6")]
         enc_ipv6_config(&self.ipv6_static, s)?;
 
-        // Encode PinConfig
-        self.uart_pins.enc(s)?;
+        // Encode UartPins
+        self.uart_pins.rx.enc(s)?;
+        self.uart_pins.tx.enc(s)?;
 
         Ok(())
     }
@@ -263,7 +284,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
 
         let wifi_ssid = SSHDecode::dec(s)?;
         let wifi_pw = dec_option(s)?;
-
+        
         let mac = SSHDecode::dec(s)?;
 
         let ipv4_static = dec_ipv4_config(s)?;
@@ -272,9 +293,9 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
 
         // Not supported by sshwire-derive nor virtue (no Option<u8> support)
         // let uart_pins = SSHDecode::dec(s)?;
-        let uart_pins = SSHDecode::dec(s)?;
-        let tx_pin = 10;
-        let rx_pin = 11;
+        let rx: u8 = SSHDecode::dec(s)?;
+        let tx: u8 = SSHDecode::dec(s)?;
+        let uart_pins = UartPins { rx, tx };
 
         Ok(Self {
             hostkey,
@@ -288,8 +309,6 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
             #[cfg(feature = "ipv6")]
             ipv6_static,
             uart_pins,
-            tx_pin,
-            rx_pin,
         })
     }
 }

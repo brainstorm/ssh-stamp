@@ -48,8 +48,6 @@ ESP_LOG = "INFO"
 #ESP_HAL_CONFIG_STACK_GUARD_VALUE=3740121773
 #ESP_HAL_CONFIG_IMPL_CRITICAL_SECTION=true
 
-
-
 [build]
 target = "riscv32imac-unknown-none-elf"
 

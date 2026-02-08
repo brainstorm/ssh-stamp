@@ -6,7 +6,6 @@ pub mod config;
 pub mod errors;
 pub mod espressif;
 pub mod keys;
-pub mod pins;
 pub mod serial;
 pub mod serve;
 pub mod settings;
