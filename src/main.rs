@@ -10,9 +10,10 @@ use core::result::Result::Err;
 use core::result::Result::Ok;
 // use core::error::Error;
 use core::future::Future;
+use core::net::Ipv4Addr;
 use embassy_executor::Spawner;
 use embassy_futures::select::{select3, Either3};
-use embassy_net::{tcp::TcpSocket, IpListenEndpoint, Stack};
+use embassy_net::{tcp::TcpSocket, IpListenEndpoint, Runner, Stack};
 use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
 use esp_hal::system::software_reset;
 use esp_hal::{
@@ -25,14 +26,17 @@ use esp_hal::{
 };
 use esp_println::dbg;
 use esp_println::println;
+use esp_radio::wifi::WifiController;
+// use esp_radio::wifi::WifiController;
+// use esp_radio::Controller
+use esp_radio::wifi::WifiDevice;
 use esp_radio::{Controller, InitializationError};
-use heapless::String;
 use ssh_stamp::{
     config::SSHStampConfig,
     espressif::{
         buffered_uart::BufferedUart,
         // net::accept_requests,
-        net::if_up,
+        net,
         rng,
     },
     serve,
@@ -98,7 +102,7 @@ pub async fn wifi_wait_for_initialisation<'a>() -> Result<Controller<'a>, Initia
     wifi_controller
 }
 
-pub async fn wifi_disable() -> () {
+pub async fn wifi_controller_disable() -> () {
     // TODO: Correctly disable wifi controller
     // pub async fn wifi_disable(wifi_controller: EspWifiController<'_>) -> (){
     // drop wifi controller
@@ -107,28 +111,33 @@ pub async fn wifi_disable() -> () {
     software_reset();
 }
 
-pub struct TcpStackReturn<'a> {
-    pub config: SSHStampConfig,
-    pub tcp_stack: Stack<'a>,
-}
-pub async fn tcp_wait_for_initialisation<'a>(s: WifiEnabledConsumed<'a>) -> Stack<'a> {
-    let wifi_controller = s.wifi_controller;
-    let wifi: WIFI = s.wifi;
-    let mut rng = s.rng;
-    let wifi_ssid = s.wifi_ssid;
-    let tcp_stack = if_up(wifi_controller, wifi, &mut rng, wifi_ssid)
-        .await
-        .unwrap();
-    tcp_stack
+pub async fn ap_stack_disable() -> () {
+    // drop ap_stack
+    software_reset();
 }
 
-pub async fn tcp_disable() -> () {
+pub async fn wifi_disable() -> () {
+    // drop wifi
+    software_reset();
+}
+
+pub async fn network_disable() -> () {
+    // drop network
+    software_reset();
+}
+
+pub async fn dhcp_disable() -> () {
+    // drop dhcp
+    software_reset();
+}
+
+pub async fn tcp_stack_disable() -> () {
     // drop tcp stack
     software_reset();
 }
 
-pub async fn socket_disable() -> () {
-    // drop socket
+pub async fn tcp_socket_disable() -> () {
+    // drop tcp stack
     software_reset();
 }
 
@@ -331,73 +340,196 @@ pub struct PeripheralsEnabled<'a> {
     pub rng: Rng,
     pub wifi: WIFI<'a>,
     pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub wifi_controller: Controller<'a>,
+    pub controller: Controller<'a>,
     pub gpio10: GPIO10<'a>,
     pub gpio11: GPIO11<'a>,
     pub uart1: UART1<'a>,
 }
 async fn peripherals_enabled<'a>(s: SshStampInit<'a>) -> Result<(), sunset::Error> {
-    let wifi_controller = wifi_wait_for_initialisation().await;
+    let controller = wifi_wait_for_initialisation().await;
 
     let peripherals_enabled_struct = PeripheralsEnabled {
         rng: s.rng,
         wifi: s.wifi,
         config: s.config,
-        wifi_controller: wifi_controller.unwrap(),
+        controller: controller.unwrap(),
         gpio10: s.gpio10,
         gpio11: s.gpio11,
         uart1: s.uart1,
     };
-    match wifi_enabled(peripherals_enabled_struct).await {
+    match wifi_controller_enabled(peripherals_enabled_struct).await {
         Ok(_) => (),
         Err(e) => {
-            println!("Wifi error: {}", e);
+            println!("Wifi controller error: {}", e);
         }
     }
 
-    wifi_disable().await;
+    wifi_controller_disable().await;
     Ok(()) // todo!() return relevant value
 }
 
-pub struct WifiEnabledConsumed<'a> {
+pub struct WifiControllerEnabled<'a> {
     pub rng: Rng,
-    pub wifi: WIFI<'a>,
-    pub wifi_ssid: String<32>,
-    pub wifi_controller: Controller<'a>,
-}
-pub struct WifiEnabled<'a> {
     pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub tcp_stack: Stack<'a>,
+    pub wifi_controller: WifiController<'a>,
     pub gpio10: GPIO10<'a>,
     pub gpio11: GPIO11<'a>,
     pub uart1: UART1<'a>,
+    pub ap_stack: Stack<'a>,
+    pub runner: Runner<'a, WifiDevice<'a>>,
+    pub ip: Ipv4Addr,
 }
-async fn wifi_enabled<'a>(s: PeripheralsEnabled<'a>) -> Result<(), sunset::Error> {
+pub async fn wifi_controller_enabled<'a>(s: PeripheralsEnabled<'a>) -> Result<(), sunset::Error> {
+    let (ap_stack, runner, wifi_controller, ip) =
+        net::prepare_ap_stack(&s.controller, s.wifi, s.rng)
+            .await
+            .unwrap();
+    let wifi_controller_enabled_stack = WifiControllerEnabled {
+        config: s.config,
+        rng: s.rng,
+        wifi_controller: wifi_controller,
+        gpio10: s.gpio10,
+        gpio11: s.gpio11,
+        uart1: s.uart1,
+        ap_stack: ap_stack,
+        runner: runner,
+        ip: ip,
+    };
+    match ap_stack_enabled(wifi_controller_enabled_stack).await {
+        Ok(_) => (),
+        Err(e) => {
+            println!("AP Stack error: {}", e);
+        }
+    }
+    ap_stack_disable().await;
+    Ok(()) // todo!() return relevant value
+}
+
+pub struct ApStackEnabled<'a> {
+    pub rng: Rng,
+    pub config: &'a SunsetMutex<SSHStampConfig>,
+    pub gpio10: GPIO10<'a>,
+    pub gpio11: GPIO11<'a>,
+    pub uart1: UART1<'a>,
+    pub ap_stack: Stack<'a>,
+    pub runner: Runner<'a, WifiDevice<'a>>,
+    pub ip: Ipv4Addr,
+}
+
+pub async fn ap_stack_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Error> {
     let wifi_ssid_config = {
         let guard = s.config.lock().await;
         guard.wifi_ssid.clone()
     };
-    let wifi_enabled_consumed = WifiEnabledConsumed {
+
+    net::wifi_up(s.wifi_controller, wifi_ssid_config).await;
+
+    let ap_stack_enabled_stack = ApStackEnabled {
+        config: s.config,
         rng: s.rng,
-        wifi: s.wifi,
-        wifi_ssid: wifi_ssid_config,
-        wifi_controller: s.wifi_controller,
+        gpio10: s.gpio10,
+        gpio11: s.gpio11,
+        uart1: s.uart1,
+        ap_stack: s.ap_stack,
+        runner: s.runner,
+        ip: s.ip,
     };
-    let tcp_stack = tcp_wait_for_initialisation(wifi_enabled_consumed).await;
-    let wifi_enabled_struct = WifiEnabled {
+    match wifi_enabled(ap_stack_enabled_stack).await {
+        Ok(_) => (),
+        Err(e) => {
+            println!("AP Stack error: {}", e);
+        }
+    }
+    wifi_disable().await; // drop wifi
+    Ok(()) // todo!() return relevant value
+}
+
+pub struct WifiEnabled<'a> {
+    pub rng: Rng,
+    pub config: &'a SunsetMutex<SSHStampConfig>,
+    pub gpio10: GPIO10<'a>,
+    pub gpio11: GPIO11<'a>,
+    pub uart1: UART1<'a>,
+    pub ap_stack: Stack<'a>,
+    pub ip: Ipv4Addr,
+}
+
+pub async fn wifi_enabled<'a>(s: ApStackEnabled<'a>) -> Result<(), sunset::Error> {
+    net::net_up(s.runner).await;
+
+    let wifi_enabled_stack = WifiEnabled {
+        config: s.config,
+        rng: s.rng,
+        gpio10: s.gpio10,
+        gpio11: s.gpio11,
+        uart1: s.uart1,
+        ap_stack: s.ap_stack,
+        ip: s.ip,
+    };
+    match network_enabled(wifi_enabled_stack).await {
+        Ok(_) => (),
+        Err(e) => {
+            println!("Network error: {}", e);
+        }
+    }
+    network_disable().await; // drop network
+    Ok(()) // todo!() return relevant value
+}
+
+pub struct NetworkEnabled<'a> {
+    pub config: &'a SunsetMutex<SSHStampConfig>,
+    pub rng: Rng,
+    pub gpio10: GPIO10<'a>,
+    pub gpio11: GPIO11<'a>,
+    pub uart1: UART1<'a>,
+    pub ap_stack: Stack<'a>,
+    pub ip: Ipv4Addr,
+}
+pub async fn network_enabled<'a>(s: WifiEnabled<'a>) -> Result<(), sunset::Error> {
+    net::run_dchp(s.ap_stack, s.ip).await;
+
+    let network_enabled_struct = NetworkEnabled {
+        config: s.config,
+        ap_stack: s.ap_stack,
+        rng: s.rng,
+        gpio10: s.gpio10,
+        gpio11: s.gpio11,
+        uart1: s.uart1,
+        ip: s.ip,
+    };
+    match dhcp_enabled(network_enabled_struct).await {
+        Ok(_) => (),
+        Err(e) => {
+            println!("DHCP error: {}", e);
+        }
+    }
+    dhcp_disable().await;
+    Ok(()) // todo!() return relevant value
+}
+
+pub struct DhcpEnabled<'a> {
+    pub config: &'a SunsetMutex<SSHStampConfig>,
+    pub gpio10: GPIO10<'a>,
+    pub gpio11: GPIO11<'a>,
+    pub uart1: UART1<'a>,
+    pub tcp_stack: Stack<'a>,
+}
+async fn dhcp_enabled<'a>(s: NetworkEnabled<'a>) -> Result<(), sunset::Error> {
+    let tcp_stack = net::check_link(s.ap_stack, s.ip).await.unwrap();
+    let dhcp_enabled_struct = DhcpEnabled {
         config: s.config,
         tcp_stack: tcp_stack,
         gpio10: s.gpio10,
         gpio11: s.gpio11,
         uart1: s.uart1,
     };
-    match tcp_enabled(wifi_enabled_struct).await {
+    match tcp_enabled(dhcp_enabled_struct).await {
         Ok(_) => (),
         Err(e) => {
             println!("TCP stack error: {}", e);
         }
     }
-    tcp_disable().await;
+    tcp_stack_disable().await;
     Ok(()) // todo!() return relevant value
 }
 
@@ -408,7 +540,8 @@ pub struct TCPEnabled<'a> {
     pub gpio11: GPIO11<'a>,
     pub uart1: UART1<'a>,
 }
-async fn tcp_enabled<'a>(s: WifiEnabled<'a>) -> Result<(), sunset::Error> {
+
+async fn tcp_enabled<'a>(s: DhcpEnabled<'a>) -> Result<(), sunset::Error> {
     let mut rx_buffer = [0u8; 1536];
     let mut tx_buffer = [0u8; 1536];
     let mut tcp_socket = TcpSocket::new(s.tcp_stack, &mut rx_buffer, &mut tx_buffer);
@@ -422,7 +555,7 @@ async fn tcp_enabled<'a>(s: WifiEnabled<'a>) -> Result<(), sunset::Error> {
         .await
     {
         println!("connect error: {:?}", e);
-        socket_disable().await;
+        tcp_socket_disable().await;
     }
     println!("Connected, port 22");
     let tcp_enabled_struct = TCPEnabled {
@@ -438,7 +571,7 @@ async fn tcp_enabled<'a>(s: WifiEnabled<'a>) -> Result<(), sunset::Error> {
             println!("TCP socket error: {}", e);
         }
     }
-    socket_disable().await;
+    tcp_socket_disable().await;
     Ok(()) // todo!() return relevant value
 }
 
