@@ -1,12 +1,15 @@
+// SPDX-FileCopyrightText: 2025 Roman Valls, 2025
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use core::option::Option::{self, None, Some};
 use core::result::Result;
-use core::writeln;
 
 use crate::config::SSHStampConfig;
+use crate::config_storage;
 use crate::keys;
-// use crate::pins::PinChannel;
-use crate::storage;
-use crate::storage::Fl;
+use storage::flash;
+
 // Embassy
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
@@ -23,14 +26,13 @@ use esp_println::{dbg, println};
 
 pub enum SessionType {
     Bridge(ChanHandle),
-    //Sftp(ChanHandle),
+    Sftp(ChanHandle),
 }
 
 pub async fn connection_loop<'a>(
     serv: &SSHServer<'_>,
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
     config: &'a SunsetMutex<SSHStampConfig>,
-    flash: &'a SunsetMutex<Fl>,
 ) -> Result<(), sunset::Error> {
     let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
     let mut session: Option<ChanHandle> = None;
@@ -43,13 +45,35 @@ pub async fn connection_loop<'a>(
         dbg!(&ev);
         #[allow(unreachable_patterns)]
         match ev {
+            // #[cfg(feature = "sftp-ota")]
+            ServEvent::SessionSubsystem(a) => {
+                if a.command()?.to_lowercase().as_str() == "sftp" {
+                    if let Some(ch) = session.take() {
+                        debug_assert!(ch.num() == a.channel());
+
+                        a.succeed()?;
+                        dbg!("We got SFTP subsystem");
+                        let _ = chan_pipe.try_send(SessionType::Sftp(ch));
+                    } else {
+                        a.fail()?;
+                    }
+                } else {
+                    a.fail()?;
+                }
+            }
             ServEvent::SessionShell(a) => {
                 if let Some(ch) = session.take() {
                     // Save config after connection successful (SessionEnv completed)
                     if config_changed {
                         let config_guard = config.lock().await;
-                        let mut flash_guard = flash.lock().await;
-                        let _result = storage::save(&mut flash_guard, &config_guard).await;
+                        let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
+                            panic!("Could not acquire flash storage lock");
+                        };
+                        let mut flash_storage = flash_storage_guard.lock().await;
+                        // TODO: Migrate this function/test to embedded-test.
+                        // Quick roundtrip test for SSHStampConfig
+                        // ssh_stamp::config::roundtrip_config();
+                        let _result = config_storage::save(&mut flash_storage, &config_guard).await;
                     }
                     debug_assert!(ch.num() == a.channel());
                     a.succeed()?;
@@ -109,7 +133,7 @@ pub async fn connection_loop<'a>(
                         dbg!("Updating UART TX pin to ", val);
                         if let Ok(pin_num) = val.parse::<u8>() {
                             let mut config_lock = config.lock().await;
-                            config_lock.tx_pin = pin_num;
+                            config_lock.uart_pins.tx = pin_num;
                             config_changed = true;
                             dbg!("TX pin updated");
                         } else {
@@ -121,7 +145,7 @@ pub async fn connection_loop<'a>(
                         dbg!("Updating UART RX pin to ", val);
                         if let Ok(pin_num) = val.parse::<u8>() {
                             let mut config_lock = config.lock().await;
-                            config_lock.rx_pin = pin_num;
+                            config_lock.uart_pins.rx = pin_num;
                             config_changed = true;
                             dbg!("RX pin updated");
                         } else {
@@ -149,7 +173,8 @@ pub async fn connection_loop<'a>(
                 println!("Expected caller to handle event");
                 error::BadUsage.fail()?
             }
+            ServEvent::PollAgain => (),
             _ => (),
-        };
+        }
     }
 }
