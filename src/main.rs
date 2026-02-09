@@ -62,7 +62,7 @@ pub async fn peripherals_wait_for_initialisation<'a>() -> SshStampPeripherals<'a
         // TODO: Migrate this function/test to embedded-test.
         // Quick roundtrip test for SSHStampConfig
         // ssh_stamp::config::roundtrip_config();
-        ssh_stamp::config_storage::load_or_create(&mut flash_storage).await
+        ssh_stamp::store::load_or_create(&mut flash_storage).await
     }
     .expect("Could not load or create SSHStampConfig");
 

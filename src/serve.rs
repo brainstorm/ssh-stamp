@@ -6,8 +6,8 @@ use core::option::Option::{self, None, Some};
 use core::result::Result;
 
 use crate::config::SSHStampConfig;
-use crate::config_storage;
 use crate::keys;
+use crate::store;
 use storage::flash;
 
 // Embassy
@@ -73,7 +73,7 @@ pub async fn connection_loop<'a>(
                         // TODO: Migrate this function/test to embedded-test.
                         // Quick roundtrip test for SSHStampConfig
                         // ssh_stamp::config::roundtrip_config();
-                        let _result = config_storage::save(&mut flash_storage, &config_guard).await;
+                        let _result = store::save(&mut flash_storage, &config_guard).await;
                     }
                     debug_assert!(ch.num() == a.channel());
                     a.succeed()?;
