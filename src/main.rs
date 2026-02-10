@@ -10,10 +10,9 @@ use core::result::Result::Err;
 use core::result::Result::Ok;
 // use core::error::Error;
 use core::future::Future;
-use core::net::Ipv4Addr;
 use embassy_executor::Spawner;
-use embassy_futures::select::{select3, Either3};
-use embassy_net::{tcp::TcpSocket, IpListenEndpoint, Runner, Stack};
+use embassy_futures::select::{Either3, select3};
+use embassy_net::{IpListenEndpoint, Stack, tcp::TcpSocket};
 use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
 use esp_hal::system::software_reset;
 use esp_hal::{
@@ -26,10 +25,6 @@ use esp_hal::{
 };
 use esp_println::dbg;
 use esp_println::println;
-use esp_radio::wifi::WifiController;
-// use esp_radio::wifi::WifiController;
-// use esp_radio::Controller
-use esp_radio::wifi::WifiDevice;
 use esp_radio::{Controller, InitializationError};
 use ssh_stamp::{
     config::SSHStampConfig,

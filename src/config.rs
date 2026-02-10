@@ -14,10 +14,10 @@ use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
 use sunset::packets::Ed25519PubKey;
-use sunset::{sshwire, KeyType, Result};
+use sunset::{KeyType, Result, sshwire};
 use sunset::{
-    sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
     SignKey,
+    sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
 };
 
 use crate::settings::{DEFAULT_SSID, DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS};
@@ -165,7 +165,7 @@ pub(crate) fn enc_option_str<const N: usize>(
     s: &mut dyn SSHSink,
 ) -> WireResult<()> {
     v.is_some().enc(s)?;
-    if let Some(ref st) = v {
+    if let Some(st) = v {
         st.as_str().enc(s)?;
     }
     Ok(())
