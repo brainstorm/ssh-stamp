@@ -69,7 +69,8 @@ target = "riscv32imac-unknown-none-elf"
 # target = "x86_64-unknown-linux-gnu"
 
 [unstable]
-build-std = []
+build-std = ["core","alloc"]
+# build-std = []
 # TODO Resolve build-std for different targets on stable channel.
 # build-std = ["core","alloc"] #  For ESP32, ESP32-S2, ESP32-S3: When using stable channel enable this. -Z option only works on nightly channel.
 # build-std core and alloc has been moved as per alias parameter since
