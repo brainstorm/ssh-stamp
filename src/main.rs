@@ -18,7 +18,7 @@ use esp_hal::system::software_reset;
 
 use esp_hal::{
     gpio::Pin,
-    peripherals::{GPIO1, GPIO3, UART1},
+    peripherals::UART1,
     peripherals::{SW_INTERRUPT, WIFI},
     rng::Rng,
     uart::{Config, RxConfig, Uart},
@@ -27,15 +27,14 @@ use esp_hal::{
 cfg_if::cfg_if! {
    if #[cfg(feature = "esp32")] {
         use esp_hal::timer::timg::TimerGroup;
-        use esp_hal::peripherals::TIMG1;
+        use esp_hal::peripherals::{TIMG1, GPIO1, GPIO3};
    } else if #[cfg(any(feature = "esp32s2", feature = "esp32s3"))] {
-       use esp_hal::peripherals::SYSTIMER;
+       use esp_hal::peripherals::{SYSTIMER, GPIO10, GPIO11};
    } else if #[cfg(any(feature = "esp32c2"))] {
-       use esp_hal::interrupt::software::SoftwareInterruptControl;
-       use esp_hal::peripherals::SYSTIMER;
+       use esp_hal::peripherals::{SYSTIMER, GPIO10, GPIO11};
    } else {
-       use esp_hal::interrupt::software::SoftwareInterruptControl;
-       use esp_hal::peripherals::SYSTIMER;
+       // use esp_hal::interrupt::software::SoftwareInterruptControl;
+       use esp_hal::peripherals::{SYSTIMER, GPIO10,  GPIO11};
    }
 }
 
@@ -93,10 +92,21 @@ pub async fn peripherals_wait_for_initialisation<'a>() -> SshStampPeripherals<'a
     let wifi = peripherals.WIFI;
     let uart1 = peripherals.UART1;
     let sw_interrupt = peripherals.SW_INTERRUPT;
-    let gpios = GPIOS {
-        gpio1: peripherals.GPIO1,
-        gpio3: peripherals.GPIO3,
-    };
+
+    cfg_if::cfg_if!(
+        if #[cfg(feature = "esp32")] {
+            let gpios = GPIOS {
+            gpio1: peripherals.GPIO1,
+            gpio3: peripherals.GPIO3,
+            };
+        } else {
+            let gpios = GPIOS {
+            gpio10: peripherals.GPIO10,
+            gpio11: peripherals.GPIO11,
+            };
+        }
+    );
+
     cfg_if::cfg_if!(
         if #[cfg(feature = "esp32")] {
             let ssh_stamp_peripherals = SshStampPeripherals {
@@ -209,17 +219,29 @@ pub async fn enable_uart<'a, 'b>(
     let rx: u8 = config_lock.uart_pins.rx;
     let tx: u8 = config_lock.uart_pins.tx;
     if rx != tx {
-        let mut holder1 = Some(gpios.gpio1);
-        let mut holder3 = Some(gpios.gpio3);
+        cfg_if::cfg_if!(
+            if #[cfg(feature = "esp32")] {
+                let mut holder0 = Some(gpios.gpio1);
+                let mut holder1 = Some(gpios.gpio3);
+            } else {
+                let mut holder0 = Some(gpios.gpio10);
+                let mut holder1 = Some(gpios.gpio11);
+            }
+        );
+
         let rx_pin = match rx {
-            1 => holder1.take().unwrap().degrade(),
-            3 => holder3.take().unwrap().degrade(),
-            _ => holder1.take().unwrap().degrade(),
+            1 => holder0.take().unwrap().degrade(),
+            3 => holder1.take().unwrap().degrade(),
+            10 => holder0.take().unwrap().degrade(),
+            11 => holder1.take().unwrap().degrade(),
+            _ => holder0.take().unwrap().degrade(),
         };
         let tx_pin = match tx {
-            1 => holder1.take().unwrap().degrade(),
-            3 => holder3.take().unwrap().degrade(),
-            _ => holder3.take().unwrap().degrade(),
+            1 => holder0.take().unwrap().degrade(),
+            3 => holder1.take().unwrap().degrade(),
+            10 => holder0.take().unwrap().degrade(),
+            11 => holder1.take().unwrap().degrade(),
+            _ => holder1.take().unwrap().degrade(),
         };
 
         // Hardware UART setup
@@ -316,10 +338,20 @@ cfg_if::cfg_if!(
     }
 );
 
-pub struct GPIOS<'a> {
-    pub gpio1: GPIO1<'a>,
-    pub gpio3: GPIO3<'a>,
-}
+cfg_if::cfg_if!(
+    if #[cfg(feature = "esp32")] {
+        pub struct GPIOS<'a> {
+            pub gpio1: GPIO1<'a>,
+            pub gpio3: GPIO3<'a>,
+        }
+    } else {
+        pub struct GPIOS<'a> {
+            pub gpio10: GPIO10<'a>,
+            pub gpio11: GPIO11<'a>,
+        }
+    }
+);
+
 pub struct SshStampInit<'a> {
     pub rng: Rng,
     pub wifi: WIFI<'a>,
