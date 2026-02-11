@@ -60,7 +60,7 @@ smoltcp = { version = "0.12", default-features = false, features = [
 ] }
 embassy-time = { version = "0.5.0" }
 embedded-io-async = "0.6.1"
-esp-alloc = { version ="0.9.0", features = ["compat", "esp32"]}
+esp-alloc = { version ="0.9.0"}
 esp-backtrace = { version = "0.18.0", features = ["panic-handler", "println"] }
 esp-hal = { workspace = true }
 esp-rtos = { version = "0.2.0", features = ["embassy", "log-04", "esp-radio"] }
@@ -80,7 +80,7 @@ heapless = "0.8"
 embassy-futures = "0.1.2"
 edge-dhcp = "0.6"
 edge-nal = "0.5"
-edge-nal-embassy = "0.6"
+edge-nal-embassy = "0.7"
 #sequential-storage = { version = "4", features = ["heapless"] }
 esp-storage = { workspace = true }
 embedded-storage = { workspace = true }

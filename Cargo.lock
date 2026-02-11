@@ -410,9 +410,9 @@ dependencies = [
 
 [[package]]
 name = "edge-nal-embassy"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "252f89adf4f0016631977bec3ba50d768263a3a9fa9f023b4087088a619568ce"
+checksum = "fb09ea0c604bbcb694ecf9cf6596bc5f59bbb5360b68c3e471b61ae9a55a8533"
 dependencies = [
  "edge-nal",
  "embassy-futures",

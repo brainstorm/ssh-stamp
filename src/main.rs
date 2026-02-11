@@ -15,14 +15,30 @@ use embassy_futures::select::{Either3, select3};
 use embassy_net::{IpListenEndpoint, Stack, tcp::TcpSocket};
 use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
 use esp_hal::system::software_reset;
+
 use esp_hal::{
     gpio::Pin,
-    interrupt::software::SoftwareInterruptControl,
-    peripherals::{GPIO10, GPIO11, UART1},
-    peripherals::{SW_INTERRUPT, SYSTIMER, TIMG1, WIFI},
+    peripherals::{GPIO1, GPIO3, UART1},
+    peripherals::{SW_INTERRUPT, WIFI},
     rng::Rng,
     uart::{Config, RxConfig, Uart},
 };
+
+cfg_if::cfg_if! {
+   if #[cfg(feature = "esp32")] {
+        use esp_hal::timer::timg::TimerGroup;
+        use esp_hal::peripherals::TIMG1;
+   } else if #[cfg(any(feature = "esp32s2", feature = "esp32s3"))] {
+       use esp_hal::peripherals::SYSTIMER;
+   } else if #[cfg(any(feature = "esp32c2"))] {
+       use esp_hal::interrupt::software::SoftwareInterruptControl;
+       use esp_hal::peripherals::SYSTIMER;
+   } else {
+       use esp_hal::interrupt::software::SoftwareInterruptControl;
+       use esp_hal::peripherals::SYSTIMER;
+   }
+}
+
 use esp_println::dbg;
 use esp_println::println;
 use esp_radio::{Controller, InitializationError};
@@ -48,8 +64,14 @@ pub async fn peripherals_wait_for_initialisation<'a>() -> SshStampPeripherals<'a
     let peripherals = esp_hal::init(esp_hal::Config::default());
     let rng = Rng::new();
     rng::register_custom_rng(rng);
-    let timg1 = peripherals.TIMG1;
-    let systimer = peripherals.SYSTIMER;
+
+    cfg_if::cfg_if!(
+        if #[cfg(feature = "esp32")] {
+            let timg1 = peripherals.TIMG1;
+        } else  {
+            let systimer = peripherals.SYSTIMER;
+        }
+    );
 
     // Read SSH configuration from Flash (if it exists)
     flash::init(peripherals.FLASH);
@@ -69,21 +91,36 @@ pub async fn peripherals_wait_for_initialisation<'a>() -> SshStampPeripherals<'a
     let config = CONFIG.init(SunsetMutex::new(config));
 
     let wifi = peripherals.WIFI;
-    let gpio10 = peripherals.GPIO10;
-    let gpio11 = peripherals.GPIO11;
     let uart1 = peripherals.UART1;
     let sw_interrupt = peripherals.SW_INTERRUPT;
-    let ssh_stamp_peripherals = SshStampPeripherals {
-        rng: rng,
-        wifi: wifi,
-        config: config,
-        gpio10: gpio10,
-        gpio11: gpio11,
-        uart1: uart1,
-        timg1: timg1,
-        systimer: systimer,
-        sw_interrupt: sw_interrupt,
+    let gpios = GPIOS {
+        gpio1: peripherals.GPIO1,
+        gpio3: peripherals.GPIO3,
     };
+    cfg_if::cfg_if!(
+        if #[cfg(feature = "esp32")] {
+            let ssh_stamp_peripherals = SshStampPeripherals {
+                rng: rng,
+                wifi: wifi,
+                config: config,
+                gpios: gpios,
+                uart1: uart1,
+                timg1: timg1,
+                sw_interrupt: sw_interrupt,
+            };
+        } else  {
+            let ssh_stamp_peripherals = SshStampPeripherals {
+                rng: rng,
+                wifi: wifi,
+                config: config,
+                gpios: gpios,
+                uart1: uart1,
+                systimer: systimer,
+                sw_interrupt: sw_interrupt,
+            };
+        }
+    );
+
     ssh_stamp_peripherals
 }
 
@@ -163,8 +200,7 @@ pub async fn enable_uart<'a, 'b>(
     uart1: UART1<'a>,
     // pin_channel: &'b mut PinChannel<'a>,
     config: &'a SunsetMutex<SSHStampConfig>,
-    gpio10: GPIO10<'_>,
-    gpio11: GPIO11<'_>,
+    gpios: GPIOS<'_>,
 ) where
     'a: 'b,
 {
@@ -173,17 +209,17 @@ pub async fn enable_uart<'a, 'b>(
     let rx: u8 = config_lock.uart_pins.rx;
     let tx: u8 = config_lock.uart_pins.tx;
     if rx != tx {
-        let mut holder10 = Some(gpio10);
-        let mut holder11 = Some(gpio11);
+        let mut holder1 = Some(gpios.gpio1);
+        let mut holder3 = Some(gpios.gpio3);
         let rx_pin = match rx {
-            10 => holder10.take().unwrap().degrade(),
-            11 => holder11.take().unwrap().degrade(),
-            _ => holder10.take().unwrap().degrade(),
+            1 => holder1.take().unwrap().degrade(),
+            3 => holder3.take().unwrap().degrade(),
+            _ => holder1.take().unwrap().degrade(),
         };
         let tx_pin = match tx {
-            10 => holder10.take().unwrap().degrade(),
-            11 => holder11.take().unwrap().degrade(),
-            _ => holder11.take().unwrap().degrade(),
+            1 => holder1.take().unwrap().degrade(),
+            3 => holder3.take().unwrap().degrade(),
+            _ => holder3.take().unwrap().degrade(),
         };
 
         // Hardware UART setup
@@ -256,29 +292,45 @@ pub async fn bridge_disable() -> () {
     software_reset();
 }
 
-pub struct SshStampPeripherals<'a> {
-    pub rng: Rng,
-    pub wifi: WIFI<'a>,
-    pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub gpio10: GPIO10<'a>,
-    pub gpio11: GPIO11<'a>,
-    pub uart1: UART1<'a>,
-    pub timg1: TIMG1<'a>,
-    pub systimer: SYSTIMER<'a>,
-    pub sw_interrupt: SW_INTERRUPT<'a>,
-}
+cfg_if::cfg_if!(
+    if #[cfg(feature = "esp32")] {
+        pub struct SshStampPeripherals<'a> {
+            pub rng: Rng,
+            pub wifi: WIFI<'a>,
+            pub config: &'a SunsetMutex<SSHStampConfig>,
+            pub gpios: GPIOS<'a>,
+            pub uart1: UART1<'a>,
+            pub timg1: TIMG1<'a>,
+            pub sw_interrupt: SW_INTERRUPT<'a>,
+        }
+    } else  {
+        pub struct SshStampPeripherals<'a> {
+            pub rng: Rng,
+            pub wifi: WIFI<'a>,
+            pub config: &'a SunsetMutex<SSHStampConfig>,
+            pub gpios: GPIOS<'a>,
+            pub uart1: UART1<'a>,
+            pub systimer: SYSTIMER<'a>,
+            pub sw_interrupt: SW_INTERRUPT<'a>,
+        }
+    }
+);
 
+pub struct GPIOS<'a> {
+    pub gpio1: GPIO1<'a>,
+    pub gpio3: GPIO3<'a>,
+}
 pub struct SshStampInit<'a> {
     pub rng: Rng,
     pub wifi: WIFI<'a>,
     pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub gpio10: GPIO10<'a>,
-    pub gpio11: GPIO11<'a>,
+    pub gpios: GPIOS<'a>,
     pub uart1: UART1<'a>,
+    pub spawner: Spawner,
 }
 
 #[esp_rtos::main]
-async fn main(_spawner: Spawner) -> ! {
+async fn main(spawner: Spawner) -> ! {
     cfg_if::cfg_if!(
         if #[cfg(feature = "esp32s2")] {
             // TODO: This heap size will crash at runtime, we need to fix this
@@ -293,17 +345,22 @@ async fn main(_spawner: Spawner) -> ! {
 
     let peripherals = peripherals_wait_for_initialisation().await;
 
-    let sw_int = SoftwareInterruptControl::new(peripherals.sw_interrupt);
-
     cfg_if::cfg_if! {
-        if #[cfg(feature = "esp32")] {
+       if #[cfg(feature = "esp32")] {
+            // TODO: Test this feature configuration
             let timg1 = TimerGroup::new(peripherals.timg1);
-            esp_rtos::start(timg1.timer0, sw_int);
-        } else {
-            use esp_hal::timer::systimer::SystemTimer;
-            let systimer = SystemTimer::new(peripherals.systimer);
-            esp_rtos::start(systimer.alarm0, sw_int.software_interrupt0);
-        }
+            esp_rtos::start(timg1.timer0);
+       } else if #[cfg(any(feature = "esp32s2", feature = "esp32s3"))] {
+            // TODO: Test this feature configuration
+           use esp_hal::timer::systimer::SystemTimer;
+           let systimer = SystemTimer::new(peripherals.systimer);
+           esp_rtos::start(systimer.alarm0);
+       } else {
+           let sw_int = SoftwareInterruptControl::new(peripherals.sw_interrupt);
+           use esp_hal::timer::systimer::SystemTimer;
+           let systimer = SystemTimer::new(peripherals.systimer);
+           esp_rtos::start(systimer.alarm0, sw_int.software_interrupt0);
+       }
     }
 
     // TODO: Migrate this function/test to embedded-test.
@@ -314,9 +371,9 @@ async fn main(_spawner: Spawner) -> ! {
         rng: peripherals.rng,
         wifi: peripherals.wifi,
         config: peripherals.config,
-        gpio10: peripherals.gpio10,
-        gpio11: peripherals.gpio11,
+        gpios: peripherals.gpios,
         uart1: peripherals.uart1,
+        spawner: spawner,
     };
 
     match peripherals_enabled(peripherals_enabled_struct).await {
@@ -335,12 +392,12 @@ pub struct PeripheralsEnabled<'a> {
     pub rng: Rng,
     pub wifi: WIFI<'a>,
     pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub controller: Controller<'a>,
-    pub gpio10: GPIO10<'a>,
-    pub gpio11: GPIO11<'a>,
+    pub controller: Controller<'static>,
+    pub gpios: GPIOS<'a>,
     pub uart1: UART1<'a>,
+    pub spawner: Spawner,
 }
-async fn peripherals_enabled<'a>(s: SshStampInit<'a>) -> Result<(), sunset::Error> {
+async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Error> {
     let controller = wifi_wait_for_initialisation().await;
 
     let peripherals_enabled_struct = PeripheralsEnabled {
@@ -348,9 +405,9 @@ async fn peripherals_enabled<'a>(s: SshStampInit<'a>) -> Result<(), sunset::Erro
         wifi: s.wifi,
         config: s.config,
         controller: controller.unwrap(),
-        gpio10: s.gpio10,
-        gpio11: s.gpio11,
+        gpios: s.gpios,
         uart1: s.uart1,
+        spawner: s.spawner,
     };
     match wifi_controller_enabled(peripherals_enabled_struct).await {
         Ok(_) => (),
@@ -366,31 +423,25 @@ async fn peripherals_enabled<'a>(s: SshStampInit<'a>) -> Result<(), sunset::Erro
 pub struct WifiControllerEnabled<'a> {
     pub rng: Rng,
     pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub wifi_controller: WifiController<'a>,
-    pub gpio10: GPIO10<'a>,
-    pub gpio11: GPIO11<'a>,
+    pub gpios: GPIOS<'a>,
     pub uart1: UART1<'a>,
-    pub ap_stack: Stack<'a>,
-    pub runner: Runner<'a, WifiDevice<'a>>,
-    pub ip: Ipv4Addr,
+    pub tcp_stack: Stack<'a>,
 }
-pub async fn wifi_controller_enabled<'a>(s: PeripheralsEnabled<'a>) -> Result<(), sunset::Error> {
-    let (ap_stack, runner, wifi_controller, ip) =
-        net::prepare_ap_stack(&s.controller, s.wifi, s.rng)
-            .await
-            .unwrap();
+
+// pub async fn wifi_controller_enabled<'a>(s: PeripheralsEnabled<'a>) -> Result<(), sunset::Error> {
+pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(), sunset::Error> {
+    let tcp_stack = net::if_up(s.spawner, s.controller, s.wifi, s.rng, s.config)
+        .await
+        .unwrap();
+
     let wifi_controller_enabled_stack = WifiControllerEnabled {
         config: s.config,
         rng: s.rng,
-        wifi_controller: wifi_controller,
-        gpio10: s.gpio10,
-        gpio11: s.gpio11,
+        gpios: s.gpios,
         uart1: s.uart1,
-        ap_stack: ap_stack,
-        runner: runner,
-        ip: ip,
+        tcp_stack: tcp_stack,
     };
-    match ap_stack_enabled(wifi_controller_enabled_stack).await {
+    match tcp_enabled(wifi_controller_enabled_stack).await {
         Ok(_) => (),
         Err(e) => {
             println!("AP Stack error: {}", e);
@@ -400,143 +451,14 @@ pub async fn wifi_controller_enabled<'a>(s: PeripheralsEnabled<'a>) -> Result<()
     Ok(()) // todo!() return relevant value
 }
 
-pub struct ApStackEnabled<'a> {
-    pub rng: Rng,
-    pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub gpio10: GPIO10<'a>,
-    pub gpio11: GPIO11<'a>,
-    pub uart1: UART1<'a>,
-    pub ap_stack: Stack<'a>,
-    pub runner: Runner<'a, WifiDevice<'a>>,
-    pub ip: Ipv4Addr,
-}
-
-pub async fn ap_stack_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Error> {
-    let wifi_ssid_config = {
-        let guard = s.config.lock().await;
-        guard.wifi_ssid.clone()
-    };
-
-    net::wifi_up(s.wifi_controller, wifi_ssid_config).await;
-
-    let ap_stack_enabled_stack = ApStackEnabled {
-        config: s.config,
-        rng: s.rng,
-        gpio10: s.gpio10,
-        gpio11: s.gpio11,
-        uart1: s.uart1,
-        ap_stack: s.ap_stack,
-        runner: s.runner,
-        ip: s.ip,
-    };
-    match wifi_enabled(ap_stack_enabled_stack).await {
-        Ok(_) => (),
-        Err(e) => {
-            println!("AP Stack error: {}", e);
-        }
-    }
-    wifi_disable().await; // drop wifi
-    Ok(()) // todo!() return relevant value
-}
-
-pub struct WifiEnabled<'a> {
-    pub rng: Rng,
-    pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub gpio10: GPIO10<'a>,
-    pub gpio11: GPIO11<'a>,
-    pub uart1: UART1<'a>,
-    pub ap_stack: Stack<'a>,
-    pub ip: Ipv4Addr,
-}
-
-pub async fn wifi_enabled<'a>(s: ApStackEnabled<'a>) -> Result<(), sunset::Error> {
-    net::net_up(s.runner).await;
-
-    let wifi_enabled_stack = WifiEnabled {
-        config: s.config,
-        rng: s.rng,
-        gpio10: s.gpio10,
-        gpio11: s.gpio11,
-        uart1: s.uart1,
-        ap_stack: s.ap_stack,
-        ip: s.ip,
-    };
-    match network_enabled(wifi_enabled_stack).await {
-        Ok(_) => (),
-        Err(e) => {
-            println!("Network error: {}", e);
-        }
-    }
-    network_disable().await; // drop network
-    Ok(()) // todo!() return relevant value
-}
-
-pub struct NetworkEnabled<'a> {
-    pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub rng: Rng,
-    pub gpio10: GPIO10<'a>,
-    pub gpio11: GPIO11<'a>,
-    pub uart1: UART1<'a>,
-    pub ap_stack: Stack<'a>,
-    pub ip: Ipv4Addr,
-}
-pub async fn network_enabled<'a>(s: WifiEnabled<'a>) -> Result<(), sunset::Error> {
-    net::run_dchp(s.ap_stack, s.ip).await;
-
-    let network_enabled_struct = NetworkEnabled {
-        config: s.config,
-        ap_stack: s.ap_stack,
-        rng: s.rng,
-        gpio10: s.gpio10,
-        gpio11: s.gpio11,
-        uart1: s.uart1,
-        ip: s.ip,
-    };
-    match dhcp_enabled(network_enabled_struct).await {
-        Ok(_) => (),
-        Err(e) => {
-            println!("DHCP error: {}", e);
-        }
-    }
-    dhcp_disable().await;
-    Ok(()) // todo!() return relevant value
-}
-
-pub struct DhcpEnabled<'a> {
-    pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub gpio10: GPIO10<'a>,
-    pub gpio11: GPIO11<'a>,
-    pub uart1: UART1<'a>,
-    pub tcp_stack: Stack<'a>,
-}
-async fn dhcp_enabled<'a>(s: NetworkEnabled<'a>) -> Result<(), sunset::Error> {
-    let tcp_stack = net::check_link(s.ap_stack, s.ip).await.unwrap();
-    let dhcp_enabled_struct = DhcpEnabled {
-        config: s.config,
-        tcp_stack: tcp_stack,
-        gpio10: s.gpio10,
-        gpio11: s.gpio11,
-        uart1: s.uart1,
-    };
-    match tcp_enabled(dhcp_enabled_struct).await {
-        Ok(_) => (),
-        Err(e) => {
-            println!("TCP stack error: {}", e);
-        }
-    }
-    tcp_stack_disable().await;
-    Ok(()) // todo!() return relevant value
-}
-
 pub struct TCPEnabled<'a> {
     pub config: &'a SunsetMutex<SSHStampConfig>,
     pub tcp_socket: TcpSocket<'a>,
-    pub gpio10: GPIO10<'a>,
-    pub gpio11: GPIO11<'a>,
+    pub gpios: GPIOS<'a>,
     pub uart1: UART1<'a>,
 }
 
-async fn tcp_enabled<'a>(s: DhcpEnabled<'a>) -> Result<(), sunset::Error> {
+async fn tcp_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Error> {
     let mut rx_buffer = [0u8; 1536];
     let mut tx_buffer = [0u8; 1536];
     let mut tcp_socket = TcpSocket::new(s.tcp_stack, &mut rx_buffer, &mut tx_buffer);
@@ -556,8 +478,7 @@ async fn tcp_enabled<'a>(s: DhcpEnabled<'a>) -> Result<(), sunset::Error> {
     let tcp_enabled_struct = TCPEnabled {
         config: s.config,
         tcp_socket: tcp_socket,
-        gpio10: s.gpio10,
-        gpio11: s.gpio11,
+        gpios: s.gpios,
         uart1: s.uart1,
     };
     match socket_enabled(tcp_enabled_struct).await {
@@ -574,8 +495,7 @@ pub struct SocketEnabled<'a> {
     pub config: &'a SunsetMutex<SSHStampConfig>,
     pub tcp_socket: TcpSocket<'a>,
     pub ssh_server: SSHServer<'a>,
-    pub gpio10: GPIO10<'a>,
-    pub gpio11: GPIO11<'a>,
+    pub gpios: GPIOS<'a>,
     pub uart1: UART1<'a>,
 }
 async fn socket_enabled<'a>(s: TCPEnabled<'a>) -> Result<(), sunset::Error> {
@@ -588,8 +508,7 @@ async fn socket_enabled<'a>(s: TCPEnabled<'a>) -> Result<(), sunset::Error> {
         config: s.config,
         tcp_socket: s.tcp_socket,
         ssh_server: ssh_server,
-        gpio10: s.gpio10,
-        gpio11: s.gpio11,
+        gpios: s.gpios,
         uart1: s.uart1,
     };
     match ssh_enabled(socket_enabled_struct).await {
@@ -614,8 +533,7 @@ where
     pub config: &'a SunsetMutex<SSHStampConfig>,
     pub chan_pipe: &'b Channel<NoopRawMutex, serve::SessionType, 1>,
     pub connection_loop: CL,
-    pub gpio10: GPIO10<'a>,
-    pub gpio11: GPIO11<'a>,
+    pub gpios: GPIOS<'a>,
 }
 async fn ssh_enabled<'a>(s: SocketEnabled<'a>) -> Result<(), sunset::Error>
 // where
@@ -634,8 +552,7 @@ async fn ssh_enabled<'a>(s: SocketEnabled<'a>) -> Result<(), sunset::Error>
         chan_pipe: &chan_pipe,
         connection_loop: connection,
         uart1: s.uart1,
-        gpio10: s.gpio10,
-        gpio11: s.gpio11,
+        gpios: s.gpios,
     };
     match client_connected(ssh_enabled_struct).await {
         Ok(_) => (),
@@ -660,8 +577,7 @@ where
     pub uart_buff: &'a BufferedUart,
     pub uart1: UART1<'a>,
     pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub gpio10: GPIO10<'a>,
-    pub gpio11: GPIO11<'a>,
+    pub gpios: GPIOS<'a>,
 }
 async fn client_connected<'a, 'b, CL>(s: SshEnabled<'a, 'b, CL>) -> Result<(), sunset::Error>
 // where 'b: 'a {
@@ -678,8 +594,7 @@ where
         uart_buff: uart_buff,
         uart1: s.uart1,
         config: s.config,
-        gpio10: s.gpio10,
-        gpio11: s.gpio11,
+        gpios: s.gpios,
     };
     match uart_buffer_ready(client_connected_struct).await {
         Ok(_) => (),
@@ -709,7 +624,7 @@ where
     CL: Future<Output = Result<(), sunset::Error>>,
 {
     // loop {
-    let _uart = enable_uart(s.uart_buff, s.uart1, &s.config, s.gpio10, s.gpio11);
+    let _uart = enable_uart(s.uart_buff, s.uart1, &s.config, s.gpios);
 
     let uart_buffer_ready_struct = UartBufferReady {
         tcp_socket: s.tcp_socket,
