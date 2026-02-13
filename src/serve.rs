@@ -19,7 +19,7 @@ use sunset_async::SunsetMutex;
 
 use heapless::String;
 // use sunset::sshwire::SSHEncode;
-use sunset::{error, ChanHandle, ServEvent, SignKey};
+use sunset::{ChanHandle, ServEvent, SignKey, error};
 use sunset_async::{ProgressHolder, SSHServer};
 
 use esp_println::{dbg, println};
@@ -47,6 +47,7 @@ pub async fn connection_loop<'a>(
         match ev {
             // #[cfg(feature = "sftp-ota")]
             ServEvent::SessionSubsystem(a) => {
+                println!("ServEvent::SessionSubsystem");
                 if a.command()?.to_lowercase().as_str() == "sftp" {
                     if let Some(ch) = session.take() {
                         debug_assert!(ch.num() == a.channel());
@@ -62,6 +63,7 @@ pub async fn connection_loop<'a>(
                 }
             }
             ServEvent::SessionShell(a) => {
+                println!("ServEvent::SessionShell");
                 if let Some(ch) = session.take() {
                     // Save config after connection successful (SessionEnv completed)
                     if config_changed {
@@ -84,22 +86,27 @@ pub async fn connection_loop<'a>(
                 }
             }
             ServEvent::FirstAuth(ref a) => {
+                println!("ServEvent::FirstAuth");
                 // record the username
                 if username.lock().await.push_str(a.username()?).is_err() {
                     println!("Too long username")
                 }
             }
             ServEvent::Hostkeys(h) => {
+                println!("ServEvent::Hostkeys");
                 let signkey: SignKey = SignKey::from_openssh(keys::HOST_SECRET_KEY)?;
                 h.hostkeys(&[&signkey])?;
             }
             ServEvent::PasswordAuth(a) => {
+                println!("ServEvent::PasswordAuth");
                 a.allow()?;
             }
             ServEvent::PubkeyAuth(a) => {
+                println!("ServEvent::PubkeyAuth");
                 a.allow()?;
             }
             ServEvent::OpenSession(a) => {
+                println!("ServEvent::OpenSession");
                 match session {
                     Some(_) => {
                         todo!("Can't have two sessions");
@@ -164,6 +171,7 @@ pub async fn connection_loop<'a>(
                 a.succeed()?;
             }
             ServEvent::SessionPty(a) => {
+                println!("ServEvent::SessionPty");
                 a.succeed()?;
             }
             ServEvent::SessionExec(a) => {
@@ -173,7 +181,9 @@ pub async fn connection_loop<'a>(
                 println!("Expected caller to handle event");
                 error::BadUsage.fail()?
             }
-            ServEvent::PollAgain => (),
+            ServEvent::PollAgain => {
+                println!("ServEvent::PollAgain");
+            }
             _ => (),
         }
     }
