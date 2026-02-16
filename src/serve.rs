@@ -15,9 +15,9 @@ use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 // use embedded_storage::Storage;
-use sunset_async::SunsetMutex;
-
+use esp_hal::system::software_reset;
 use heapless::String;
+use sunset_async::SunsetMutex;
 // use sunset::sshwire::SSHEncode;
 use sunset::{ChanHandle, ServEvent, SignKey, error};
 use sunset_async::{ProgressHolder, SSHServer};
@@ -187,4 +187,57 @@ pub async fn connection_loop<'a>(
             _ => (),
         }
     }
+}
+
+pub async fn connection_disable() -> () {
+    // disable connection loop
+    software_reset();
+}
+
+pub async fn ssh_wait_for_initialisation<'server>(
+    inbuf: &'server mut [u8; crate::espressif::buffered_uart::UART_BUFFER_SIZE],
+    outbuf: &'server mut [u8; crate::espressif::buffered_uart::UART_BUFFER_SIZE],
+) -> SSHServer<'server> {
+    let ssh_server = SSHServer::new(inbuf, outbuf);
+    ssh_server
+}
+
+pub async fn ssh_disable() -> () {
+    // drop ssh server
+    software_reset();
+}
+
+// use crate::serve::SessionType;
+use crate::espressif::buffered_uart::BufferedUart;
+use crate::serial::serial_bridge;
+use sunset_async::ChanInOut;
+
+pub async fn bridge_wait_for_initialisation<'a, 'b>(
+    uart_buff: &'a BufferedUart,
+    ssh_server: &'b SSHServer<'a>,
+    chan_pipe: &'b Channel<NoopRawMutex, SessionType, 1>,
+) -> Result<(), sunset::Error> {
+    let bridge = {
+        let chan_pipe = chan_pipe;
+        let session_type = chan_pipe.receive().await;
+
+        match session_type {
+            SessionType::Bridge(ch) => {
+                let stdio: ChanInOut<'_> = ssh_server.stdio(ch).await?;
+                let stdio2 = stdio.clone();
+                serial_bridge(stdio, stdio2, uart_buff).await?
+            }
+            SessionType::Sftp(_ch) => {
+                // Handle SFTP session
+                //     todo!()
+            }
+        };
+        Ok(())
+    };
+    bridge
+}
+
+pub async fn bridge_disable() -> () {
+    // disable bridge
+    software_reset();
 }

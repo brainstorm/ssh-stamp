@@ -3,35 +3,30 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use core::net::Ipv4Addr;
-use core::str::FromStr;
-
-use embassy_executor::Spawner;
-use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, StaticConfigV4};
-use embassy_net::{Stack, StackResources, tcp::TcpSocket};
-use embassy_time::{Duration, Timer};
-
-use esp_hal::peripherals::WIFI;
-
-use esp_hal::rng::Rng;
-use esp_println::{dbg, println};
-
-use esp_radio::Controller;
-use esp_radio::wifi::WifiEvent;
-use esp_radio::wifi::{AccessPointConfig, ModeConfig, WifiApState, WifiController};
-use sunset_async::SunsetMutex;
-
 use core::net::SocketAddrV4;
+use core::str::FromStr;
 use edge_dhcp;
-
 use edge_dhcp::{
     io::{self, DEFAULT_SERVER_PORT},
     server::{Server, ServerOptions},
 };
 use edge_nal::UdpBind;
 use edge_nal_embassy::{Udp, UdpBuffers};
+use embassy_executor::Spawner;
+use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, StaticConfigV4};
+use embassy_net::{Stack, StackResources, tcp::TcpSocket};
+use embassy_time::{Duration, Timer};
+use esp_hal::peripherals::WIFI;
+use esp_hal::rng::Rng;
+use esp_hal::system::software_reset;
+use esp_println::{dbg, println};
+use esp_radio::Controller;
+use esp_radio::wifi::WifiEvent;
+use esp_radio::wifi::{AccessPointConfig, ModeConfig, WifiApState, WifiController};
+use heapless::String;
+use sunset_async::SunsetMutex;
 
 use crate::config::SSHStampConfig;
-// use crate::settings::DEFAULT_SSID;
 use crate::settings::{DEFAULT_IP, DEFAULT_SSID};
 
 use super::buffered_uart::BufferedUart;
@@ -45,8 +40,6 @@ macro_rules! mk_static {
         x
     }};
 }
-
-use heapless::String;
 
 pub async fn if_up(
     spawner: Spawner,
@@ -101,6 +94,37 @@ pub async fn if_up(
     );
 
     Ok(ap_stack)
+}
+
+pub async fn ap_stack_disable() -> () {
+    // drop ap_stack
+    software_reset();
+}
+
+pub async fn create_tcp_socket<'a>(
+    tcp_stack: Stack<'a>,
+    rx_buffer: &'a mut [u8],
+    tx_buffer: &'a mut [u8],
+) -> TcpSocket<'a> {
+    let mut tcp_socket = TcpSocket::new(tcp_stack, rx_buffer, tx_buffer);
+
+    println!("Waiting for SSH client...");
+    if let Err(e) = tcp_socket
+        .accept(IpListenEndpoint {
+            addr: None,
+            port: 22,
+        })
+        .await
+    {
+        println!("connect error: {:?}", e);
+        tcp_socket_disable().await;
+    }
+    tcp_socket
+}
+
+pub async fn tcp_socket_disable() -> () {
+    // drop tcp stack
+    software_reset();
 }
 
 pub async fn accept_requests<'a>(stack: Stack<'a>, _uart: &BufferedUart) -> ! {
@@ -170,6 +194,15 @@ pub async fn wifi_up(
         }
         Timer::after(Duration::from_millis(10)).await;
     }
+}
+
+pub async fn wifi_controller_disable() -> () {
+    // TODO: Correctly disable wifi controller
+    // pub async fn wifi_disable(wifi_controller: EspWifiController<'_>) -> (){
+    // drop wifi controller
+    // esp_wifi::deinit_unchecked()
+    // wifi_controller.deinit_unchecked()
+    software_reset();
 }
 
 use esp_radio::wifi::WifiDevice;
