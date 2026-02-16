@@ -12,6 +12,7 @@ use core::result::Result::Ok;
 use core::future::Future;
 use embassy_executor::Spawner;
 use embassy_futures::select::{Either4, select4};
+use embassy_net::IpListenEndpoint;
 use embassy_net::{Stack, tcp::TcpSocket};
 use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
 use esp_hal::system::software_reset;
@@ -36,7 +37,6 @@ cfg_if::cfg_if! {
        use esp_hal::peripherals::{SYSTIMER};
    }
 }
-
 use esp_println::println;
 use esp_radio::Controller;
 // use ssh_stamp::espressif;
@@ -313,7 +313,20 @@ async fn tcp_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Err
     println!("HSM: tcp_enabled");
     let mut rx_buffer = [0u8; 1536];
     let mut tx_buffer = [0u8; 1536];
-    let tcp_socket = net::create_tcp_socket(s.tcp_stack, &mut rx_buffer, &mut tx_buffer).await;
+    let mut tcp_socket = TcpSocket::new(s.tcp_stack, &mut rx_buffer, &mut tx_buffer);
+
+    println!("Waiting for SSH client...");
+    if let Err(e) = tcp_socket
+        .accept(IpListenEndpoint {
+            addr: None,
+            port: 22,
+        })
+        .await
+    {
+        println!("connect error: {:?}", e);
+        net::tcp_socket_disable().await;
+    }
+    // let tcp_socket = net::create_tcp_socket(s.tcp_stack, &mut rx_buffer, &mut tx_buffer);
     println!("Connected, port 22");
     let tcp_enabled_struct = TCPEnabled {
         config: s.config,
