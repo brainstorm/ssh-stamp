@@ -41,8 +41,9 @@ pub async fn connection_loop<'a>(
     let mut config_changed: bool = false;
     loop {
         let mut ph = ProgressHolder::new();
+        // dbg!("Waiting for ssh server event");
         let ev = serv.progress(&mut ph).await?;
-        dbg!(&ev);
+        // dbg!(&ev);
         #[allow(unreachable_patterns)]
         match ev {
             // #[cfg(feature = "sftp-ota")]
@@ -182,7 +183,7 @@ pub async fn connection_loop<'a>(
                 error::BadUsage.fail()?
             }
             ServEvent::PollAgain => {
-                println!("ServEvent::PollAgain");
+                // println!("ServEvent::PollAgain");
             }
             _ => (),
         }
@@ -217,17 +218,21 @@ pub async fn bridge_wait_for_initialisation<'a, 'b>(
     ssh_server: &'b SSHServer<'a>,
     chan_pipe: &'b Channel<NoopRawMutex, SessionType, 1>,
 ) -> Result<(), sunset::Error> {
+    dbg!("Preparing bridge");
     let bridge = {
         let chan_pipe = chan_pipe;
         let session_type = chan_pipe.receive().await;
-
+        dbg!("Checking bridge session type");
         match session_type {
             SessionType::Bridge(ch) => {
+                dbg!("Handling bridge session");
                 let stdio: ChanInOut<'_> = ssh_server.stdio(ch).await?;
                 let stdio2 = stdio.clone();
+                dbg!("Starting bridge");
                 serial_bridge(stdio, stdio2, uart_buff).await?
             }
             SessionType::Sftp(_ch) => {
+                dbg!("Handling SFTP session");
                 // Handle SFTP session
                 //     todo!()
             }

@@ -11,11 +11,13 @@ use core::result::Result::Ok;
 // use core::error::Error;
 use core::future::Future;
 use embassy_executor::Spawner;
-use embassy_futures::select::{Either4, select4};
+use embassy_futures::select::{Either3, select3};
 use embassy_net::IpListenEndpoint;
 use embassy_net::{Stack, tcp::TcpSocket};
 use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
+use esp_hal::gpio::AnyPin;
 use esp_hal::system::software_reset;
+use esp_rtos::embassy::InterruptExecutor;
 
 use esp_hal::{
     peripherals::UART1,
@@ -30,22 +32,21 @@ cfg_if::cfg_if! {
    } else if #[cfg(any(feature = "esp32s2", feature = "esp32s3"))] {
        use esp_hal::peripherals::{SYSTIMER};
    } else if #[cfg(any(feature = "esp32c2"))] {
-       use esp_hal::interrupt::software::SoftwareInterruptControl;
+       // use esp_hal::interrupt::software::SoftwareInterruptControl;
        use esp_hal::peripherals::{SYSTIMER};
    } else {
-       use esp_hal::interrupt::software::SoftwareInterruptControl;
+       // use esp_hal::interrupt::software::SoftwareInterruptControl;
        use esp_hal::peripherals::{SYSTIMER};
    }
 }
 use esp_println::println;
 use esp_radio::Controller;
-// use ssh_stamp::espressif;
 use ssh_stamp::{
     config::SSHStampConfig,
     espressif::{
         buffered_uart,
         buffered_uart::BufferedUart,
-        buffered_uart::GPIOS,
+        // buffered_uart::GPIOS,
         // net::accept_requests,
         net,
         rng,
@@ -102,13 +103,13 @@ pub async fn peripherals_wait_for_initialisation<'a>() -> SshStampPeripherals<'a
     cfg_if::cfg_if!(
         if #[cfg(feature = "esp32")] {
             let gpios = GPIOS {
-            gpio1: peripherals.GPIO1,
-            gpio3: peripherals.GPIO3,
+            gpio13: peripherals.GPIO13.into(),
+            gpio14: peripherals.GPIO14.into(),
             };
         } else {
             let gpios = GPIOS {
-            gpio10: peripherals.GPIO10,
-            gpio11: peripherals.GPIO11,
+            gpio10: peripherals.GPIO10.into(),
+            gpio11: peripherals.GPIO11.into(),
             };
         }
     );
@@ -168,15 +169,17 @@ cfg_if::cfg_if!(
         }
     }
 );
-
+// use esp_hal::interrupt::software::SoftwareInterrupt;
+use esp_hal::interrupt::{Priority, software::SoftwareInterruptControl};
 pub struct SshStampInit<'a> {
     pub rng: Rng,
     pub wifi: WIFI<'a>,
     pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub gpios: GPIOS<'a>,
-    pub uart1: UART1<'a>,
+    // pub gpios: GPIOS<'a>,
+    pub uart_buf: &'a BufferedUart,
     pub spawner: Spawner,
 }
+static INT_EXECUTOR: StaticCell<InterruptExecutor<1>> = StaticCell::new(); // 0 is used for esp_rtos
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
     println!("HSM: main");
@@ -195,6 +198,8 @@ async fn main(spawner: Spawner) -> ! {
     let peripherals = peripherals_wait_for_initialisation().await;
 
     println!("HSM: Initialising timers ");
+    let software_interrupts = SoftwareInterruptControl::new(peripherals.sw_interrupt);
+
     cfg_if::cfg_if! {
        if #[cfg(feature = "esp32")] {
             // TODO: Test this feature configuration
@@ -206,13 +211,52 @@ async fn main(spawner: Spawner) -> ! {
            let systimer = SystemTimer::new(peripherals.systimer);
            esp_rtos::start(systimer.alarm0);
        } else {
-           let sw_int = SoftwareInterruptControl::new(peripherals.sw_interrupt);
+           // let sw_int = SoftwareInterruptControl::new(peripherals.sw_interrupt);
            use esp_hal::timer::systimer::SystemTimer;
            let systimer = SystemTimer::new(peripherals.systimer);
-           esp_rtos::start(systimer.alarm0, sw_int.software_interrupt0);
+           esp_rtos::start(systimer.alarm0, software_interrupts.software_interrupt0);
        }
     }
 
+    // Set up software buffered UART to run in a higher priority InterruptExecutor
+    let uart_buf = UART_BUF.init_with(BufferedUart::new);
+    let interrupt_executor =
+        INT_EXECUTOR.init_with(|| InterruptExecutor::new(software_interrupts.software_interrupt1));
+    cfg_if::cfg_if! {
+        if #[cfg(any(feature = "esp32", feature = "esp32s2", feature = "esp32s3"))] {
+            let interrupt_spawner = interrupt_executor.start(Priority::Priority1);
+        } else {
+            let interrupt_spawner = interrupt_executor.start(Priority::Priority10);
+        }
+    }
+
+    // Use the same config reference for UART task.
+    // Pass pin_channel_ref into the UART task so it can acquire/release pins.
+    cfg_if::cfg_if! {
+       if #[cfg(feature = "esp32")] {
+        interrupt_spawner
+            .spawn(uart_task(
+                uart_buf,
+                peripherals.uart1,
+                &peripherals.config,
+                // peripherals.gpios,
+                peripherals.gpios.gpio13.into(),
+                peripherals.gpios.gpio14.into(),
+                ))
+                .unwrap();
+       } else {
+           interrupt_spawner
+               .spawn(uart_task(
+                   uart_buf,
+                   peripherals.uart1,
+                   &peripherals.config,
+                   // peripherals.gpios,
+                   peripherals.gpios.gpio10.into(),
+                   peripherals.gpios.gpio11.into(),
+               ))
+               .unwrap();
+       }
+    }
     // TODO: Migrate this function/test to embedded-test.
     // Quick roundtrip test for SSHStampConfig
     // ssh_stamp::config::roundtrip_config();
@@ -221,9 +265,8 @@ async fn main(spawner: Spawner) -> ! {
         rng: peripherals.rng,
         wifi: peripherals.wifi,
         config: peripherals.config,
-        gpios: peripherals.gpios,
-        uart1: peripherals.uart1,
         spawner: spawner,
+        uart_buf: uart_buf,
     };
 
     match peripherals_enabled(peripherals_enabled_struct).await {
@@ -243,8 +286,7 @@ pub struct PeripheralsEnabled<'a> {
     pub wifi: WIFI<'a>,
     pub config: &'a SunsetMutex<SSHStampConfig>,
     pub controller: Controller<'static>,
-    pub gpios: GPIOS<'a>,
-    pub uart1: UART1<'a>,
+    pub uart_buf: &'a BufferedUart,
     pub spawner: Spawner,
 }
 async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Error> {
@@ -256,8 +298,7 @@ async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Err
         wifi: s.wifi,
         config: s.config,
         controller: controller,
-        gpios: s.gpios,
-        uart1: s.uart1,
+        uart_buf: s.uart_buf,
         spawner: s.spawner,
     };
     match wifi_controller_enabled(peripherals_enabled_struct).await {
@@ -274,8 +315,7 @@ async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Err
 pub struct WifiControllerEnabled<'a> {
     pub rng: Rng,
     pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub gpios: GPIOS<'a>,
-    pub uart1: UART1<'a>,
+    pub uart_buf: &'a BufferedUart,
     pub tcp_stack: Stack<'a>,
 }
 
@@ -288,8 +328,7 @@ pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(
     let wifi_controller_enabled_stack = WifiControllerEnabled {
         config: s.config,
         rng: s.rng,
-        gpios: s.gpios,
-        uart1: s.uart1,
+        uart_buf: s.uart_buf,
         tcp_stack: tcp_stack,
     };
     match tcp_enabled(wifi_controller_enabled_stack).await {
@@ -305,8 +344,7 @@ pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(
 pub struct TCPEnabled<'a> {
     pub config: &'a SunsetMutex<SSHStampConfig>,
     pub tcp_socket: TcpSocket<'a>,
-    pub gpios: GPIOS<'a>,
-    pub uart1: UART1<'a>,
+    pub uart_buf: &'a BufferedUart,
 }
 
 async fn tcp_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Error> {
@@ -331,8 +369,7 @@ async fn tcp_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Err
     let tcp_enabled_struct = TCPEnabled {
         config: s.config,
         tcp_socket: tcp_socket,
-        gpios: s.gpios,
-        uart1: s.uart1,
+        uart_buf: s.uart_buf,
     };
     match socket_enabled(tcp_enabled_struct).await {
         Ok(_) => (),
@@ -348,8 +385,7 @@ pub struct SocketEnabled<'a> {
     pub config: &'a SunsetMutex<SSHStampConfig>,
     pub tcp_socket: TcpSocket<'a>,
     pub ssh_server: SSHServer<'a>,
-    pub gpios: GPIOS<'a>,
-    pub uart1: UART1<'a>,
+    pub uart_buf: &'a BufferedUart,
 }
 
 use buffered_uart::UART_BUFFER_SIZE;
@@ -359,16 +395,15 @@ async fn socket_enabled<'a>(s: TCPEnabled<'a>) -> Result<(), sunset::Error> {
     // Spawn network tasks to handle incoming connections with demo_common::session()
     let mut inbuf = [0u8; UART_BUFFER_SIZE];
     let mut outbuf = [0u8; UART_BUFFER_SIZE];
-    println!("Starting ssh_server");
+    println!("HSM: Starting ssh_server");
     let ssh_server = serve::ssh_wait_for_initialisation(&mut inbuf, &mut outbuf).await;
-    println!("Started ssh_server");
+    println!("HSM: Started ssh_server");
 
     let socket_enabled_struct = SocketEnabled {
         config: s.config,
         tcp_socket: s.tcp_socket,
         ssh_server: ssh_server,
-        gpios: s.gpios,
-        uart1: s.uart1,
+        uart_buf: s.uart_buf,
     };
     match ssh_enabled(socket_enabled_struct).await {
         Ok(_) => (),
@@ -388,13 +423,12 @@ where
 {
     pub tcp_socket: TcpSocket<'a>,
     pub ssh_server: &'b SSHServer<'a>,
-    pub uart1: UART1<'a>,
+    pub uart_buf: &'a BufferedUart,
     pub config: &'a SunsetMutex<SSHStampConfig>,
     pub chan_pipe: &'b Channel<NoopRawMutex, serve::SessionType, 1>,
     pub connection_loop: CL,
-    pub gpios: GPIOS<'a>,
 }
-
+use embassy_time::{Duration, Timer};
 async fn ssh_enabled<'a>(s: SocketEnabled<'a>) -> Result<(), sunset::Error>
 // where
     // 'b: 'a,
@@ -406,15 +440,14 @@ async fn ssh_enabled<'a>(s: SocketEnabled<'a>) -> Result<(), sunset::Error>
     println!("HSM: Started channel pipe. Calling connection_loop from ssh_enabled");
     let connection = serve::connection_loop(&s.ssh_server, &chan_pipe, &s.config);
     println!("HSM: Started connection loop");
-
+    Timer::after(Duration::from_millis(500)).await;
     let ssh_enabled_struct = SshEnabled {
         tcp_socket: s.tcp_socket,
         ssh_server: &s.ssh_server,
         config: s.config,
+        uart_buf: s.uart_buf,
         chan_pipe: &chan_pipe,
         connection_loop: connection,
-        uart1: s.uart1,
-        gpios: s.gpios,
     };
     match client_connected(ssh_enabled_struct).await {
         Ok(_) => (),
@@ -436,10 +469,8 @@ where
     pub ssh_server: &'b SSHServer<'a>,
     pub chan_pipe: &'b Channel<NoopRawMutex, serve::SessionType, 1>,
     pub connection_loop: CL,
-    pub uart_buff: &'a BufferedUart,
-    pub uart1: UART1<'a>,
+    pub uart_buf: &'a BufferedUart,
     pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub gpios: GPIOS<'a>,
 }
 async fn client_connected<'a, 'b, CL>(s: SshEnabled<'a, 'b, CL>) -> Result<(), sunset::Error>
 // where 'b: 'a {
@@ -448,17 +479,16 @@ where
 {
     println!("HSM: client_connected");
     // loop {
-    let uart_buff = buffered_uart::uart_buffer_wait_for_initialisation().await;
+    // let uart_buff = buffered_uart::uart_buffer_wait_for_initialisation().await;
+    Timer::after(Duration::from_millis(500)).await;
 
     let client_connected_struct = ClientConnected {
         tcp_socket: s.tcp_socket,
         ssh_server: s.ssh_server,
         chan_pipe: s.chan_pipe,
         connection_loop: s.connection_loop,
-        uart_buff: uart_buff,
-        uart1: s.uart1,
+        uart_buf: s.uart_buf,
         config: s.config,
-        gpios: s.gpios,
     };
     match uart_buffer_ready(client_connected_struct).await {
         Ok(_) => (),
@@ -472,17 +502,15 @@ where
     Ok(()) // todo!() return relevant value
 }
 
-pub struct UartBufferReady<'a, 'b, CL, U>
+pub struct UartBufferReady<'a, 'b, CL>
 where
     CL: Future<Output = Result<(), sunset::Error>>,
-    U: Future<Output = Result<(), sunset::Error>>,
 {
     pub tcp_socket: TcpSocket<'a>,
     pub ssh_server: &'b SSHServer<'a>,
-    pub uart_buff: &'a BufferedUart,
+    pub uart_buf: &'a BufferedUart,
     pub chan_pipe: &'b Channel<NoopRawMutex, serve::SessionType, 1>,
     pub connection_loop: CL,
-    pub uart: U,
 }
 
 async fn uart_buffer_ready<'a, 'b, CL>(s: ClientConnected<'a, 'b, CL>) -> Result<(), sunset::Error>
@@ -491,16 +519,21 @@ where
     CL: Future<Output = Result<(), sunset::Error>>,
 {
     println!("HSM: uart_buffer_ready");
+    Timer::after(Duration::from_millis(500)).await;
+
     // loop {
-    let uart = buffered_uart::uart_task(s.uart_buff, s.uart1, &s.config, s.gpios);
+    // let uart = buffered_uart::uart_task(s.uart_buff, s.uart1, &s.config, s.gpios);
+    // Signal for uart task to configure pins and run.
+    UART_SIGNAL.signal(1);
+    Timer::after(Duration::from_millis(500)).await;
+    println!("HSM: UART_SIGNAL sent");
 
     let uart_buffer_ready_struct = UartBufferReady {
         tcp_socket: s.tcp_socket,
         ssh_server: s.ssh_server,
         chan_pipe: s.chan_pipe,
-        uart_buff: s.uart_buff,
+        uart_buf: s.uart_buf,
         connection_loop: s.connection_loop,
-        uart: uart,
     };
     match uart_enabled(uart_buffer_ready_struct).await {
         Ok(_) => (),
@@ -514,35 +547,34 @@ where
     Ok(()) // todo!() return relevant value
 }
 
-pub struct UartEnabled<'a, 'b, CL, U, BR>
+pub struct UartEnabled<'a, 'b, CL, BR>
 where
     CL: Future<Output = Result<(), sunset::Error>>,
-    U: Future<Output = Result<(), sunset::Error>>,
     BR: Future<Output = Result<(), sunset::Error>>,
 {
     pub ssh_server: &'b SSHServer<'a>,
     pub bridge: BR,
     pub connection_loop: CL,
-    pub uart: U,
     pub tcp_socket: TcpSocket<'a>,
 }
 
-async fn uart_enabled<'a, 'b, CL, U>(s: UartBufferReady<'a, 'b, CL, U>) -> Result<(), sunset::Error>
+async fn uart_enabled<'a, 'b, CL>(s: UartBufferReady<'a, 'b, CL>) -> Result<(), sunset::Error>
 where
     CL: Future<Output = Result<(), sunset::Error>>,
-    U: Future<Output = Result<(), sunset::Error>>,
     'a: 'b,
 {
     println!("HSM: uart_enabled");
+    Timer::after(Duration::from_millis(500)).await;
+
     // // loop {
-    println!("Setting up serial bridge");
-    let bridge = serve::bridge_wait_for_initialisation(s.uart_buff, s.ssh_server, s.chan_pipe);
+    println!("HSM: Setting up serial bridge");
+    let bridge = serve::bridge_wait_for_initialisation(s.uart_buf, s.ssh_server, s.chan_pipe);
 
     let uart_enabled_struct = UartEnabled {
         ssh_server: s.ssh_server,
         bridge: bridge,
         connection_loop: s.connection_loop,
-        uart: s.uart,
+        // uart: s.uart,
         tcp_socket: s.tcp_socket,
     };
     match bridge_connected(uart_enabled_struct).await {
@@ -558,28 +590,26 @@ where
     Ok(()) // todo!() return relevant value
 }
 
-async fn bridge_connected<'a, 'b, CL, U, BR>(
-    s: UartEnabled<'a, 'b, CL, U, BR>,
+async fn bridge_connected<'a, 'b, CL, BR>(
+    s: UartEnabled<'a, 'b, CL, BR>,
 ) -> Result<(), sunset::Error>
 where
     CL: Future<Output = Result<(), sunset::Error>>,
-    U: Future<Output = Result<(), sunset::Error>>,
     BR: Future<Output = Result<(), sunset::Error>>,
     'a: 'b,
 {
     println!("HSM: bridge_connected");
     let mut tcp_socket = s.tcp_socket;
     let (mut rsock, mut wsock) = tcp_socket.split();
-    println!("Running server from handle_ssh_client()");
+    println!("HSM: Running server from handle_ssh_client()");
     let server = s.ssh_server.run(&mut rsock, &mut wsock);
     let connection_loop = s.connection_loop;
     let bridge = s.bridge;
-    println!("Main select() in bridge_connected()");
-    match select4(server, connection_loop, bridge, s.uart).await {
-        Either4::First(r) => r,
-        Either4::Second(r) => r,
-        Either4::Third(r) => r,
-        Either4::Fourth(r) => r,
+    println!("HSM: Main select() in bridge_connected()");
+    match select3(server, connection_loop, bridge).await {
+        Either3::First(r) => r,
+        Either3::Second(r) => r,
+        Either3::Third(r) => r,
     }?;
     Result::Ok(())
 }
@@ -587,4 +617,122 @@ where
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
+}
+
+use esp_hal::uart::{RxConfig, Uart};
+
+// cfg_if::cfg_if! {
+//    if #[cfg(feature = "esp32")] {
+//         use esp_hal::peripherals::{GPIO1, GPIO3};
+//    } else {
+//        use esp_hal::peripherals::{GPIO10,  GPIO11};
+//    }
+// }
+cfg_if::cfg_if!(
+    if #[cfg(feature = "esp32")] {
+        pub struct GPIOS<'a> {
+            pub gpio13: AnyPin<'a>,
+            pub gpio14: AnyPin<'a>,
+        }
+    } else {
+        pub struct GPIOS<'a> {
+            pub gpio10: AnyPin<'a>,
+            pub gpio11: AnyPin<'a>,
+        }
+    }
+);
+
+pub static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();
+
+pub async fn uart_buffer_wait_for_initialisation() -> &'static BufferedUart {
+    UART_BUF.init_with(BufferedUart::new)
+}
+
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::signal::Signal;
+pub static UART_SIGNAL: Signal<CriticalSectionRawMutex, u8> = Signal::new();
+// use embassy_time::{Duration, Timer};
+// use esp_hal::gpio::AnyPin;
+use esp_println::dbg;
+#[embassy_executor::task]
+pub async fn uart_task(
+    uart_buf: &'static BufferedUart,
+    uart1: UART1<'static>,
+    _config: &'static SunsetMutex<SSHStampConfig>,
+    // gpios: GPIOS<'static>,
+    rx_pin: AnyPin<'static>,
+    tx_pin: AnyPin<'static>,
+) -> () {
+    dbg!("Configuring UART");
+    Timer::after(Duration::from_millis(100)).await;
+    // Wait until ssh complete
+    UART_SIGNAL.wait().await;
+    dbg!("UART signal recieved");
+    Timer::after(Duration::from_millis(100)).await;
+
+    // let config_lock = config.lock().await;
+    // let rx: u8 = config_lock.uart_pins.rx;
+    // let tx: u8 = config_lock.uart_pins.tx;
+    // if rx != tx {
+    // cfg_if::cfg_if!(
+    //     if #[cfg(feature = "esp32")] {
+    //         let tx_pin: AnyPin<'static> = gpio1.into();
+    //         let rx_pin: AnyPin<'static> = gpio3.into();
+    //         // let mut holder0 = Some(gpios.gpio1);
+    //         // let mut holder1 = Some(gpios.gpio3);
+    //     } else {
+    //         let tx_pin = gpio10;
+    //         let rx_pin = gpio11;
+    //         // let mut holder0 = Some(gpios.gpio10);
+    //         // let mut holder1 = Some(gpios.gpio11);
+    //     }
+    // );
+
+    // let rx_pin = match rx {
+    //     1 => holder0.take().unwrap().degrade(),
+    //     3 => holder1.take().unwrap().degrade(),
+    //     10 => holder0.take().unwrap().degrade(),
+    //     11 => holder1.take().unwrap().degrade(),
+    //     _ => holder0.take().unwrap().degrade(),
+    // };
+    // let tx_pin = match tx {
+    //     1 => holder0.take().unwrap().degrade(),
+    //     3 => holder1.take().unwrap().degrade(),
+    //     10 => holder0.take().unwrap().degrade(),
+    //     11 => holder1.take().unwrap().degrade(),
+    //     _ => holder1.take().unwrap().degrade(),
+    // };
+
+    dbg!("UART config");
+    Timer::after(Duration::from_millis(100)).await;
+
+    // Hardware UART setup
+    let uart_config = esp_hal::uart::Config::default().with_rx(
+        RxConfig::default()
+            .with_fifo_full_threshold(16)
+            .with_timeout(1),
+    );
+
+    // let uart_config = Config::default().with_rx(
+    //     RxConfig::default()
+    //         .with_fifo_full_threshold(16)
+    //         .with_timeout(1),
+    // );
+
+    dbg!("UART setup pins");
+    Timer::after(Duration::from_millis(100)).await;
+
+    let uart = Uart::new(uart1, uart_config)
+        .unwrap()
+        .with_rx(rx_pin)
+        .with_tx(tx_pin)
+        .into_async();
+
+    // Run the main buffered TX/RX loop
+    dbg!("uart_task running UART");
+    Timer::after(Duration::from_millis(100)).await;
+    uart_buf.run(uart).await;
+    // }
+    // TODO: Pin config error
+    // Ok(())
 }
