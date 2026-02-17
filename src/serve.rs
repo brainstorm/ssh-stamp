@@ -4,7 +4,6 @@
 
 use core::option::Option::{self, None, Some};
 use core::result::Result;
-use core::writeln;
 
 use crate::espressif::buffered_uart::BufferedUart;
 use crate::keys;
@@ -86,6 +85,12 @@ async fn connection_loop(
             }
             ServEvent::PollAgain => (),
             ServEvent::SessionSubsystem(_) => (),
+            ServEvent::SessionEnv(a) => {
+                dbg!("Got ENV request");
+                dbg!(a.name()?);
+                dbg!(a.value()?);
+                a.succeed()?;
+            }
         }
     }
 }

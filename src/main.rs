@@ -8,31 +8,49 @@
 use core::marker::Sized;
 use esp_alloc as _;
 use esp_backtrace as _;
+
+#[cfg(feature = "esp32")]
+use esp_hal::timer::timg::TimerGroup;
 use esp_hal::{
-    gpio::AnyPin,
-    interrupt::{software::SoftwareInterruptControl, Priority},
+    gpio::Pin,
+    interrupt::{Priority, software::SoftwareInterruptControl},
     peripherals::UART1,
     rng::Rng,
-    timer::timg::TimerGroup,
     uart::{Config, RxConfig, Uart},
 };
-use esp_hal_embassy::InterruptExecutor;
+use esp_rtos::embassy::InterruptExecutor;
+use esp_storage::FlashStorage;
+use esp_println::dbg;
 
 use embassy_executor::Spawner;
-use ssh_stamp::espressif::{
-    buffered_uart::BufferedUart,
-    net::{accept_requests, if_up},
-    rng,
-};
-use static_cell::StaticCell;
 
-#[esp_hal_embassy::main]
+use log::info;
+
+use ssh_stamp::pins;
+use ssh_stamp::pins::GPIOConfig;
+use ssh_stamp::pins::PinChannel;
+use ssh_stamp::{
+    config::SSHStampConfig,
+    espressif::{
+        buffered_uart::BufferedUart,
+        net::{accept_requests, if_up},
+        rng,
+    },
+    storage::Fl,
+};
+
+
+use static_cell::StaticCell;
+use sunset_async::SunsetMutex;
+
+#[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
     cfg_if::cfg_if!(
         if #[cfg(feature = "esp32s2")] {
-            // TODO: This heap size will crash at runtime, we need to fix this
+            // TODO: This heap size will crash at runtime (only for the ESP32S2), we need to fix this
             // applying ideas from https://github.com/brainstorm/ssh-stamp/pull/41#issuecomment-2964775170
-                esp_alloc::heap_allocator!(size: 69 * 1024);
+            esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 72 * 1024);
+
         } else {
                 esp_alloc::heap_allocator!(size: 72 * 1024);
         }
@@ -42,34 +60,54 @@ async fn main(spawner: Spawner) -> ! {
 
     // System init
     let peripherals = esp_hal::init(esp_hal::Config::default());
-    let mut rng = Rng::new(peripherals.RNG);
-    let timg0 = TimerGroup::new(peripherals.TIMG0);
+    let mut rng = Rng::new();
+    // let timg0 = TimerGroup::new(peripherals.TIMG0); dhcp example uses it for esp_rtos as timg0.timer0
 
     rng::register_custom_rng(rng);
-
+    let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     cfg_if::cfg_if! {
        if #[cfg(feature = "esp32")] {
+            // TODO: Test this feature configuration
             let timg1 = TimerGroup::new(peripherals.TIMG1);
-            esp_hal_embassy::init(timg1.timer0);
+            esp_rtos::start(timg1.timer0);
+       } else if #[cfg(any(feature = "esp32s2", feature = "esp32s3"))] {
+            // TODO: Test this feature configuration
+           use esp_hal::timer::systimer::SystemTimer;
+           let systimer = SystemTimer::new(peripherals.SYSTIMER);
+           esp_rtos::start(systimer.alarm0);
        } else {
            use esp_hal::timer::systimer::SystemTimer;
            let systimer = SystemTimer::new(peripherals.SYSTIMER);
-           esp_hal_embassy::init(systimer.alarm0);
+           esp_rtos::start(systimer.alarm0, sw_int.software_interrupt0);
        }
     }
 
-    let wifi_controller = esp_wifi::init(timg0.timer0, rng, peripherals.RADIO_CLK).unwrap();
+    // TODO: Migrate this function/test to embedded-test.
+    // Quick roundtrip test for SSHStampConfig
+    // ssh_stamp::config::roundtrip_config();
+
+    // Read SSH configuration from Flash (if it exists)
+    let mut flash_storage = Fl::new(FlashStorage::new(peripherals.FLASH));
+    let config = ssh_stamp::storage::load_or_create(&mut flash_storage).await;
+
+    static FLASH: StaticCell<SunsetMutex<Fl>> = StaticCell::new();
+    let _flash = FLASH.init(SunsetMutex::new(flash_storage));
+
+    static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
+    let config = CONFIG.init(SunsetMutex::new(config.unwrap()));
+
+    let wifi_controller = esp_radio::init().unwrap();
 
     // Bring up the network interface and start accepting SSH connections.
-    let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng)
+    // Clone the reference to config to avoid borrow checker issues.
+    let tcp_stack = if_up(spawner, wifi_controller, peripherals.WIFI, &mut rng, config)
         .await
         .unwrap();
 
     // Set up software buffered UART to run in a higher priority InterruptExecutor
     let uart_buf = UART_BUF.init_with(BufferedUart::new);
-    let software_interrupts = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     let interrupt_executor =
-        INT_EXECUTOR.init_with(|| InterruptExecutor::new(software_interrupts.software_interrupt0));
+        INT_EXECUTOR.init_with(|| InterruptExecutor::new(sw_int.software_interrupt1));
     cfg_if::cfg_if! {
         if #[cfg(any(feature = "esp32", feature = "esp32s2", feature = "esp32s3"))] {
             let interrupt_spawner = interrupt_executor.start(Priority::Priority1);
@@ -77,27 +115,81 @@ async fn main(spawner: Spawner) -> ! {
             let interrupt_spawner = interrupt_executor.start(Priority::Priority10);
         }
     }
+
+    let serde_pin_config = {
+        let guard = config.lock().await;
+        guard.uart_pins.clone()
+    };
+
     cfg_if::cfg_if! {
-        if #[cfg(not(feature = "esp32c2"))] {
-    interrupt_spawner.spawn(uart_task(uart_buf, peripherals.UART1, peripherals.GPIO11.into(), peripherals.GPIO10.into())).unwrap();
+        if #[cfg(any(feature = "esp32c2", feature = "esp32c3"))] {
+           // TODO: ESPC2/C3: GPIO pin configuration not yet implemented
+           let available_gpios = GPIOConfig {
+               gpio10: Some(peripherals.GPIO10.degrade()),
+               gpio11: Some(peripherals.GPIO9.degrade()),
+            };
+        }else if #[cfg(feature = "esp32c6")] {
+
+            let available_gpios = GPIOConfig {
+                gpio10: Some(peripherals.GPIO10.degrade()),
+                gpio11: Some(peripherals.GPIO11.degrade()),
+            };
+        } else if #[cfg(feature = "esp32")]{
+            // TODO: ESP32: GPIO pin configuration not yet implemented
+            let available_gpios = GPIOConfig {
+                gpio10: Some(peripherals.GPIO12.degrade()),
+                gpio11: Some(peripherals.GPIO13.degrade()),
+            };
+        } else if #[cfg(any( feature = "esp32s2", feature = "esp32s3"))]{
+            // TODO: ESP32/S2/S3: GPIO pin configuration not yet implemented
+            let available_gpios = GPIOConfig {
+                gpio10: Some(peripherals.GPIO10.degrade()),
+                gpio11: Some(peripherals.GPIO11.degrade()),
+            };
         } else {
-            interrupt_spawner.spawn(uart_task(uart_buf, peripherals.UART1, peripherals.GPIO9.into(), peripherals.GPIO10.into())).unwrap();
+            // No fallback
+            panic!("Unsupported target for PinChannel GPIOConfig initialization");
         }
+    };
+
+    // Initialize the global pin channel and keep the &'static reference so we can
+    // pass it to tasks that need to mutate pins (no unsafe globals).
+    let pin_channel_ref =
+        pins::init_global_channel(PinChannel::new(serde_pin_config, available_gpios));
+
+    // Grab UART1, typically not connected to dev board's TTL2USB IC nor builtin JTAG functionality
+    let uart1 = peripherals.UART1;
+
+    // Use the same config reference for UART task.
+    // Pass pin_channel_ref into the UART task so it can acquire/release pins.
+    interrupt_spawner
+        .spawn(uart_task(uart_buf, uart1, pin_channel_ref))
+        .unwrap();
+    // Optional version details logging
+    if let Some(build_date) = option_env!("BUILD_DATE") {
+        info!(
+            "Initialization done. Starting SSH server... version : v{}, build date: {}",
+            env!("CARGO_PKG_VERSION"),
+            build_date
+        );
     }
-    accept_requests(tcp_stack, uart_buf).await;
+
+    // Pass pin_channel_ref into accept_requests (so SSH handlers can use it).
+    // NOTE: accept_requests signature must accept this arg; if it doesn't,
+    // thread the reference into whatever code spawns handle_ssh_client.
+    accept_requests(tcp_stack, uart_buf, pin_channel_ref).await;
 }
 
 static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();
+static INT_EXECUTOR: StaticCell<InterruptExecutor<1>> = StaticCell::new(); // 0 is used for esp_rtos.
 
-static INT_EXECUTOR: StaticCell<InterruptExecutor<0>> = StaticCell::new();
-
-#[embassy_executor::task]
+#[embassy_executor::task()]
 async fn uart_task(
     buffer: &'static BufferedUart,
     uart_periph: UART1<'static>,
-    rx_pin: AnyPin<'static>,
-    tx_pin: AnyPin<'static>,
+    pin_channel_ref: &'static SunsetMutex<PinChannel>,
 ) {
+    dbg!("Spawning UART task...");
     // Hardware UART setup
     let uart_config = Config::default().with_rx(
         RxConfig::default()
@@ -105,12 +197,21 @@ async fn uart_task(
             .with_timeout(1),
     );
 
-    let uart = Uart::new(uart_periph, uart_config)
-        .unwrap()
-        .with_rx(rx_pin)
-        .with_tx(tx_pin)
-        .into_async();
+    // Use the pinned reference passed in from main.
+    let mut pin_chan = pin_channel_ref.lock().await;
 
-    // Run the main buffered TX/RX loop
-    buffer.run(uart).await;
+    // Sync pin config via channels
+    pin_chan
+        .with_channel(async |rx, tx| {
+            let uart = Uart::new(uart_periph, uart_config)
+                .unwrap()
+                .with_rx(rx)
+                .with_tx(tx)
+                .into_async();
+
+            // Run the main buffered TX/RX loop
+            buffer.run(uart).await;
+        })
+        .await
+        .unwrap();
 }
