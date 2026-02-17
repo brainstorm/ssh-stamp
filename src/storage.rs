@@ -18,6 +18,7 @@ use sunset_sshwire_derive::*;
 
 use crate::config::SSHStampConfig;
 
+// TODO: Read the right partition and write there instead of hardcoding offset and size.
 pub const CONFIG_VERSION_SIZE: usize = 4;
 pub const CONFIG_HASH_SIZE: usize = 32;
 pub const CONFIG_AREA_SIZE: usize = 4096;
@@ -57,13 +58,16 @@ impl FlashConfig<'_> {
         println!("Flash size = {} bytes", flash.capacity());
 
         let mut pt_mem = [0u8; partitions::PARTITION_TABLE_MAX_LEN];
-        let pt = partitions::read_partition_table(flash, &mut pt_mem).unwrap();
-        let nvs = pt
+        let pt = partitions::read_partition_table(flash, &mut pt_mem)
+            .map_err(|_| SSHStampError::FlashStorageError)?;
+        let Some(nvs) = pt
             .find_partition(partitions::PartitionType::Data(
                 partitions::DataPartitionSubType::Nvs,
             ))
-            .unwrap()
-            .unwrap();
+            .map_err(|_| SSHStampError::FlashStorageError)?
+        else {
+            return Err(SSHStampError::FlashStorageError);
+        };
 
         let nvs_partition = nvs.as_embedded_storage(flash);
 
@@ -117,7 +121,7 @@ pub async fn load(fl: &mut Fl<'_>) -> Result<SSHStampConfig, SunsetError> {
         return Err(SunsetError::msg("wrong config version"));
     }
 
-    let calc_hash = config_hash(flash_config.config.borrow()).unwrap();
+    let calc_hash = config_hash(flash_config.config.borrow())?;
 
     if calc_hash != flash_config.hash {
         return Err(SunsetError::msg("bad config hash"));
@@ -138,7 +142,7 @@ pub async fn save(fl: &mut Fl<'_>, config: &SSHStampConfig) -> Result<(), Sunset
         hash: config_hash(&config)?,
     };
 
-    FlashConfig::find_config_partition(&mut fl.flash).unwrap();
+    FlashConfig::find_config_partition(&mut fl.flash).map_err(|_| SunsetError::Bug)?;
 
     //   dbg!("Saving config: ", &config);
     dbg!("Before write_ssh, with hash: ", &sc.hash.hex_dump());
@@ -156,9 +160,11 @@ pub async fn save(fl: &mut Fl<'_>, config: &SSHStampConfig) -> Result<(), Sunset
             CONFIG_OFFSET as u32,
             (CONFIG_OFFSET + CONFIG_AREA_SIZE) as u32,
         )
-        .unwrap();
+        .map_err(|_| SunsetError::Bug)?;
 
-    fl.flash.write(CONFIG_OFFSET as u32, &fl.buf).unwrap();
+    fl.flash
+        .write(CONFIG_OFFSET as u32, &fl.buf)
+        .map_err(|_| SunsetError::Bug)?;
 
     println!("flash save done");
     Ok(())
