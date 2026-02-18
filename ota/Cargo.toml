@@ -8,3 +8,12 @@ default = []
 std = []
 
 [dependencies]
+sunset.workspace = true
+sunset-async.workspace = true
+
+log.workspace = true
+sha2.workspace = true
+
+# Only for helpers and tests
+[target.'cfg(not(target_os = "none"))'.dependencies]
+clap = "4.5"
