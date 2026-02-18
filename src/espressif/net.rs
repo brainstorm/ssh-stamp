@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::pins::PinChannel;
-
 use core::net::Ipv4Addr;
 use core::str::FromStr;
 
@@ -101,11 +99,7 @@ pub async fn if_up(
     Ok(ap_stack)
 }
 
-pub async fn accept_requests(
-    stack: Stack<'static>,
-    uart: &BufferedUart,
-    _pin_channel_ref: &'static SunsetMutex<PinChannel>,
-) -> ! {
+pub async fn accept_requests(stack: Stack<'static>, uart: &BufferedUart) -> ! {
     let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
     let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
 
