@@ -120,7 +120,7 @@ pub async fn accept_requests(stack: Stack<'static>, uart: &BufferedUart) -> ! {
         }
 
         println!("Connected, port 22");
-        match crate::serve::handle_ssh_client(&mut socket, uart).await {
+        match crate::serve::handle_ssh_session(&mut socket, uart).await {
             Ok(_) => (),
             Err(e) => {
                 println!("SSH client fatal error: {}", e);

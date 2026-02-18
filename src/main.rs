@@ -20,7 +20,6 @@ use esp_hal::{
 };
 use esp_println::dbg;
 use esp_rtos::embassy::InterruptExecutor;
-use esp_storage::FlashStorage;
 
 use embassy_executor::Spawner;
 
@@ -36,8 +35,9 @@ use ssh_stamp::{
         net::{accept_requests, if_up},
         rng,
     },
-    storage::Fl,
 };
+
+use storage::flash;
 
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
@@ -85,16 +85,29 @@ async fn main(spawner: Spawner) -> ! {
     // Quick roundtrip test for SSHStampConfig
     // ssh_stamp::config::roundtrip_config();
 
-    // Read SSH configuration from Flash (if it exists)
-    let mut flash_storage = Fl::new(FlashStorage::new(peripherals.FLASH));
-    let config = ssh_stamp::storage::load_or_create(&mut flash_storage).await;
+    flash::init(peripherals.FLASH);
 
-    static FLASH: StaticCell<SunsetMutex<Fl>> = StaticCell::new();
-    let _flash = FLASH.init(SunsetMutex::new(flash_storage));
+    #[cfg(feature = "sftp-ota")]
+    {
+        // TODO: Add OTA validation on new Application partition after OTA update and reboot
+    }
+
+    // Read SSH configuration from Flash (if it exists)
+    let config = {
+        // let rrr = flash::get_flash_n_buffer();
+        let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
+            panic!("Could not acquire flash storage lock");
+        };
+        let mut flash_storage = flash_storage_guard.lock().await;
+        // TODO: Migrate this function/test to embedded-test.
+        // Quick roundtrip test for SSHStampConfig
+        // ssh_stamp::config::roundtrip_config();
+        ssh_stamp::storage::load_or_create(&mut flash_storage).await
+    }
+    .expect("Could not load or create SSHStampConfig");
 
     static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
-    let config = CONFIG.init(SunsetMutex::new(config.unwrap()));
-
+    let config = CONFIG.init(SunsetMutex::new(config));
     let wifi_controller = esp_radio::init().unwrap();
 
     // Bring up the network interface and start accepting SSH connections.
