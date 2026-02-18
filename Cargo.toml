@@ -40,6 +40,8 @@ once_cell = { version = "1", features = [
 
 [dependencies]
 
+storage = { path = "storage" }
+
 sunset = { workspace = true }
 sunset-async = { workspace = true }
 sunset-sshwire-derive = { workspace = true }
