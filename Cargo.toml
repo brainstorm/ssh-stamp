@@ -10,7 +10,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace]
-members = ["storage"]
+members = ["storage", "ota"]
 
 [workspace.dependencies]
 
@@ -41,6 +41,7 @@ once_cell = { version = "1", features = [
 [dependencies]
 
 storage = { path = "storage" }
+ota = { path = "ota" }
 
 sunset = { workspace = true }
 sunset-async = { workspace = true }
@@ -130,6 +131,7 @@ opt-level = "s"
 
 [features]
 ipv6 = []
+sftp-ota = []
 default = ["esp32c6"]
 
 # MCU options

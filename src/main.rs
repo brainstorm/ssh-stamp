@@ -20,7 +20,6 @@ use esp_hal::{
 };
 use esp_println::dbg;
 use esp_rtos::embassy::InterruptExecutor;
-use esp_storage::FlashStorage;
 
 use embassy_executor::Spawner;
 
@@ -37,6 +36,8 @@ use ssh_stamp::{
         rng,
     },
 };
+
+use storage::flash;
 
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
@@ -85,6 +86,11 @@ async fn main(spawner: Spawner) -> ! {
     // ssh_stamp::config::roundtrip_config();
 
     flash::init(peripherals.FLASH);
+
+    #[cfg(feature = "sftp-ota")]
+    {
+        // TODO: Add OTA validation on new Application partition after OTA update and reboot
+    }
 
     // Read SSH configuration from Flash (if it exists)
     let config = {
