@@ -20,7 +20,6 @@ use esp_hal::{
 };
 use esp_println::dbg;
 use esp_rtos::embassy::InterruptExecutor;
-use esp_storage::FlashStorage;
 
 use embassy_executor::Spawner;
 

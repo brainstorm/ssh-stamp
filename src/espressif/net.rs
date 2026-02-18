@@ -104,7 +104,7 @@ pub async fn if_up(
 pub async fn accept_requests(
     stack: Stack<'static>,
     uart: &BufferedUart,
-    pin_channel_ref: &'static SunsetMutex<PinChannel>,
+    _pin_channel_ref: &'static SunsetMutex<PinChannel>,
 ) -> ! {
     let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
     let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
