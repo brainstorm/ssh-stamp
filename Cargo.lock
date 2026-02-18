@@ -1928,6 +1928,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "storage"
+version = "0.1.0"
+dependencies = [
+ "embedded-storage",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "esp-storage",
+ "log",
+ "once_cell",
+ "sunset-async",
+]
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

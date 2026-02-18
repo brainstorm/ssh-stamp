@@ -9,7 +9,10 @@ authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
 
-[dependencies]
+[workspace]
+members = ["storage"]
+
+[workspace.dependencies]
 
 sunset = { git = "https://github.com/mkj/sunset", default-features = false, features = [
     "openssh-key",
@@ -34,6 +37,21 @@ static_cell = { version = "2.1" }
 once_cell = { version = "1", features = [
     "critical-section",
 ], default-features = false }
+
+[dependencies]
+
+sunset = { workspace = true }
+sunset-async = { workspace = true }
+sunset-sshwire-derive = { workspace = true }
+sha2 = { workspace = true }
+rustc-hash = { workspace = true }
+log = { workspace = true }
+esp-hal = { workspace = true }
+embedded-storage = { workspace = true }
+esp-storage = { workspace = true }
+esp-bootloader-esp-idf = { workspace = true }
+static_cell = { workspace = true }
+once_cell = { workspace = true }
 
 cfg-if = "1"
 ed25519-dalek = { version = "2", default-features = false }
