@@ -16,31 +16,12 @@ use embassy_net::IpListenEndpoint;
 use embassy_net::{Stack, tcp::TcpSocket};
 use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
 use esp_hal::gpio::AnyPin;
+use esp_hal::interrupt::{Priority, software::SoftwareInterruptControl};
 use esp_hal::system::software_reset;
-use esp_rtos::embassy::InterruptExecutor;
-
-use esp_hal::{
-    peripherals::UART1,
-    peripherals::{SW_INTERRUPT, WIFI},
-    rng::Rng,
-};
-
-cfg_if::cfg_if! {
-   if #[cfg(feature = "esp32")] {
-        use esp_hal::timer::timg::TimerGroup;
-        use esp_hal::peripherals::{TIMG1};
-   } else if #[cfg(any(feature = "esp32s2", feature = "esp32s3"))] {
-       use esp_hal::peripherals::{SYSTIMER};
-   } else if #[cfg(any(feature = "esp32c2"))] {
-       // use esp_hal::interrupt::software::SoftwareInterruptControl;
-       use esp_hal::peripherals::{SYSTIMER};
-   } else {
-       // use esp_hal::interrupt::software::SoftwareInterruptControl;
-       use esp_hal::peripherals::{SYSTIMER};
-   }
-}
+use esp_hal::{peripherals::UART1, peripherals::WIFI, rng::Rng};
 use esp_println::println;
 use esp_radio::Controller;
+use esp_rtos::embassy::InterruptExecutor;
 use ssh_stamp::{
     config::SSHStampConfig,
     espressif::{
@@ -57,88 +38,10 @@ use static_cell::StaticCell;
 use storage::flash;
 use sunset_async::{SSHServer, SunsetMutex};
 
-pub async fn peripherals_wait_for_initialisation<'a>() -> SshStampPeripherals<'a> {
-    let peripherals = esp_hal::init(esp_hal::Config::default());
-
-    println!("Initialising rng ");
-
-    let rng = Rng::new();
-    rng::register_custom_rng(rng);
-
-    cfg_if::cfg_if!(
-        if #[cfg(feature = "esp32")] {
-            let timg1 = peripherals.TIMG1;
-        } else  {
-            let systimer = peripherals.SYSTIMER;
-        }
-    );
-
-    println!("Initialising flash ");
-    // Read SSH configuration from Flash (if it exists)
-    flash::init(peripherals.FLASH);
-
-    println!("Loading config ");
-    let config = {
-        let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
-            panic!("Could not acquire flash storage lock");
-        };
-        let mut flash_storage = flash_storage_guard.lock().await;
-        // TODO: Migrate this function/test to embedded-test.
-        // Quick roundtrip test for SSHStampConfig
-        // ssh_stamp::config::roundtrip_config();
-        ssh_stamp::store::load_or_create(&mut flash_storage).await
-    }
-    .expect("Could not load or create SSHStampConfig");
-
-    println!("Initialising config ");
-
-    static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
-    let config = CONFIG.init(SunsetMutex::new(config));
-
-    let wifi = peripherals.WIFI;
-    let uart1 = peripherals.UART1;
-    let sw_interrupt = peripherals.SW_INTERRUPT;
-
-    println!("Initialising gpio ");
-    cfg_if::cfg_if!(
-        if #[cfg(feature = "esp32")] {
-            let gpios = GPIOS {
-            gpio13: peripherals.GPIO13.into(),
-            gpio14: peripherals.GPIO14.into(),
-            };
-        } else {
-            let gpios = GPIOS {
-            gpio10: peripherals.GPIO10.into(),
-            gpio11: peripherals.GPIO11.into(),
-            };
-        }
-    );
-
-    cfg_if::cfg_if!(
-        if #[cfg(feature = "esp32")] {
-            let ssh_stamp_peripherals = SshStampPeripherals {
-                rng: rng,
-                wifi: wifi,
-                config: config,
-                gpios: gpios,
-                uart1: uart1,
-                timg1: timg1,
-                sw_interrupt: sw_interrupt,
-            };
-        } else  {
-            let ssh_stamp_peripherals = SshStampPeripherals {
-                rng: rng,
-                wifi: wifi,
-                config: config,
-                gpios: gpios,
-                uart1: uart1,
-                systimer: systimer,
-                sw_interrupt: sw_interrupt,
-            };
-        }
-    );
-
-    ssh_stamp_peripherals
+cfg_if::cfg_if! {
+   if #[cfg(feature = "esp32")] {
+        use esp_hal::timer::timg::TimerGroup;
+   }
 }
 
 pub async fn peripherals_disable() -> () {
@@ -146,31 +49,6 @@ pub async fn peripherals_disable() -> () {
     software_reset();
 }
 
-cfg_if::cfg_if!(
-    if #[cfg(feature = "esp32")] {
-        pub struct SshStampPeripherals<'a> {
-            pub rng: Rng,
-            pub wifi: WIFI<'a>,
-            pub config: &'a SunsetMutex<SSHStampConfig>,
-            pub gpios: GPIOS<'a>,
-            pub uart1: UART1<'a>,
-            pub timg1: TIMG1<'a>,
-            pub sw_interrupt: SW_INTERRUPT<'a>,
-        }
-    } else  {
-        pub struct SshStampPeripherals<'a> {
-            pub rng: Rng,
-            pub wifi: WIFI<'a>,
-            pub config: &'a SunsetMutex<SSHStampConfig>,
-            pub gpios: GPIOS<'a>,
-            pub uart1: UART1<'a>,
-            pub systimer: SYSTIMER<'a>,
-            pub sw_interrupt: SW_INTERRUPT<'a>,
-        }
-    }
-);
-// use esp_hal::interrupt::software::SoftwareInterrupt;
-use esp_hal::interrupt::{Priority, software::SoftwareInterruptControl};
 pub struct SshStampInit<'a> {
     pub rng: Rng,
     pub wifi: WIFI<'a>,
@@ -195,26 +73,70 @@ async fn main(spawner: Spawner) -> ! {
     esp_bootloader_esp_idf::esp_app_desc!();
     esp_println::logger::init_logger_from_env();
     println!("HSM: Initialising peripherals ");
-    let peripherals = peripherals_wait_for_initialisation().await;
 
-    println!("HSM: Initialising timers ");
-    let software_interrupts = SoftwareInterruptControl::new(peripherals.sw_interrupt);
+    // System init
+    let peripherals = esp_hal::init(esp_hal::Config::default());
+    let rng = Rng::new();
+    rng::register_custom_rng(rng);
 
+    println!("Initialising flash ");
+    // Read SSH configuration from Flash (if it exists)
+    flash::init(peripherals.FLASH);
+
+    println!("Loading config ");
+    let flash_config = {
+        let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
+            panic!("Could not acquire flash storage lock");
+        };
+        let mut flash_storage = flash_storage_guard.lock().await;
+        // TODO: Migrate this function/test to embedded-test.
+        // Quick roundtrip test for SSHStampConfig
+        // ssh_stamp::config::roundtrip_config();
+        ssh_stamp::store::load_or_create(&mut flash_storage).await
+    }
+    .expect("Could not load or create SSHStampConfig");
+
+    println!("Initialising config ");
+    static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
+    let config: &SunsetMutex<SSHStampConfig> = CONFIG.init(SunsetMutex::new(flash_config));
+
+    println!("Initialising gpio ");
+    // Only certain GPIO are available for each target.
+    // TODO: Confirm working pins on every target.
+
+    let mut gpios: GPIOS = Default::default();
+    cfg_if::cfg_if!(
+        if #[cfg(any(feature = "esp32"))]{
+            gpios.gpio13 = Some(peripherals.GPIO13.into());
+            gpios.gpio14 = Some(peripherals.GPIO14.into());
+        } else if #[cfg(feature = "esp32c2")] {
+            gpios.gpio9 = Some(peripherals.GPIO9.into());
+            gpios.gpio10 = Some(peripherals.GPIO10.into());
+        } else if #[cfg(feature = "esp32c3")] {
+            gpios.gpio20 = Some(peripherals.GPIO20.into());
+            gpios.gpio21 = Some(peripherals.GPIO21.into());
+        } else {
+            gpios.gpio10 = Some(peripherals.GPIO10.into());
+            gpios.gpio11 = Some(peripherals.GPIO11.into());
+        }
+    );
+
+    println!("Initialising timers ");
+    let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     cfg_if::cfg_if! {
        if #[cfg(feature = "esp32")] {
             // TODO: Test this feature configuration
-            let timg1 = TimerGroup::new(peripherals.timg1);
+            let timg1 = TimerGroup::new(peripherals.TIMG1);
             esp_rtos::start(timg1.timer0);
        } else if #[cfg(any(feature = "esp32s2", feature = "esp32s3"))] {
             // TODO: Test this feature configuration
            use esp_hal::timer::systimer::SystemTimer;
-           let systimer = SystemTimer::new(peripherals.systimer);
+           let systimer = SystemTimer::new(peripherals.SYSTIMER);
            esp_rtos::start(systimer.alarm0);
        } else {
-           // let sw_int = SoftwareInterruptControl::new(peripherals.sw_interrupt);
            use esp_hal::timer::systimer::SystemTimer;
-           let systimer = SystemTimer::new(peripherals.systimer);
-           esp_rtos::start(systimer.alarm0, software_interrupts.software_interrupt0);
+           let systimer = SystemTimer::new(peripherals.SYSTIMER);
+           esp_rtos::start(systimer.alarm0, sw_int.software_interrupt0);
        }
     }
 
@@ -222,7 +144,7 @@ async fn main(spawner: Spawner) -> ! {
     // Must be higher priority than esp_rtos (Priority1)
     let uart_buf = UART_BUF.init_with(BufferedUart::new);
     let interrupt_executor =
-        INT_EXECUTOR.init_with(|| InterruptExecutor::new(software_interrupts.software_interrupt1));
+        INT_EXECUTOR.init_with(|| InterruptExecutor::new(sw_int.software_interrupt1));
     cfg_if::cfg_if! {
         if #[cfg(any(feature = "esp32", feature = "esp32s2", feature = "esp32s3"))] {
             let interrupt_spawner = interrupt_executor.start(Priority::Priority3);
@@ -232,40 +154,15 @@ async fn main(spawner: Spawner) -> ! {
     }
 
     // Use the same config reference for UART task.
-    // Pass pin_channel_ref into the UART task so it can acquire/release pins.
-    cfg_if::cfg_if! {
-       if #[cfg(feature = "esp32")] {
-        interrupt_spawner
-            .spawn(uart_task(
-                uart_buf,
-                peripherals.uart1,
-                &peripherals.config,
-                // peripherals.gpios,
-                peripherals.gpios.gpio13.into(),
-                peripherals.gpios.gpio14.into(),
-                ))
-                .unwrap();
-       } else {
-           interrupt_spawner
-               .spawn(uart_task(
-                   uart_buf,
-                   peripherals.uart1,
-                   &peripherals.config,
-                   // peripherals.gpios,
-                   peripherals.gpios.gpio10.into(),
-                   peripherals.gpios.gpio11.into(),
-               ))
-               .unwrap();
-       }
-    }
-    // TODO: Migrate this function/test to embedded-test.
-    // Quick roundtrip test for SSHStampConfig
-    // ssh_stamp::config::roundtrip_config();
+    // Pass GPIO peripherals which can then be selected from config values
+    interrupt_spawner
+        .spawn(uart_task(uart_buf, peripherals.UART1, &config, gpios))
+        .unwrap();
 
     let peripherals_enabled_struct = SshStampInit {
-        rng: peripherals.rng,
-        wifi: peripherals.wifi,
-        config: peripherals.config,
+        rng: rng,
+        wifi: peripherals.WIFI,
+        config: config,
         spawner: spawner,
         uart_buf: uart_buf,
     };
@@ -575,7 +472,6 @@ where
         ssh_server: s.ssh_server,
         bridge: bridge,
         connection_loop: s.connection_loop,
-        // uart: s.uart,
         tcp_socket: s.tcp_socket,
     };
     match bridge_connected(uart_enabled_struct).await {
@@ -622,26 +518,17 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 
 use esp_hal::uart::{RxConfig, Uart};
 
-// cfg_if::cfg_if! {
-//    if #[cfg(feature = "esp32")] {
-//         use esp_hal::peripherals::{GPIO1, GPIO3};
-//    } else {
-//        use esp_hal::peripherals::{GPIO10,  GPIO11};
-//    }
-// }
-cfg_if::cfg_if!(
-    if #[cfg(feature = "esp32")] {
-        pub struct GPIOS<'a> {
-            pub gpio13: AnyPin<'a>,
-            pub gpio14: AnyPin<'a>,
-        }
-    } else {
-        pub struct GPIOS<'a> {
-            pub gpio10: AnyPin<'a>,
-            pub gpio11: AnyPin<'a>,
-        }
-    }
-);
+#[derive(Default)]
+pub struct GPIOS<'a> {
+    pub gpio9: Option<AnyPin<'a>>,
+    pub gpio10: Option<AnyPin<'a>>,
+    pub gpio11: Option<AnyPin<'a>>,
+    pub gpio12: Option<AnyPin<'a>>,
+    pub gpio13: Option<AnyPin<'a>>,
+    pub gpio14: Option<AnyPin<'a>>,
+    pub gpio20: Option<AnyPin<'a>>,
+    pub gpio21: Option<AnyPin<'a>>,
+}
 
 pub static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();
 
@@ -654,15 +541,14 @@ use embassy_sync::signal::Signal;
 pub static UART_SIGNAL: Signal<CriticalSectionRawMutex, u8> = Signal::new();
 // use embassy_time::{Duration, Timer};
 // use esp_hal::gpio::AnyPin;
+use esp_hal::uart::Config;
 use esp_println::dbg;
 #[embassy_executor::task]
 pub async fn uart_task(
     uart_buf: &'static BufferedUart,
     uart1: UART1<'static>,
     _config: &'static SunsetMutex<SSHStampConfig>,
-    // gpios: GPIOS<'static>,
-    rx_pin: AnyPin<'static>,
-    tx_pin: AnyPin<'static>,
+    gpios: GPIOS<'static>,
 ) -> () {
     dbg!("Configuring UART");
     Timer::after(Duration::from_millis(100)).await;
@@ -671,69 +557,110 @@ pub async fn uart_task(
     dbg!("UART signal recieved");
     Timer::after(Duration::from_millis(100)).await;
 
+    // Temporarily hardcoded pin numbers. Restore once ServEvent::SessionEnv properly updates config
     // let config_lock = config.lock().await;
     // let rx: u8 = config_lock.uart_pins.rx;
     // let tx: u8 = config_lock.uart_pins.tx;
-    // if rx != tx {
-    // cfg_if::cfg_if!(
-    //     if #[cfg(feature = "esp32")] {
-    //         let tx_pin: AnyPin<'static> = gpio1.into();
-    //         let rx_pin: AnyPin<'static> = gpio3.into();
-    //         // let mut holder0 = Some(gpios.gpio1);
-    //         // let mut holder1 = Some(gpios.gpio3);
-    //     } else {
-    //         let tx_pin = gpio10;
-    //         let rx_pin = gpio11;
-    //         // let mut holder0 = Some(gpios.gpio10);
-    //         // let mut holder1 = Some(gpios.gpio11);
-    //     }
-    // );
-
-    // let rx_pin = match rx {
-    //     1 => holder0.take().unwrap().degrade(),
-    //     3 => holder1.take().unwrap().degrade(),
-    //     10 => holder0.take().unwrap().degrade(),
-    //     11 => holder1.take().unwrap().degrade(),
-    //     _ => holder0.take().unwrap().degrade(),
-    // };
-    // let tx_pin = match tx {
-    //     1 => holder0.take().unwrap().degrade(),
-    //     3 => holder1.take().unwrap().degrade(),
-    //     10 => holder0.take().unwrap().degrade(),
-    //     11 => holder1.take().unwrap().degrade(),
-    //     _ => holder1.take().unwrap().degrade(),
-    // };
-
-    dbg!("UART config");
-    Timer::after(Duration::from_millis(100)).await;
-
-    // Hardware UART setup
-    let uart_config = esp_hal::uart::Config::default().with_rx(
-        RxConfig::default()
-            .with_fifo_full_threshold(16)
-            .with_timeout(1),
+    cfg_if::cfg_if!(
+        if #[cfg(feature = "esp32")] {
+            let rx: u8 = 13;
+            let tx: u8 = 14;
+        } else if #[cfg(feature = "esp32c2")] {
+            let rx: u8 = 9;
+            let tx: u8 = 10;
+        } else if #[cfg(feature = "esp32c3")] {
+            let rx: u8 = 20;
+            let tx: u8 = 21;
+        } else {
+            let rx: u8 = 10;
+            let tx: u8 = 11;
+        }
     );
 
-    // let uart_config = Config::default().with_rx(
-    //     RxConfig::default()
-    //         .with_fifo_full_threshold(16)
-    //         .with_timeout(1),
-    // );
+    println!("Config Read - RX Pin: {}  TX Pin: {}", rx, tx);
+    if rx != tx {
+        let mut _holder9 = Some(gpios.gpio9);
+        let mut _holder10 = Some(gpios.gpio10);
+        let mut _holder11 = Some(gpios.gpio11);
+        let mut _holder13 = Some(gpios.gpio13);
+        let mut _holder14 = Some(gpios.gpio14);
+        let mut _holder20 = Some(gpios.gpio20);
+        let mut _holder21 = Some(gpios.gpio21);
+        // Not every GPIO is available for every target.
+        // TODO: Merge all targets to only match on available GPIO
+        cfg_if::cfg_if!(
+            if #[cfg(feature = "esp32")] {
+                let rx_pin = match rx {
+                    13 => _holder13.take().unwrap().unwrap(),
+                    14 => _holder14.take().unwrap().unwrap(),
+                    _ => _holder13.take().unwrap().unwrap(),
+                };
+                let tx_pin = match tx {
+                    13 => _holder13.take().unwrap().unwrap(),
+                    14 => _holder14.take().unwrap().unwrap(),
+                    _ => _holder13.take().unwrap().unwrap(),
+                };
+            } else if #[cfg(feature = "esp32c2")] {
+                let rx_pin = match rx {
+                    9 => _holder9.take().unwrap().unwrap(),
+                    10 => _holder10.take().unwrap().unwrap(),
+                    _ => _holder9.take().unwrap().unwrap(),
+                };
+                let tx_pin = match tx {
+                    9 => _holder9.take().unwrap().unwrap(),
+                    10 => _holder10.take().unwrap().unwrap(),
+                    _ => _holder10.take().unwrap().unwrap(),
+                };
+            } else if #[cfg(feature = "esp32c3")] {
+                let rx_pin = match rx {
+                    20 => _holder20.take().unwrap().unwrap(),
+                    21 => _holder21.take().unwrap().unwrap(),
+                    _ => _holder20.take().unwrap().unwrap(),
+                };
+                let tx_pin = match tx {
+                    20 => _holder20.take().unwrap().unwrap(),
+                    21 => _holder21.take().unwrap().unwrap(),
+                    _ => _holder21.take().unwrap().unwrap(),
+                };
+            } else {
+                let rx_pin = match rx {
+                    10 => _holder10.take().unwrap().unwrap(),
+                    11 => _holder11.take().unwrap().unwrap(),
+                    _ => _holder10.take().unwrap().unwrap(),
+                };
+                let tx_pin = match tx {
+                    10 => _holder10.take().unwrap().unwrap(),
+                    11 => _holder11.take().unwrap().unwrap(),
+                    _ => _holder11.take().unwrap().unwrap(),
+                };
+            }
+        );
 
-    dbg!("UART setup pins");
-    Timer::after(Duration::from_millis(100)).await;
+        dbg!("UART config");
+        Timer::after(Duration::from_millis(100)).await;
 
-    let uart = Uart::new(uart1, uart_config)
-        .unwrap()
-        .with_rx(rx_pin)
-        .with_tx(tx_pin)
-        .into_async();
+        // Hardware UART setup
+        let uart_config = Config::default().with_rx(
+            RxConfig::default()
+                .with_fifo_full_threshold(16)
+                .with_timeout(1),
+        );
 
-    // Run the main buffered TX/RX loop
-    dbg!("uart_task running UART");
-    Timer::after(Duration::from_millis(100)).await;
-    uart_buf.run(uart).await;
-    // }
+        dbg!("UART setup pins");
+        Timer::after(Duration::from_millis(100)).await;
+
+        let uart = Uart::new(uart1, uart_config)
+            .unwrap()
+            .with_rx(rx_pin)
+            .with_tx(tx_pin)
+            .into_async();
+
+        // Run the main buffered TX/RX loop
+        dbg!("uart_task running UART");
+        Timer::after(Duration::from_millis(100)).await;
+        uart_buf.run(uart).await;
+    }
     // TODO: Pin config error
-    // Ok(())
+    dbg!("uart_task Pin config error! Using the same pin number for RX and TX!");
+    ()
 }

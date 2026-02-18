@@ -63,6 +63,7 @@ impl Default for UartPins {
         }
     }
 }
+use esp_println::println;
 
 impl SSHStampConfig {
     /// Bump this when the format changes
@@ -80,6 +81,10 @@ impl SSHStampConfig {
         let wifi_pw = None;
 
         let uart_pins = UartPins::default();
+        println!(
+            "SSH Stamp Config new() - RX Pin: {}  TX Pin: {}",
+            uart_pins.rx, uart_pins.tx
+        );
 
         Ok(SSHStampConfig {
             hostkey,
