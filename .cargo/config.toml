@@ -31,6 +31,10 @@ run-esp32s3 = "run --release --target xtensa-esp32s3-none-elf --no-default-featu
 # Test alias
 test-ota = "test --package ota --target x86_64-unknown-linux-gnu"
 
+# Build ota-packer alias: I might need to modify it so when run it can run a build for target architecture, extract the binary from the elf image and then pack the ota file.
+ota-packer = "run --package ota --bin ota-packer --target x86_64-unknown-linux-gnu"
+
+
 [target.xtensa-esp32-none-elf]
 runner = "espflash flash --baud=921600 --monitor --chip esp32"
 rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32"']

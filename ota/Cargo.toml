@@ -17,3 +17,7 @@ sha2.workspace = true
 # Only for helpers and tests
 [target.'cfg(not(target_os = "none"))'.dependencies]
 clap = "4.5"
+
+[[bin]]
+name = "ota-packer"
+path = "src/bin/ota-packer.rs"
