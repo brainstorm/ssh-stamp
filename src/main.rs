@@ -87,6 +87,11 @@ async fn main(spawner: Spawner) -> ! {
 
     flash::init(peripherals.FLASH);
 
+    #[cfg(feature = "sftp-ota")]
+    {
+        // TODO: Add OTA validation on new Application partition after OTA update and reboot
+    }
+
     // Read SSH configuration from Flash (if it exists)
     let config = {
         // let rrr = flash::get_flash_n_buffer();

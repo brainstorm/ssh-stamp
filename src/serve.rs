@@ -22,9 +22,15 @@ use sunset_async::{ProgressHolder, SSHServer};
 
 use esp_println::{dbg, println};
 
+enum SessionType {
+    Bridge(ChanHandle),
+    #[cfg(feature = "sftp-ota")]
+    Sftp(ChanHandle),
+}
+
 async fn connection_loop(
     serv: &SSHServer<'_>,
-    chan_pipe: &Channel<NoopRawMutex, ChanHandle, 1>,
+    chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
 ) -> Result<(), sunset::Error> {
     let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
     let mut session: Option<ChanHandle> = None;
@@ -41,7 +47,7 @@ async fn connection_loop(
                 if let Some(ch) = session.take() {
                     a.succeed()?;
                     dbg!("We got shell");
-                    let _ = chan_pipe.try_send(ch);
+                    let _ = chan_pipe.try_send(SessionType::Bridge(ch));
                 } else {
                     a.fail()?;
                 }
@@ -84,18 +90,42 @@ async fn connection_loop(
                 error::BadUsage.fail()?
             }
             ServEvent::PollAgain => (),
-            ServEvent::SessionSubsystem(_) => (),
+            ServEvent::SessionSubsystem(a) => {
+                #[cfg(feature = "sftp-ota")]
+                {
+                    if a.command()?.to_lowercase().as_str() == "sftp" {
+                        if let Some(ch) = session.take() {
+                            debug_assert!(ch.num() == a.channel());
+
+                            a.succeed()?;
+                            dbg!("We got SFTP subsystem");
+                            let _ = chan_pipe.try_send(SessionType::Sftp(ch));
+                        } else {
+                            a.fail()?;
+                        }
+                    } else {
+                        a.fail()?;
+                    }
+                }
+                #[cfg(not(feature = "sftp-ota"))]
+                {
+                    a.fail()?;
+                }
+            }
             ServEvent::SessionEnv(a) => {
                 dbg!("Got ENV request");
                 dbg!(a.name()?);
                 dbg!(a.value()?);
                 a.succeed()?;
             }
+            _ => {
+                println!("Unexpected event: {:?}", ev);
+            }
         }
     }
 }
 
-pub(crate) async fn handle_ssh_client(
+pub(crate) async fn handle_ssh_session(
     stream: &mut TcpSocket<'_>,
     uart: &BufferedUart,
 ) -> Result<(), sunset::Error> {
@@ -106,23 +136,33 @@ pub(crate) async fn handle_ssh_client(
     let ssh_server = SSHServer::new(&mut inbuf, &mut outbuf);
     let (mut rsock, mut wsock) = stream.split();
 
-    let chan_pipe = Channel::<NoopRawMutex, ChanHandle, 1>::new();
+    let chan_pipe = Channel::<NoopRawMutex, SessionType, 1>::new();
 
     println!("Calling connection_loop from handle_ssh_client");
     let conn_loop = connection_loop(&ssh_server, &chan_pipe);
     println!("Running server from handle_ssh_client()");
     let server = ssh_server.run(&mut rsock, &mut wsock);
 
-    println!("Setting up serial bridge");
-    let bridge = async {
-        let ch = chan_pipe.receive().await;
-        let stdio = ssh_server.stdio(ch).await?;
-        let stdio2 = stdio.clone();
-        serial_bridge(stdio, stdio2, uart).await
+    // TODO: Maybe loop forever here and/or handle disconnection/terminations gracefully?
+    let session = async {
+        let session_type = chan_pipe.receive().await;
+
+        match session_type {
+            SessionType::Bridge(ch) => {
+                println!("Setting up serial bridge");
+                let (chan_read, chan_write) = ssh_server.stdio(ch).await?.split();
+                serial_bridge(chan_read, chan_write, uart).await?
+            }
+            #[cfg(feature = "sftp-ota")]
+            SessionType::Sftp(_ch) => {
+                // TODO: create a new SFTP Subsystem session to handle ota
+            }
+        };
+        Ok(())
     };
 
     println!("Main select() in handle_ssh_client()");
-    match select3(conn_loop, server, bridge).await {
+    match select3(conn_loop, server, session).await {
         Either3::First(r) => r,
         Either3::Second(r) => r,
         Either3::Third(r) => r,
