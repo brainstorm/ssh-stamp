@@ -30,11 +30,8 @@ async fn uart_to_ssh(
             // TODO: should this also go to the SSH client?
             println!("UART RX dropped {} bytes", dropped);
         }
-        println!("UART RX waiting to read bytes");
         let n = uart_buf.read(&mut ssh_tx_buf).await;
-        println!("UART RX read {} bytes", n);
         chanw.write_all(&ssh_tx_buf[..n]).await?;
-        println!("UART RX write all complete");
     }
 }
 
@@ -44,14 +41,10 @@ async fn ssh_to_uart(
 ) -> Result<(), sunset::Error> {
     let mut uart_tx_buf = [0u8; 64];
     loop {
-        println!("UART TX waiting to read bytes");
         let n = chanr.read(&mut uart_tx_buf).await?;
-        println!("UART TX read bytes");
         if n == 0 {
             return Err(sunset::Error::ChannelEOF);
         }
-        println!("UART TX waiting to write byte");
         uart_buf.write(&uart_tx_buf[..n]).await;
-        println!("UART TX all bytes written");
     }
 }

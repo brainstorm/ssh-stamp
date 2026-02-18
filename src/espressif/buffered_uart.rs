@@ -15,7 +15,6 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pipe::Pipe};
 use esp_hal::Async;
 use esp_hal::system::software_reset;
 use esp_hal::uart::Uart;
-use esp_println::dbg;
 
 // Sizes of the software buffers. Inward is more
 // important as an overrun here drops bytes. A full outward
@@ -56,26 +55,16 @@ impl BufferedUart {
         loop {
             let rd_from = async {
                 loop {
-                    dbg!("BufferedUart run rd_from");
                     let n = uart_rx.read_async(&mut uart_rx_buf).await.unwrap();
-                    dbg!("rd_to uart_rx read");
 
                     let mut rx_slice = &uart_rx_buf[..n];
-                    dbg!("rd_to rx_slice");
 
                     // Write rx_slice to 'inward' pipe, dropping bytes rather than blocking if
                     // the pipe is full
                     while !rx_slice.is_empty() {
-                        dbg!("rd_to rx_slice not empty");
-                        dbg!(rx_slice);
-
                         rx_slice = match self.inward.try_write(rx_slice) {
-                            Ok(w) => {
-                                dbg!("rd_to rx_slice try write ok");
-                                &rx_slice[w..]
-                            }
+                            Ok(w) => &rx_slice[w..],
                             Err(TryWriteError::Full) => {
-                                dbg!("rd_to rx_slice TryWriteError Full");
                                 // If the receive buffer is full (no SSH client, or network congestion) then
                                 // drop the oldest bytes from the pipe so we can still write the newest ones.
                                 let mut drop_buf = [0u8; UART_BUF_SZ];
@@ -91,34 +80,26 @@ impl BufferedUart {
                                 rx_slice
                             }
                         };
-                        dbg!("rd_to rx_slice updated");
-                        dbg!(rx_slice);
                     }
                 }
             };
             let rd_to = async {
                 loop {
-                    dbg!("BufferedUart run rd_to read");
                     let n = self.outward.read(&mut uart_tx_buf).await;
                     // TODO: handle write errors
-                    dbg!("BufferedUart run rd_to write_async");
                     let _ = uart_tx.write_async(&uart_tx_buf[..n]).await;
                 }
             };
-            dbg!("BufferedUart run select");
             select(rd_from, rd_to).await;
         }
     }
 
     pub async fn read(&self, buf: &mut [u8]) -> usize {
-        dbg!("BufferedUart read");
         self.inward.read(buf).await
     }
 
     pub async fn write(&self, buf: &[u8]) {
-        dbg!("BufferedUart write start");
         self.outward.write_all(buf).await;
-        dbg!("BufferedUart write complete");
     }
 
     /// Return the number of dropped bytes (if any) since the last check,
