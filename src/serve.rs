@@ -10,14 +10,14 @@ use crate::keys;
 use crate::serial::serial_bridge;
 
 // Embassy
-use embassy_futures::select::{select3, Either3};
+use embassy_futures::select::{Either3, select3};
 use embassy_net::tcp::TcpSocket;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 
 use heapless::String;
-use sunset::{error, ChanHandle, ServEvent, SignKey};
+use sunset::{ChanHandle, ServEvent, SignKey, error};
 use sunset_async::{ProgressHolder, SSHServer};
 
 use esp_println::{dbg, println};

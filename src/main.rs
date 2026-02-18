@@ -18,9 +18,9 @@ use esp_hal::{
     rng::Rng,
     uart::{Config, RxConfig, Uart},
 };
+use esp_println::dbg;
 use esp_rtos::embassy::InterruptExecutor;
 use esp_storage::FlashStorage;
-use esp_println::dbg;
 
 use embassy_executor::Spawner;
 
@@ -38,7 +38,6 @@ use ssh_stamp::{
     },
     storage::Fl,
 };
-
 
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
@@ -177,7 +176,7 @@ async fn main(spawner: Spawner) -> ! {
     // Pass pin_channel_ref into accept_requests (so SSH handlers can use it).
     // NOTE: accept_requests signature must accept this arg; if it doesn't,
     // thread the reference into whatever code spawns handle_ssh_client.
-    accept_requests(tcp_stack, uart_buf, pin_channel_ref).await;
+    accept_requests(tcp_stack, uart_buf).await;
 }
 
 static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();
