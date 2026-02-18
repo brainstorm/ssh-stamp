@@ -18,7 +18,7 @@ use sunset_sshwire_derive::*;
 
 use crate::config::SSHStampConfig;
 
-// TODO: Read the right partition and write there instead of hardcoding offset and size.
+// TODO: [Nice to have] Read the right partition and write there instead of hardcoding offset and size.
 pub const CONFIG_VERSION_SIZE: usize = 4;
 pub const CONFIG_HASH_SIZE: usize = 32;
 pub const CONFIG_AREA_SIZE: usize = 4096;
