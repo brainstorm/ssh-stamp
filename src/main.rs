@@ -238,13 +238,33 @@ pub struct TCPEnabled<'a> {
     pub uart_buf: &'a BufferedUart,
 }
 
+cfg_if::cfg_if!(if #[cfg(feature = "esp32")] {use embassy_net::IpListenEndpoint;});
 async fn tcp_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Error> {
     println!("HSM: tcp_enabled");
 
     let mut rx_buffer = [0u8; 1536];
     let mut tx_buffer = [0u8; 1536];
-    let tcp_socket = net::accept_requests(s.tcp_stack, &mut rx_buffer, &mut tx_buffer).await;
 
+    // TO FIX: ESP32 target needs tcp_socket.accept in main.rs - Gets blocked at bridge connection?
+    cfg_if::cfg_if!(
+        if #[cfg(feature = "esp32")] {
+            let mut tcp_socket = TcpSocket::new(s.tcp_stack, &mut rx_buffer, &mut tx_buffer);
+            println!("Waiting for SSH client...");
+            if let Err(e) = tcp_socket
+                .accept(IpListenEndpoint {
+                    addr: None,
+                    port: 22,
+                })
+                .await
+            {
+                println!("connect error: {:?}", e);
+                net::tcp_socket_disable().await;
+            }
+            println!("Connected, port 22");
+        } else {
+            let tcp_socket = net::accept_requests(s.tcp_stack, &mut rx_buffer, &mut tx_buffer).await;
+        }
+    );
     let tcp_enabled_struct = TCPEnabled {
         config: s.config,
         tcp_socket: tcp_socket,
