@@ -66,13 +66,14 @@ async fn main(spawner: Spawner) -> ! {
         .unwrap();
 
     // Set up software buffered UART to run in a higher priority InterruptExecutor
+    // Must be higher priority than esp_rtos (Priority1)
     let uart_buf = UART_BUF.init_with(BufferedUart::new);
     let software_interrupts = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     let interrupt_executor =
         INT_EXECUTOR.init_with(|| InterruptExecutor::new(software_interrupts.software_interrupt0));
     cfg_if::cfg_if! {
         if #[cfg(any(feature = "esp32", feature = "esp32s2", feature = "esp32s3"))] {
-            let interrupt_spawner = interrupt_executor.start(Priority::Priority1);
+            let interrupt_spawner = interrupt_executor.start(Priority::Priority3);
         } else {
             let interrupt_spawner = interrupt_executor.start(Priority::Priority10);
         }
