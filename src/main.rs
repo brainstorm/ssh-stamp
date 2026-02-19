@@ -12,25 +12,19 @@ use core::result::Result::Ok;
 use core::future::Future;
 use embassy_executor::Spawner;
 use embassy_futures::select::{Either3, select3};
-use embassy_net::IpListenEndpoint;
 use embassy_net::{Stack, tcp::TcpSocket};
 use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
-use esp_hal::gpio::AnyPin;
 use esp_hal::interrupt::{Priority, software::SoftwareInterruptControl};
 use esp_hal::system::software_reset;
-use esp_hal::{peripherals::UART1, peripherals::WIFI, rng::Rng};
+use esp_hal::{peripherals::WIFI, rng::Rng};
 use esp_println::println;
 use esp_radio::Controller;
 use esp_rtos::embassy::InterruptExecutor;
 use ssh_stamp::{
     config::SSHStampConfig,
     espressif::{
-        buffered_uart,
-        buffered_uart::BufferedUart,
-        // buffered_uart::GPIOS,
-        // net::accept_requests,
-        net,
-        rng,
+        buffered_uart::{self, BufferedUart, GPIOS, UART_BUF, UART_BUFFER_SIZE, uart_task},
+        net, rng,
     },
     serve,
 };
@@ -53,7 +47,6 @@ pub struct SshStampInit<'a> {
     pub rng: Rng,
     pub wifi: WIFI<'a>,
     pub config: &'a SunsetMutex<SSHStampConfig>,
-    // pub gpios: GPIOS<'a>,
     pub uart_buf: &'a BufferedUart,
     pub spawner: Spawner,
 }
@@ -187,6 +180,7 @@ pub struct PeripheralsEnabled<'a> {
     pub uart_buf: &'a BufferedUart,
     pub spawner: Spawner,
 }
+
 async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Error> {
     println!("HSM: peripherals_enabled");
     let controller = esp_radio::init().unwrap();
@@ -286,7 +280,6 @@ pub struct SocketEnabled<'a> {
     pub uart_buf: &'a BufferedUart,
 }
 
-use buffered_uart::UART_BUFFER_SIZE;
 async fn socket_enabled<'a>(s: TCPEnabled<'a>) -> Result<(), sunset::Error> {
     println!("HSM: socket_enabled");
     // loop {
@@ -421,10 +414,7 @@ where
 
     // loop {
     // let uart = buffered_uart::uart_task(s.uart_buff, s.uart1, &s.config, s.gpios);
-    // Signal for uart task to configure pins and run.
-    UART_SIGNAL.signal(1);
     Timer::after(Duration::from_millis(500)).await;
-    println!("HSM: UART_SIGNAL sent");
 
     let uart_buffer_ready_struct = UartBufferReady {
         tcp_socket: s.tcp_socket,
@@ -514,153 +504,4 @@ where
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
-}
-
-use esp_hal::uart::{RxConfig, Uart};
-
-#[derive(Default)]
-pub struct GPIOS<'a> {
-    pub gpio9: Option<AnyPin<'a>>,
-    pub gpio10: Option<AnyPin<'a>>,
-    pub gpio11: Option<AnyPin<'a>>,
-    pub gpio12: Option<AnyPin<'a>>,
-    pub gpio13: Option<AnyPin<'a>>,
-    pub gpio14: Option<AnyPin<'a>>,
-    pub gpio20: Option<AnyPin<'a>>,
-    pub gpio21: Option<AnyPin<'a>>,
-}
-
-pub static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();
-
-pub async fn uart_buffer_wait_for_initialisation() -> &'static BufferedUart {
-    UART_BUF.init_with(BufferedUart::new)
-}
-
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::signal::Signal;
-pub static UART_SIGNAL: Signal<CriticalSectionRawMutex, u8> = Signal::new();
-// use embassy_time::{Duration, Timer};
-// use esp_hal::gpio::AnyPin;
-use esp_hal::uart::Config;
-use esp_println::dbg;
-#[embassy_executor::task]
-pub async fn uart_task(
-    uart_buf: &'static BufferedUart,
-    uart1: UART1<'static>,
-    _config: &'static SunsetMutex<SSHStampConfig>,
-    gpios: GPIOS<'static>,
-) -> () {
-    dbg!("Configuring UART");
-    Timer::after(Duration::from_millis(100)).await;
-    // Wait until ssh complete
-    UART_SIGNAL.wait().await;
-    dbg!("UART signal recieved");
-    Timer::after(Duration::from_millis(100)).await;
-
-    // Temporarily hardcoded pin numbers. Restore once ServEvent::SessionEnv properly updates config
-    // let config_lock = config.lock().await;
-    // let rx: u8 = config_lock.uart_pins.rx;
-    // let tx: u8 = config_lock.uart_pins.tx;
-    cfg_if::cfg_if!(
-        if #[cfg(feature = "esp32")] {
-            let rx: u8 = 13;
-            let tx: u8 = 14;
-        } else if #[cfg(feature = "esp32c2")] {
-            let rx: u8 = 9;
-            let tx: u8 = 10;
-        } else if #[cfg(feature = "esp32c3")] {
-            let rx: u8 = 20;
-            let tx: u8 = 21;
-        } else {
-            let rx: u8 = 10;
-            let tx: u8 = 11;
-        }
-    );
-
-    println!("Config Read - RX Pin: {}  TX Pin: {}", rx, tx);
-    if rx != tx {
-        let mut _holder9 = Some(gpios.gpio9);
-        let mut _holder10 = Some(gpios.gpio10);
-        let mut _holder11 = Some(gpios.gpio11);
-        let mut _holder13 = Some(gpios.gpio13);
-        let mut _holder14 = Some(gpios.gpio14);
-        let mut _holder20 = Some(gpios.gpio20);
-        let mut _holder21 = Some(gpios.gpio21);
-        // Not every GPIO is available for every target.
-        // TODO: Merge all targets to only match on available GPIO
-        cfg_if::cfg_if!(
-            if #[cfg(feature = "esp32")] {
-                let rx_pin = match rx {
-                    13 => _holder13.take().unwrap().unwrap(),
-                    14 => _holder14.take().unwrap().unwrap(),
-                    _ => _holder13.take().unwrap().unwrap(),
-                };
-                let tx_pin = match tx {
-                    13 => _holder13.take().unwrap().unwrap(),
-                    14 => _holder14.take().unwrap().unwrap(),
-                    _ => _holder13.take().unwrap().unwrap(),
-                };
-            } else if #[cfg(feature = "esp32c2")] {
-                let rx_pin = match rx {
-                    9 => _holder9.take().unwrap().unwrap(),
-                    10 => _holder10.take().unwrap().unwrap(),
-                    _ => _holder9.take().unwrap().unwrap(),
-                };
-                let tx_pin = match tx {
-                    9 => _holder9.take().unwrap().unwrap(),
-                    10 => _holder10.take().unwrap().unwrap(),
-                    _ => _holder10.take().unwrap().unwrap(),
-                };
-            } else if #[cfg(feature = "esp32c3")] {
-                let rx_pin = match rx {
-                    20 => _holder20.take().unwrap().unwrap(),
-                    21 => _holder21.take().unwrap().unwrap(),
-                    _ => _holder20.take().unwrap().unwrap(),
-                };
-                let tx_pin = match tx {
-                    20 => _holder20.take().unwrap().unwrap(),
-                    21 => _holder21.take().unwrap().unwrap(),
-                    _ => _holder21.take().unwrap().unwrap(),
-                };
-            } else {
-                let rx_pin = match rx {
-                    10 => _holder10.take().unwrap().unwrap(),
-                    11 => _holder11.take().unwrap().unwrap(),
-                    _ => _holder10.take().unwrap().unwrap(),
-                };
-                let tx_pin = match tx {
-                    10 => _holder10.take().unwrap().unwrap(),
-                    11 => _holder11.take().unwrap().unwrap(),
-                    _ => _holder11.take().unwrap().unwrap(),
-                };
-            }
-        );
-
-        dbg!("UART config");
-        Timer::after(Duration::from_millis(100)).await;
-
-        // Hardware UART setup
-        let uart_config = Config::default().with_rx(
-            RxConfig::default()
-                .with_fifo_full_threshold(16)
-                .with_timeout(1),
-        );
-
-        dbg!("UART setup pins");
-        Timer::after(Duration::from_millis(100)).await;
-
-        let uart = Uart::new(uart1, uart_config)
-            .unwrap()
-            .with_rx(rx_pin)
-            .with_tx(tx_pin)
-            .into_async();
-
-        // Run the main buffered TX/RX loop
-        dbg!("uart_task running UART");
-        Timer::after(Duration::from_millis(100)).await;
-        uart_buf.run(uart).await;
-    }
-    // TODO: Pin config error
-    dbg!("uart_task Pin config error! Using the same pin number for RX and TX!");
-    ()
 }

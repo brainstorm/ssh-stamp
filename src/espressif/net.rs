@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use crate::config::SSHStampConfig;
+use crate::espressif::buffered_uart::BufferedUart;
+use crate::settings::{DEFAULT_IP, DEFAULT_SSID};
 use core::net::Ipv4Addr;
 use core::net::SocketAddrV4;
 use core::str::FromStr;
@@ -25,12 +28,6 @@ use esp_radio::wifi::WifiEvent;
 use esp_radio::wifi::{AccessPointConfig, ModeConfig, WifiApState, WifiController};
 use heapless::String;
 use sunset_async::SunsetMutex;
-
-use crate::config::SSHStampConfig;
-use crate::settings::{DEFAULT_IP, DEFAULT_SSID};
-
-use super::buffered_uart::BufferedUart;
-
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {
     ($t:ty,$val:expr) => {{

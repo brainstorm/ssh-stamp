@@ -19,6 +19,7 @@ use esp_hal::system::software_reset;
 use heapless::String;
 use sunset_async::SunsetMutex;
 // use sunset::sshwire::SSHEncode;
+use crate::espressif::buffered_uart::UART_SIGNAL;
 use sunset::{ChanHandle, ServEvent, SignKey, error};
 use sunset_async::{ProgressHolder, SSHServer};
 
@@ -81,6 +82,9 @@ pub async fn connection_loop<'a>(
                     debug_assert!(ch.num() == a.channel());
                     a.succeed()?;
                     dbg!("We got shell");
+                    // Signal for uart task to configure pins and run. Value is irrelevant.
+                    UART_SIGNAL.signal(1);
+                    println!("Connection loop: UART_SIGNAL sent");
                     let _ = chan_pipe.try_send(SessionType::Bridge(ch));
                 } else {
                     a.fail()?;
