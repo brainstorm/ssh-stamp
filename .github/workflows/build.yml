@@ -10,8 +10,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build ${{ matrix.device.soc }}
+  espressif-targets:
+    name: Espressif target ${{ matrix.device.soc }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -54,3 +54,18 @@ jobs:
         run: |
           cargo +${{ matrix.device.toolchain }} clippy --features ${{ matrix.device.soc }} --target riscv32imac-unknown-none-elf -- -D warnings
           cargo +${{ matrix.device.toolchain }} fmt -- --check
+  ota-packer:
+    name: OTA Packer
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Stable Rust Toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          target: riscv32imac-unknown-none-elf
+          toolchain: stable
+      - name: Build utility
+        run: cargo build-ota-packer
