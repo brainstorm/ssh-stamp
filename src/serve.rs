@@ -20,10 +20,9 @@ use heapless::String;
 use sunset_async::SunsetMutex;
 // use sunset::sshwire::SSHEncode;
 use crate::espressif::buffered_uart::UART_SIGNAL;
+use esp_println::{dbg, println};
 use sunset::{ChanHandle, ServEvent, SignKey, error};
 use sunset_async::{ProgressHolder, SSHServer};
-
-use esp_println::{dbg, println};
 
 pub enum SessionType {
     Bridge(ChanHandle),
@@ -217,7 +216,7 @@ use crate::espressif::buffered_uart::BufferedUart;
 use crate::serial::serial_bridge;
 use sunset_async::ChanInOut;
 
-pub async fn bridge_wait_for_initialisation<'a, 'b>(
+pub async fn handle_ssh_client<'a, 'b>(
     uart_buff: &'a BufferedUart,
     ssh_server: &'b SSHServer<'a>,
     chan_pipe: &'b Channel<NoopRawMutex, SessionType, 1>,

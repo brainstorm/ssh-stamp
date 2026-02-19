@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::config::SSHStampConfig;
-use crate::espressif::buffered_uart::BufferedUart;
 use crate::settings::{DEFAULT_IP, DEFAULT_SSID};
 use core::net::Ipv4Addr;
 use core::net::SocketAddrV4;
