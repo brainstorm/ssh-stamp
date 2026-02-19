@@ -98,7 +98,12 @@ pub async fn ap_stack_disable() -> () {
     software_reset();
 }
 
-pub async fn create_tcp_socket<'a>(
+pub async fn tcp_socket_disable() -> () {
+    // drop tcp stack
+    software_reset();
+}
+
+pub async fn accept_requests<'a>(
     tcp_stack: Stack<'a>,
     rx_buffer: &'a mut [u8],
     tx_buffer: &'a mut [u8],
@@ -114,46 +119,12 @@ pub async fn create_tcp_socket<'a>(
         .await
     {
         println!("connect error: {:?}", e);
+        // continue;
         tcp_socket_disable().await;
     }
+    println!("Connected, port 22");
+
     tcp_socket
-}
-
-pub async fn tcp_socket_disable() -> () {
-    // drop tcp stack
-    software_reset();
-}
-
-pub async fn accept_requests<'a>(stack: Stack<'a>, _uart: &BufferedUart) -> ! {
-    // let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
-    // let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
-    let mut rx_buffer = [0u8; 1536];
-    let mut tx_buffer = [0u8; 1536];
-    loop {
-        // let mut socket = TcpSocket::new(stack, rx_buffer, tx_buffer);
-        let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
-
-        println!("Waiting for SSH client...");
-
-        if let Err(e) = socket
-            .accept(IpListenEndpoint {
-                addr: None,
-                port: 22,
-            })
-            .await
-        {
-            println!("connect error: {:?}", e);
-            continue;
-        }
-
-        println!("Connected, port 22");
-        // match crate::serve::handle_ssh_client(&mut socket, uart, pin_channel_ref).await {
-        //     Ok(_) => (),
-        //     Err(e) => {
-        //         println!("SSH client fatal error: {}", e);
-        //     }
-        // };
-    }
 }
 
 #[embassy_executor::task]

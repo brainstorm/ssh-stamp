@@ -241,23 +241,11 @@ pub struct TCPEnabled<'a> {
 
 async fn tcp_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Error> {
     println!("HSM: tcp_enabled");
+
     let mut rx_buffer = [0u8; 1536];
     let mut tx_buffer = [0u8; 1536];
-    let mut tcp_socket = TcpSocket::new(s.tcp_stack, &mut rx_buffer, &mut tx_buffer);
+    let tcp_socket = net::accept_requests(s.tcp_stack, &mut rx_buffer, &mut tx_buffer).await;
 
-    println!("Waiting for SSH client...");
-    if let Err(e) = tcp_socket
-        .accept(IpListenEndpoint {
-            addr: None,
-            port: 22,
-        })
-        .await
-    {
-        println!("connect error: {:?}", e);
-        net::tcp_socket_disable().await;
-    }
-    // let tcp_socket = net::create_tcp_socket(s.tcp_stack, &mut rx_buffer, &mut tx_buffer);
-    println!("Connected, port 22");
     let tcp_enabled_struct = TCPEnabled {
         config: s.config,
         tcp_socket: tcp_socket,
