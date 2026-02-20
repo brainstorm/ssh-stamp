@@ -1,0 +1,23 @@
+[package]
+name = "ota"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = []
+std = []
+
+[dependencies]
+sunset.workspace = true
+sunset-async.workspace = true
+
+log.workspace = true
+sha2.workspace = true
+
+# Only for helpers and tests
+[target.'cfg(not(target_os = "none"))'.dependencies]
+clap = "4.5"
+
+[[bin]]
+name = "ota-packer"
+path = "src/bin/ota-packer.rs"

@@ -1,6 +1,10 @@
 #![no_std]
 #![no_main]
 // #![forbid(unsafe_code)]
+
+// SPDX-FileCopyrightText: 2025 Roman Valls, 2025
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
 #[deny(clippy::mem_forget)] // avoids any UB, forces use of Drop impl instead
 pub mod config;
 pub mod errors;

@@ -17,6 +17,7 @@ use storage::flash::FlashBuffer;
 use sunset::sshwire::{self, OwnOrBorrow};
 use sunset_sshwire_derive::*;
 
+// TODO: [Nice to have] Read the right partition and write there instead of hardcoding offset and size.
 pub const CONFIG_VERSION_SIZE: usize = 4;
 pub const CONFIG_HASH_SIZE: usize = 32;
 pub const CONFIG_AREA_SIZE: usize = 4096;
@@ -47,12 +48,16 @@ impl FlashConfig<'_> {
             println!("Failed to read partition table: {:?}", e);
             SSHStampError::FlashStorageError
         })?;
-        let nvs = pt
+
+        let Some(nvs) = pt
             .find_partition(partitions::PartitionType::Data(
                 partitions::DataPartitionSubType::Nvs,
             ))
-            .unwrap()
-            .unwrap();
+            .map_err(|_| SSHStampError::FlashStorageError)?
+        else {
+            println!("Failed to find NVS partition in partition table");
+            return Err(SSHStampError::FlashStorageError);
+        };
 
         let nvs_partition = nvs.as_embedded_storage(&mut fb.flash);
 

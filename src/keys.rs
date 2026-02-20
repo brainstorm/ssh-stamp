@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Roman Valls, 2025
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // FIXME: For demo purposes, there should be a key handler/generator on first connection.
 pub(crate) const HOST_SECRET_KEY: &[u8; 400] = b"
 -----BEGIN OPENSSH PRIVATE KEY-----

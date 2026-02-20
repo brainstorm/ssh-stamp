@@ -10,8 +10,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build ${{ matrix.device.soc }}
+  espressif-targets:
+    name: Espressif target ${{ matrix.device.soc }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -38,13 +38,13 @@ jobs:
         with:
           target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
           toolchain: stable
-          components: rust-src
+          components: rust-src, clippy, rustfmt
       - name: Setup Rust toolchain for Xtensa
         if: ${{ contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.device.soc) }}
         uses: esp-rs/xtensa-toolchain@v1.5
         with:
           ldproxy: false
-          version: 1.86.0.0
+          version: 1.88.0.0  # bumped from 1.86.0.0 since darling, esp-hal, etc require >=1.88
 
       - name: Build project
         run: cargo +${{ matrix.device.toolchain }} build-${{ matrix.device.soc }}
@@ -54,3 +54,18 @@ jobs:
         run: |
           cargo +${{ matrix.device.toolchain }} clippy --features ${{ matrix.device.soc }} --target riscv32imac-unknown-none-elf -- -D warnings
           cargo +${{ matrix.device.toolchain }} fmt -- --check
+  ota-packer:
+    name: OTA Packer
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Stable Rust Toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          target: riscv32imac-unknown-none-elf
+          toolchain: stable
+      - name: Build utility
+        run: cargo build-ota-packer
