@@ -39,59 +39,94 @@ A "low level to SSH Swiss army knife".
 
 Rust versions are controlled via `rust-toolchain.toml` and the equivalent defined on the CI workflow.
 
-Required for all targets:
+On a fresh system the following should be enough to build and run on the relevant ESP32 dev boards.
+
+## Required for all targets:
 ```
 rustup toolchain install stable --component rust-src
 cargo install espflash
 ```
 
-On a fresh system the following should be enough to build and run on an ESP32-C6 dev board.
+## ESP32-C6
+
+
 ```
 rustup target add riscv32imac-unknown-none-elf
 cargo build-esp32c6
 cargo run-esp32c6
 ```
 
-Build and run for ESP32-C2 / ESP32-C3:
+## ESP32-C2 / ESP32-C3
 ```
-rustup target add riscv32imc-unknown-none-elf
+rustup target add riscv32imc-unknown-none-elf`
+```
+### ESP32-C2
+```
 cargo build-esp32c2
-cargo build-esp32c3
 cargo run-esp32c2
+```
+### ESP32-C3
+```
+cargo build-esp32c2
 cargo run-esp32c3
 ```
 
-Build for ESP32 / ESP32-S2 / ESP32-S3 (Xtensa Cores) -
+
+## ESP32 / ESP32-S2 / ESP32-S3 (Xtensa Cores)
 Install esp toolchain first: https://github.com/esp-rs/espup
 ```
-cargo install espup
-espup install
-$HOME/export-esp.sh
-rustup override set esp
+cargo install espup                                      
+espup install                                            
+source $HOME/export-esp.sh                                                         
+```
+
+### ESP32
+```
+cargo +esp build-esp32
+cargo +esp run-esp32
+```
+### ESP32-S2
+```
+cargo +esp build-esp32s2
+cargo +esp run-esp32s2
+```
+### ESP32-S3
+```
+cargo +esp build-esp32s3
+cargo +esp run-esp32s3
+```
+
+### Using rustup toolchain override (Doesn't require `+esp`)
+To set rustup override:
+```
+rustup override set esp   
+```
+To remove rustup override:
+```
+cargo override unset
+```
+Build:
+```
 cargo build-esp32
 cargo build-esp32s2
 cargo build-esp32s3
 ```
-Running on the target:
+Run:
 ```
 cargo run-esp32
 cargo run-esp32s2
 cargo run-esp32s3
 ```
 
-Alternatively to not use rustup override:
-```
-cargo +esp build-esp32
-cargo +esp build-esp32s2
-cargo +esp build-esp32s3
-```
 
-Running on the target:
-```
-cargo +esp run-esp32
-cargo +esp run-esp32s2
-cargo +esp run-esp32s3
-```
+# Default UART Pins
+| Target  | RX | TX | 
+| ----    | -- | -- |
+| ESP32   | 13 | 14 | 
+| ESP32S2 | 11 | 10 | 
+| ESP32C2 |  9 | 10 |
+| ESP32C3 | 20 | 21 |
+| ESP32C6 | 11 | 10 |
 
 # Example usecases
 
@@ -117,3 +152,11 @@ cargo cyclonedx -f json --manifest-path ./docs/
 [nlnet-grant]: https://nlnet.nl/project/SSH-Stamp/
 [openwrt_mediatek_no_monitor]: https://github.com/openwrt/openwrt/issues/16279
 [nlnet_zero_commons]: ./docs/nlnet/zero_commons_logo.svg
+
+/dev/ttyUSB0 is ESP32
+
+USB to UART
+sudo minicom --device /dev/ttyUSB1
+
+
+https://docs.espressif.com/projects/esp-matter/en/latest/esp32/optimizations.html
