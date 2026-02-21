@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::config::SSHStampConfig;
-use crate::keys;
 use crate::settings::UART_BUFFER_SIZE;
 use crate::store;
 use core::option::Option::{self, None, Some};
@@ -20,7 +19,7 @@ use sunset_async::SunsetMutex;
 // use sunset::sshwire::SSHEncode;
 use crate::espressif::buffered_uart::UART_SIGNAL;
 use esp_println::{dbg, println};
-use sunset::{ChanHandle, ServEvent, SignKey, error};
+use sunset::{ChanHandle, ServEvent, error};
 use sunset_async::{ProgressHolder, SSHServer};
 
 pub enum SessionType {
@@ -97,8 +96,8 @@ pub async fn connection_loop(
             }
             ServEvent::Hostkeys(h) => {
                 println!("ServEvent::Hostkeys");
-                let signkey: SignKey = SignKey::from_openssh(keys::HOST_SECRET_KEY)?;
-                h.hostkeys(&[&signkey])?;
+                let config_guard = config.lock().await;
+                h.hostkeys(&[&config_guard.hostkey])?;
             }
             ServEvent::PasswordAuth(a) => {
                 println!("ServEvent::PasswordAuth");
