@@ -9,7 +9,6 @@ use crate::store;
 use core::option::Option::{self, None, Some};
 use core::result::Result;
 use storage::flash;
-
 // Embassy
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
@@ -29,10 +28,10 @@ pub enum SessionType {
     Sftp(ChanHandle),
 }
 
-pub async fn connection_loop<'a>(
+pub async fn connection_loop(
     serv: &SSHServer<'_>,
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
-    config: &'a SunsetMutex<SSHStampConfig>,
+    config: &SunsetMutex<SSHStampConfig>,
 ) -> Result<(), sunset::Error> {
     let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
     let mut session: Option<ChanHandle> = None;
@@ -202,8 +201,7 @@ pub async fn ssh_wait_for_initialisation<'server>(
     inbuf: &'server mut [u8; UART_BUFFER_SIZE],
     outbuf: &'server mut [u8; UART_BUFFER_SIZE],
 ) -> SSHServer<'server> {
-    let ssh_server = SSHServer::new(inbuf, outbuf);
-    ssh_server
+    SSHServer::new(inbuf, outbuf)
 }
 
 pub async fn ssh_disable() -> () {
@@ -222,27 +220,23 @@ pub async fn handle_ssh_client<'a, 'b>(
     chan_pipe: &'b Channel<NoopRawMutex, SessionType, 1>,
 ) -> Result<(), sunset::Error> {
     dbg!("Preparing bridge");
-    let bridge = {
-        let chan_pipe = chan_pipe;
-        let session_type = chan_pipe.receive().await;
-        dbg!("Checking bridge session type");
-        match session_type {
-            SessionType::Bridge(ch) => {
-                dbg!("Handling bridge session");
-                let stdio: ChanInOut<'_> = ssh_server.stdio(ch).await?;
-                let stdio2 = stdio.clone();
-                dbg!("Starting bridge");
-                serial_bridge(stdio, stdio2, uart_buff).await?
-            }
-            SessionType::Sftp(_ch) => {
-                dbg!("Handling SFTP session");
-                // Handle SFTP session
-                //     todo!()
-            }
-        };
-        Ok(())
+    let session_type = chan_pipe.receive().await;
+    dbg!("Checking bridge session type");
+    match session_type {
+        SessionType::Bridge(ch) => {
+            dbg!("Handling bridge session");
+            let stdio: ChanInOut<'_> = ssh_server.stdio(ch).await?;
+            let stdio2 = stdio.clone();
+            dbg!("Starting bridge");
+            serial_bridge(stdio, stdio2, uart_buff).await?
+        }
+        SessionType::Sftp(_ch) => {
+            dbg!("Handling SFTP session");
+            // Handle SFTP session
+            //     todo!()
+        }
     };
-    bridge
+    Ok(())
 }
 
 pub async fn bridge_disable() -> () {

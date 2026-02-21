@@ -32,7 +32,7 @@ macro_rules! mk_static {
     ($t:ty,$val:expr) => {{
         static STATIC_CELL: static_cell::StaticCell<$t> = static_cell::StaticCell::new();
         #[deny(unused_attributes)]
-        let x = STATIC_CELL.uninit().write(($val));
+        let x = STATIC_CELL.uninit().write($val);
         x
     }};
 }
@@ -53,7 +53,7 @@ pub async fn if_up(
     let res = wifi_controller.set_config(&ap_config);
     println!("wifi_set_configuration returned {:?}", res);
 
-    let gw_ip_addr_ipv4 = DEFAULT_IP.clone();
+    let gw_ip_addr_ipv4 = *DEFAULT_IP;
 
     let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(gw_ip_addr_ipv4, 24),

@@ -271,5 +271,4 @@ pub async fn uart_task(
     }
     // TODO: Pin config error
     dbg!("uart_task Pin config error! Using the same pin number for RX and TX!");
-    ()
 }

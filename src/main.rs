@@ -97,20 +97,31 @@ async fn main(spawner: Spawner) -> ! {
     println!("Initialising gpio ");
     // Only certain GPIO are available for each target.
     // TODO: Confirm working pins on every target.
-    let mut gpios: GPIOS = Default::default();
     cfg_if::cfg_if!(
         if #[cfg(any(feature = "esp32"))]{
-            gpios.gpio13 = Some(peripherals.GPIO13.into());
-            gpios.gpio14 = Some(peripherals.GPIO14.into());
+            let gpios = GPIOS {
+            gpio13: Some(peripherals.GPIO13.into()),
+            gpio14: Some(peripherals.GPIO14.into()),
+            .. Default::default()
+            };
         } else if #[cfg(feature = "esp32c2")] {
-            gpios.gpio9 = Some(peripherals.GPIO9.into());
-            gpios.gpio10 = Some(peripherals.GPIO10.into());
+            let gpios = GPIOS {
+            gpio9: Some(peripherals.GPIO9.into()),
+            gpio10: Some(peripherals.GPIO10.into()),
+            .. Default::default()
+            };
         } else if #[cfg(feature = "esp32c3")] {
-            gpios.gpio20 = Some(peripherals.GPIO20.into());
-            gpios.gpio21 = Some(peripherals.GPIO21.into());
+            let gpios = GPIOS {
+            gpio20: Some(peripherals.GPIO20.into()),
+            gpio21: Some(peripherals.GPIO21.into()),
+            .. Default::default()
+            };
         } else {
-            gpios.gpio10 = Some(peripherals.GPIO10.into());
-            gpios.gpio11 = Some(peripherals.GPIO11.into());
+            let gpios = GPIOS {
+            gpio10: Some(peripherals.GPIO10.into()),
+            gpio11: Some(peripherals.GPIO11.into()),
+            .. Default::default()
+            };
         }
     );
 
@@ -149,15 +160,15 @@ async fn main(spawner: Spawner) -> ! {
     // Use the same config reference for UART task.
     // Pass GPIO peripherals which can then be selected from config values
     interrupt_spawner
-        .spawn(uart_task(uart_buf, peripherals.UART1, &config, gpios))
+        .spawn(uart_task(uart_buf, peripherals.UART1, config, gpios))
         .unwrap();
 
     let peripherals_enabled_struct = SshStampInit {
-        rng: rng,
+        rng,
         wifi: peripherals.WIFI,
-        config: config,
-        spawner: spawner,
-        uart_buf: uart_buf,
+        config,
+        spawner,
+        uart_buf,
     };
 
     match peripherals_enabled(peripherals_enabled_struct).await {
@@ -189,7 +200,7 @@ async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Err
         rng: s.rng,
         wifi: s.wifi,
         config: s.config,
-        controller: controller,
+        controller,
         uart_buf: s.uart_buf,
         spawner: s.spawner,
     };
@@ -221,7 +232,7 @@ pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(
         config: s.config,
         rng: s.rng,
         uart_buf: s.uart_buf,
-        tcp_stack: tcp_stack,
+        tcp_stack,
     };
     match tcp_enabled(wifi_controller_enabled_stack).await {
         Ok(_) => (),
@@ -268,7 +279,7 @@ async fn tcp_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Err
     );
     let tcp_enabled_struct = TCPEnabled {
         config: s.config,
-        tcp_socket: tcp_socket,
+        tcp_socket,
         uart_buf: s.uart_buf,
     };
     match socket_enabled(tcp_enabled_struct).await {
@@ -301,7 +312,7 @@ async fn socket_enabled<'a>(s: TCPEnabled<'a>) -> Result<(), sunset::Error> {
     let socket_enabled_struct = SocketEnabled {
         config: s.config,
         tcp_socket: s.tcp_socket,
-        ssh_server: ssh_server,
+        ssh_server,
         uart_buf: s.uart_buf,
     };
     match ssh_enabled(socket_enabled_struct).await {
@@ -334,7 +345,7 @@ async fn ssh_enabled<'a>(s: SocketEnabled<'a>) -> Result<(), sunset::Error> {
     println!("HSM: Starting channel pipe");
     let chan_pipe = Channel::<NoopRawMutex, serve::SessionType, 1>::new();
     println!("HSM: Started channel pipe. Calling connection_loop from ssh_enabled");
-    let connection = serve::connection_loop(&s.ssh_server, &chan_pipe, &s.config);
+    let connection = serve::connection_loop(&s.ssh_server, &chan_pipe, s.config);
     println!("HSM: Started connection loop");
 
     let ssh_enabled_struct = SshEnabled {
@@ -381,7 +392,7 @@ where
 
     let uart_enabled_struct = ClientConnected {
         ssh_server: s.ssh_server,
-        bridge: bridge,
+        bridge,
         connection_loop: s.connection_loop,
         tcp_socket: s.tcp_socket,
     };

@@ -102,7 +102,7 @@ impl SSHStampConfig {
     }
 
     pub fn set_admin_pw(&mut self, pw: Option<&str>) -> Result<()> {
-        self.admin_pw = pw.map(|p| PwHash::new(p)).transpose()?;
+        self.admin_pw = pw.map(PwHash::new).transpose()?;
         Ok(())
     }
 
@@ -215,7 +215,7 @@ where
             return Err(WireError::PacketWrong);
         }
         let gw: Option<u32> = dec_option(s)?;
-        let gateway = gw.map(|gw| Ipv4Addr::from_bits(gw));
+        let gateway = gw.map(Ipv4Addr::from_bits);
         Ok(StaticConfigV4 {
             address: Ipv4Cidr::new(ad, prefix),
             gateway,
@@ -366,14 +366,14 @@ impl PwHash {
             return false;
         }
         let prehash = Self::prehash(pw, &self.salt);
-        let check_hash = bcrypt::bcrypt(self.cost as u32, self.salt.clone(), &prehash);
+        let check_hash = bcrypt::bcrypt(self.cost as u32, self.salt, &prehash);
         check_hash.ct_eq(&self.hash).into()
     }
 
     fn prehash(pw: &str, salt: &[u8]) -> [u8; 32] {
         // OK unwrap: can't fail, accepts any length
         // TODO: Generalise, not only Espressif esp_hal
-        let mut prehash = Hmac::<Sha256>::new_from_slice(&salt).unwrap();
+        let mut prehash = Hmac::<Sha256>::new_from_slice(salt).unwrap();
         prehash.update(pw.as_bytes());
         prehash.finalize().into_bytes().into()
     }
