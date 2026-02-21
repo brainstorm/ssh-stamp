@@ -10,6 +10,7 @@ pub(crate) const DEFAULT_SSID: &str = "ssh-stamp";
 pub(crate) const KEY_SLOTS: usize = 1; // TODO: Document whether this a "reasonable default"? Justify why?
 //pub(crate) const PASSWORD_AUTHENTICATION: bool = true;
 pub(crate) const DEFAULT_IP: &Ipv4Addr = &Ipv4Addr::new(192, 168, 4, 1);
+pub const UART_BUFFER_SIZE: usize = 4096;
 
 // UART settings
 //pub(crate) const BAUD_RATE: u32 = 115200;

@@ -127,7 +127,6 @@ impl Default for BufferedUart {
     }
 }
 
-pub const UART_BUFFER_SIZE: usize = 4096;
 
 pub async fn uart_buffer_disable() -> () {
     // disable uart buffer

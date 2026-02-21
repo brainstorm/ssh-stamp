@@ -2,12 +2,12 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use core::option::Option::{self, None, Some};
-use core::result::Result;
-
 use crate::config::SSHStampConfig;
 use crate::keys;
+use crate::settings::UART_BUFFER_SIZE;
 use crate::store;
+use core::option::Option::{self, None, Some};
+use core::result::Result;
 use storage::flash;
 
 // Embassy
@@ -199,8 +199,8 @@ pub async fn connection_disable() -> () {
 }
 
 pub async fn ssh_wait_for_initialisation<'server>(
-    inbuf: &'server mut [u8; crate::espressif::buffered_uart::UART_BUFFER_SIZE],
-    outbuf: &'server mut [u8; crate::espressif::buffered_uart::UART_BUFFER_SIZE],
+    inbuf: &'server mut [u8; UART_BUFFER_SIZE],
+    outbuf: &'server mut [u8; UART_BUFFER_SIZE],
 ) -> SSHServer<'server> {
     let ssh_server = SSHServer::new(inbuf, outbuf);
     ssh_server

@@ -23,10 +23,11 @@ use esp_rtos::embassy::InterruptExecutor;
 use ssh_stamp::{
     config::SSHStampConfig,
     espressif::{
-        buffered_uart::{BufferedUart, GPIOS, UART_BUF, UART_BUFFER_SIZE, uart_task},
+        buffered_uart::{BufferedUart, GPIOS, UART_BUF, uart_task},
         net, rng,
     },
     serve,
+    settings::UART_BUFFER_SIZE,
 };
 use static_cell::StaticCell;
 use storage::flash;
