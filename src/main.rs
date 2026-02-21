@@ -57,9 +57,9 @@ async fn main(spawner: Spawner) -> ! {
     println!("HSM: main");
     cfg_if::cfg_if!(
         if #[cfg(feature = "esp32s2")] {
-            // TODO: This heap size will crash at runtime, we need to fix this
+            // TODO: This heap size will crash at runtime (only for the ESP32S2), we need to fix this
             // applying ideas from https://github.com/brainstorm/ssh-stamp/pull/41#issuecomment-2964775170
-                esp_alloc::heap_allocator!(size: 69 * 1024);
+            esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 72 * 1024);
         } else {
                 esp_alloc::heap_allocator!(size: 72 * 1024);
         }
