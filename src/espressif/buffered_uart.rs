@@ -127,7 +127,6 @@ impl Default for BufferedUart {
     }
 }
 
-
 pub async fn uart_buffer_disable() -> () {
     // disable uart buffer
     software_reset();

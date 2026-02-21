@@ -12,7 +12,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace]
-members = ["storage"]
+members = ["storage", "ota"]
 
 [workspace.dependencies]
 sunset = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false, features = [
@@ -42,6 +42,8 @@ once_cell = { version = "1", features = [
 
 [dependencies]
 storage = { path = "storage" }
+ota = { path = "ota" }
+
 sha2 = { workspace = true }
 rustc-hash = { workspace = true }
 
