@@ -29,11 +29,12 @@ run-esp32c6 = "run --release --target riscv32imac-unknown-none-elf --no-default-
 run-esp32s2 = "run --profile esp32s2 --target xtensa-esp32s2-none-elf --no-default-features --features esp32s2 "
 run-esp32s3 = "run --release --target xtensa-esp32s3-none-elf --no-default-features --features esp32s3 "
 
-# Build ota-packer alias: I might need to modify it so when run it can run a build for target architecture, extract the binary from the elf image and then pack the ota file.
-ota-packer = "run --package ota --bin ota-packer --target x86_64-unknown-linux-gnu"
-
 # Test alias
 test-ota = "test --package ota --target x86_64-unknown-linux-gnu"
+
+# ota-packer aliases
+build-ota-packer = "build --package ota --bin ota-packer --target x86_64-unknown-linux-gnu"
+ota-packer = "run --package ota --bin ota-packer --target x86_64-unknown-linux-gnu"
 
 [target.xtensa-esp32-none-elf] # ESP32
 runner = "espflash flash --baud=921600 --monitor --chip esp32"
