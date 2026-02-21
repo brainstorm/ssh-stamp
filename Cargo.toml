@@ -29,7 +29,7 @@ sha2 = { version = "0.10", default-features = false }
 rustc-hash = { version = "2.1", default-features = false } # For hash in the OTA SFTP server TODO: For the optimisation task: Remove this dependency and use sha2 instead?
 log = "0.4"
 
-esp-hal = { version = "1.0.0", features = ["unstable", "log-04"] }
+esp-hal = { version = "1", features = ["unstable", "log-04"] }
 embedded-storage = "0.3.1"
 esp-storage = { version = "0.8.0" }
 esp-bootloader-esp-idf = { version = "0.4.0" }
