@@ -194,6 +194,8 @@ pub async fn connection_loop(
 
 pub async fn connection_disable() -> () {
     // disable connection loop
+    println!("Connection loop disabled");
+    // TODO: Correctly disable/restart Conection loop and/or send messsage to user over SSH
     software_reset();
 }
 
@@ -206,6 +208,8 @@ pub async fn ssh_wait_for_initialisation<'server>(
 
 pub async fn ssh_disable() -> () {
     // drop ssh server
+    println!("SSH Server disabled");
+    // TODO: Correctly disable/restart SSH Server and/or send messsage to user over SSH
     software_reset();
 }
 
@@ -241,5 +245,7 @@ pub async fn handle_ssh_client<'a, 'b>(
 
 pub async fn bridge_disable() -> () {
     // disable bridge
+    println!("Bridge disabled");
+    // TODO: Correctly disable/restart bridge and/or send messsage to user over SSH
     software_reset();
 }

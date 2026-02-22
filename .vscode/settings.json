@@ -1,6 +1,3 @@
 {
-    "rust-analyzer.check.allTargets": false,
-    // "rust-analyzer.cargo.features": [
-    //     "esp32c6"
-    // ]
+  "rust-analyzer.check.allTargets": false,
 }

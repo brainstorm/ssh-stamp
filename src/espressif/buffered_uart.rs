@@ -129,12 +129,16 @@ impl Default for BufferedUart {
 
 pub async fn uart_buffer_disable() -> () {
     // disable uart buffer
+    println!("UART buffer disabled");
+    // TODO: Correctly disable/restart UART buffer and/or send messsage to user over SSH
     software_reset();
 }
 // use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 
 pub async fn uart_disable() -> () {
     // disable uart
+    println!("UART disabled");
+    // TODO: Correctly disable/restart UART and/or send messsage to user over SSH
     software_reset();
 }
 

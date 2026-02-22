@@ -94,11 +94,15 @@ pub async fn if_up(
 
 pub async fn ap_stack_disable() -> () {
     // drop ap_stack
+    println!("AP Stack disabled");
+    // TODO: Correctly disable/restart AP Stack and/or send messsage to user over SSH
     software_reset();
 }
 
 pub async fn tcp_socket_disable() -> () {
     // drop tcp stack
+    println!("TCP socket disabled");
+    // TODO: Correctly disable/restart tcp socket and/or send messsage to user over SSH
     software_reset();
 }
 
