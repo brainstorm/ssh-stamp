@@ -11,7 +11,7 @@ use esp_println::println;
 
 /// Forwards an incoming SSH connection to/from the local UART, until
 /// the connection drops
-pub(crate) async fn serial_bridge(
+pub async fn serial_bridge(
     chanr: impl Read<Error = sunset::Error>,
     chanw: impl Write<Error = sunset::Error>,
     uart: &BufferedUart,
@@ -34,7 +34,6 @@ async fn uart_to_ssh(
             // TODO: should this also go to the SSH client?
             println!("UART RX dropped {} bytes", dropped);
         }
-
         let n = uart_buf.read(&mut ssh_tx_buf).await;
         chanw.write_all(&ssh_tx_buf[..n]).await?;
     }

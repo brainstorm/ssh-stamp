@@ -2,73 +2,113 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use crate::config::SSHStampConfig;
+use crate::settings::UART_BUFFER_SIZE;
+use crate::store;
 use core::option::Option::{self, None, Some};
 use core::result::Result;
-
-use crate::espressif::buffered_uart::BufferedUart;
-use crate::keys;
-use crate::serial::serial_bridge;
-
+use storage::flash;
 // Embassy
-use embassy_futures::select::{Either3, select3};
-use embassy_net::tcp::TcpSocket;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
-
+// use embedded_storage::Storage;
+use esp_hal::system::software_reset;
 use heapless::String;
-use sunset::{ChanHandle, ServEvent, SignKey, error};
+use sunset_async::SunsetMutex;
+// use sunset::sshwire::SSHEncode;
+use crate::espressif::buffered_uart::UART_SIGNAL;
+use esp_println::{dbg, println};
+use sunset::{ChanHandle, ServEvent, error};
 use sunset_async::{ProgressHolder, SSHServer};
 
-use esp_println::{dbg, println};
-
-enum SessionType {
+pub enum SessionType {
     Bridge(ChanHandle),
-    #[cfg(feature = "sftp-ota")]
     Sftp(ChanHandle),
 }
 
-async fn connection_loop(
+pub async fn connection_loop(
     serv: &SSHServer<'_>,
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
+    config: &SunsetMutex<SSHStampConfig>,
 ) -> Result<(), sunset::Error> {
     let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
     let mut session: Option<ChanHandle> = None;
 
     println!("Entering connection_loop and prog_loop is next...");
-
+    let mut config_changed: bool = false;
     loop {
         let mut ph = ProgressHolder::new();
+        // dbg!("Waiting for ssh server event");
         let ev = serv.progress(&mut ph).await?;
-        dbg!(&ev);
+        // dbg!(&ev);
         #[allow(unreachable_patterns)]
         match ev {
+            // #[cfg(feature = "sftp-ota")]
+            ServEvent::SessionSubsystem(a) => {
+                println!("ServEvent::SessionSubsystem");
+                if a.command()?.to_lowercase().as_str() == "sftp" {
+                    if let Some(ch) = session.take() {
+                        debug_assert!(ch.num() == a.channel());
+
+                        a.succeed()?;
+                        dbg!("We got SFTP subsystem");
+                        let _ = chan_pipe.try_send(SessionType::Sftp(ch));
+                    } else {
+                        a.fail()?;
+                    }
+                } else {
+                    a.fail()?;
+                }
+            }
             ServEvent::SessionShell(a) => {
+                println!("ServEvent::SessionShell");
                 if let Some(ch) = session.take() {
+                    // Save config after connection successful (SessionEnv completed)
+                    if config_changed {
+                        let config_guard = config.lock().await;
+                        let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
+                            panic!("Could not acquire flash storage lock");
+                        };
+                        let mut flash_storage = flash_storage_guard.lock().await;
+                        // TODO: Migrate this function/test to embedded-test.
+                        // Quick roundtrip test for SSHStampConfig
+                        // ssh_stamp::config::roundtrip_config();
+                        let _result = store::save(&mut flash_storage, &config_guard).await;
+                    }
+                    debug_assert!(ch.num() == a.channel());
                     a.succeed()?;
                     dbg!("We got shell");
+                    // Signal for uart task to configure pins and run. Value is irrelevant.
+                    UART_SIGNAL.signal(1);
+                    println!("Connection loop: UART_SIGNAL sent");
                     let _ = chan_pipe.try_send(SessionType::Bridge(ch));
                 } else {
                     a.fail()?;
                 }
             }
             ServEvent::FirstAuth(ref a) => {
+                println!("ServEvent::FirstAuth");
                 // record the username
                 if username.lock().await.push_str(a.username()?).is_err() {
                     println!("Too long username")
                 }
             }
             ServEvent::Hostkeys(h) => {
-                let signkey: SignKey = SignKey::from_openssh(keys::HOST_SECRET_KEY)?;
-                h.hostkeys(&[&signkey])?;
+                println!("ServEvent::Hostkeys");
+                let config_guard = config.lock().await;
+                h.hostkeys(&[&config_guard.hostkey])?;
             }
             ServEvent::PasswordAuth(a) => {
+                println!("ServEvent::PasswordAuth");
                 a.allow()?;
             }
             ServEvent::PubkeyAuth(a) => {
+                println!("ServEvent::PubkeyAuth");
                 a.allow()?;
             }
             ServEvent::OpenSession(a) => {
+                println!("ServEvent::OpenSession");
                 match session {
                     Some(_) => {
                         todo!("Can't have two sessions");
@@ -79,7 +119,61 @@ async fn connection_loop(
                     }
                 }
             }
+            ServEvent::SessionEnv(a) => {
+                dbg!("Got ENV request");
+                dbg!(a.name()?);
+                dbg!(a.value()?);
+
+                // TODO: Logic to serialise/validate env vars? I.e:
+                // a.name.validate(); // Checks the input variable, sanitizes, assigns a target subsystem
+                //
+                // config.change(c): Apply the config change to the relevant subsystem.
+                // i.e: if UART_TX_PIN or UART_RX_PIN, we update the PinChannel with with_channel() to change pins live.
+                match a.name()? {
+                    "SAVE_CONFIG" => {
+                        if a.value()? == "1" {
+                            dbg!("Triggering config save...");
+                            todo!("Implement config save to flash");
+                        }
+                    }
+                    // If the env var is UART_TX_PIN or UART_RX_PIN
+                    "UART_TX_PIN" => {
+                        let val = a.value()?;
+                        dbg!("Updating UART TX pin to ", val);
+                        if let Ok(pin_num) = val.parse::<u8>() {
+                            let mut config_lock = config.lock().await;
+                            config_lock.uart_pins.tx = pin_num;
+                            config_changed = true;
+                            dbg!("TX pin updated");
+                        } else {
+                            dbg!("Invalid TX pin value");
+                        }
+                    }
+                    "UART_RX_PIN" => {
+                        let val = a.value()?;
+                        dbg!("Updating UART RX pin to ", val);
+                        if let Ok(pin_num) = val.parse::<u8>() {
+                            let mut config_lock = config.lock().await;
+                            config_lock.uart_pins.rx = pin_num;
+                            config_changed = true;
+                            dbg!("RX pin updated");
+                        } else {
+                            dbg!("Invalid RX pin value");
+                        }
+                    }
+                    _ => {
+                        dbg!("Unknown/unsupported ENV var");
+                    }
+                }
+
+                // config.save(a): Potentially an optional special environment variable SAVE_CONFIG=1
+                // that serialises current config to flash
+                // Only save once all ENV requests have been recorded?
+
+                a.succeed()?;
+            }
             ServEvent::SessionPty(a) => {
+                println!("ServEvent::SessionPty");
                 a.succeed()?;
             }
             ServEvent::SessionExec(a) => {
@@ -89,84 +183,68 @@ async fn connection_loop(
                 println!("Expected caller to handle event");
                 error::BadUsage.fail()?
             }
-            ServEvent::PollAgain => (),
-            ServEvent::SessionSubsystem(a) => {
-                #[cfg(feature = "sftp-ota")]
-                {
-                    if a.command()?.to_lowercase().as_str() == "sftp" {
-                        if let Some(ch) = session.take() {
-                            debug_assert!(ch.num() == a.channel());
-
-                            a.succeed()?;
-                            dbg!("We got SFTP subsystem");
-                            let _ = chan_pipe.try_send(SessionType::Sftp(ch));
-                        } else {
-                            a.fail()?;
-                        }
-                    } else {
-                        a.fail()?;
-                    }
-                }
-                #[cfg(not(feature = "sftp-ota"))]
-                {
-                    a.fail()?;
-                }
+            ServEvent::PollAgain => {
+                // println!("ServEvent::PollAgain");
             }
-            ServEvent::SessionEnv(a) => {
-                dbg!("Got ENV request");
-                dbg!(a.name()?);
-                dbg!(a.value()?);
-                a.succeed()?;
-            }
-            _ => {
-                println!("Unexpected event: {:?}", ev);
-            }
+            _ => (),
         }
     }
 }
 
-pub(crate) async fn handle_ssh_session(
-    stream: &mut TcpSocket<'_>,
-    uart: &BufferedUart,
+pub async fn connection_disable() -> () {
+    // disable connection loop
+    println!("Connection loop disabled");
+    // TODO: Correctly disable/restart Conection loop and/or send messsage to user over SSH
+    software_reset();
+}
+
+pub async fn ssh_wait_for_initialisation<'server>(
+    inbuf: &'server mut [u8; UART_BUFFER_SIZE],
+    outbuf: &'server mut [u8; UART_BUFFER_SIZE],
+) -> SSHServer<'server> {
+    SSHServer::new(inbuf, outbuf)
+}
+
+pub async fn ssh_disable() -> () {
+    // drop ssh server
+    println!("SSH Server disabled");
+    // TODO: Correctly disable/restart SSH Server and/or send messsage to user over SSH
+    software_reset();
+}
+
+// use crate::serve::SessionType;
+use crate::espressif::buffered_uart::BufferedUart;
+use crate::serial::serial_bridge;
+use sunset_async::ChanInOut;
+
+pub async fn handle_ssh_client<'a, 'b>(
+    uart_buff: &'a BufferedUart,
+    ssh_server: &'b SSHServer<'a>,
+    chan_pipe: &'b Channel<NoopRawMutex, SessionType, 1>,
 ) -> Result<(), sunset::Error> {
-    // Spawn network tasks to handle incoming connections with demo_common::session()
-    let mut inbuf = [0u8; 4096];
-    let mut outbuf = [0u8; 4096];
-
-    let ssh_server = SSHServer::new(&mut inbuf, &mut outbuf);
-    let (mut rsock, mut wsock) = stream.split();
-
-    let chan_pipe = Channel::<NoopRawMutex, SessionType, 1>::new();
-
-    println!("Calling connection_loop from handle_ssh_client");
-    let conn_loop = connection_loop(&ssh_server, &chan_pipe);
-    println!("Running server from handle_ssh_client()");
-    let server = ssh_server.run(&mut rsock, &mut wsock);
-
-    // TODO: Maybe loop forever here and/or handle disconnection/terminations gracefully?
-    let session = async {
-        let session_type = chan_pipe.receive().await;
-
-        match session_type {
-            SessionType::Bridge(ch) => {
-                println!("Setting up serial bridge");
-                let (chan_read, chan_write) = ssh_server.stdio(ch).await?.split();
-                serial_bridge(chan_read, chan_write, uart).await?
-            }
-            #[cfg(feature = "sftp-ota")]
-            SessionType::Sftp(_ch) => {
-                // TODO: create a new SFTP Subsystem session to handle ota
-            }
-        };
-        Ok(())
+    dbg!("Preparing bridge");
+    let session_type = chan_pipe.receive().await;
+    dbg!("Checking bridge session type");
+    match session_type {
+        SessionType::Bridge(ch) => {
+            dbg!("Handling bridge session");
+            let stdio: ChanInOut<'_> = ssh_server.stdio(ch).await?;
+            let stdio2 = stdio.clone();
+            dbg!("Starting bridge");
+            serial_bridge(stdio, stdio2, uart_buff).await?
+        }
+        SessionType::Sftp(_ch) => {
+            dbg!("Handling SFTP session");
+            // Handle SFTP session
+            //     todo!()
+        }
     };
-
-    println!("Main select() in handle_ssh_client()");
-    match select3(conn_loop, server, session).await {
-        Either3::First(r) => r,
-        Either3::Second(r) => r,
-        Either3::Third(r) => r,
-    }?;
-
     Ok(())
+}
+
+pub async fn bridge_disable() -> () {
+    // disable bridge
+    println!("Bridge disabled");
+    // TODO: Correctly disable/restart bridge and/or send messsage to user over SSH
+    software_reset();
 }

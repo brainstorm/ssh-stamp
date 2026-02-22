@@ -20,3 +20,6 @@ target/
 
 # VSCode workspace(s)
 *.code-workspace
+
+# Temporarily ignore book from this branch
+docs/book

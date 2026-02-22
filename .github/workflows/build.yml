@@ -52,7 +52,7 @@ jobs:
       - name: Check lints and format
         if: ${{ contains(fromJson('["esp32c6"]'), matrix.device.soc) }}
         run: |
-          cargo +${{ matrix.device.toolchain }} clippy --features ${{ matrix.device.soc }} --target riscv32imac-unknown-none-elf -- -D warnings
+          cargo +${{ matrix.device.toolchain }} clippy --release --features ${{ matrix.device.soc }} --target riscv32imac-unknown-none-elf -- -D warnings
           cargo +${{ matrix.device.toolchain }} fmt -- --check
   ota-packer:
     name: OTA Packer

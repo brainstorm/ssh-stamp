@@ -2,40 +2,31 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use crate::config::SSHStampConfig;
+use crate::settings::{DEFAULT_IP, DEFAULT_SSID};
 use core::net::Ipv4Addr;
-use core::str::FromStr;
-
-use embassy_executor::Spawner;
-use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, StaticConfigV4};
-use embassy_net::{Stack, StackResources, tcp::TcpSocket};
-use embassy_time::{Duration, Timer};
-
-use esp_hal::peripherals::WIFI;
-
-use esp_hal::rng::Rng;
-use esp_println::{dbg, println};
-
-use esp_radio::Controller;
-use esp_radio::wifi::{AccessPointConfig, ModeConfig, WifiController, WifiDevice, WifiEvent};
-
-use sunset_async::SunsetMutex;
-
 use core::net::SocketAddrV4;
+use core::str::FromStr;
 use edge_dhcp;
-
 use edge_dhcp::{
     io::{self, DEFAULT_SERVER_PORT},
     server::{Server, ServerOptions},
 };
 use edge_nal::UdpBind;
 use edge_nal_embassy::{Udp, UdpBuffers};
-
-use crate::config::SSHStampConfig;
-
-use super::buffered_uart::BufferedUart;
-
-const GW_IP_ADDR_ENV: Option<&'static str> = option_env!("GATEWAY_IP");
-
+use embassy_executor::Spawner;
+use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, StaticConfigV4};
+use embassy_net::{Stack, StackResources, tcp::TcpSocket};
+use embassy_time::{Duration, Timer};
+use esp_hal::peripherals::WIFI;
+use esp_hal::rng::Rng;
+use esp_hal::system::software_reset;
+use esp_println::{dbg, println};
+use esp_radio::Controller;
+use esp_radio::wifi::WifiEvent;
+use esp_radio::wifi::{AccessPointConfig, ModeConfig, WifiApState, WifiController};
+use heapless::String;
+use sunset_async::SunsetMutex;
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {
     ($t:ty,$val:expr) => {{
@@ -48,19 +39,21 @@ macro_rules! mk_static {
 
 pub async fn if_up(
     spawner: Spawner,
-    wifi_controller: Controller<'static>,
+    controller: Controller<'static>,
     wifi: WIFI<'static>,
-    rng: &mut Rng,
+    rng: Rng,
     config: &'static SunsetMutex<SSHStampConfig>,
 ) -> Result<Stack<'static>, sunset::Error> {
-    let wifi_init = &*mk_static!(Controller<'static>, wifi_controller);
-
-    let (controller, interfaces) =
+    let wifi_init = &*mk_static!(Controller<'static>, controller);
+    let (mut wifi_controller, interfaces) =
         esp_radio::wifi::new(wifi_init, wifi, Default::default()).unwrap();
 
-    let gw_ip_addr_str = GW_IP_ADDR_ENV.unwrap_or("192.168.4.1");
+    let ap_config =
+        ModeConfig::AccessPoint(AccessPointConfig::default().with_ssid(DEFAULT_SSID.into()));
+    let res = wifi_controller.set_config(&ap_config);
+    println!("wifi_set_configuration returned {:?}", res);
 
-    let gw_ip_addr_ipv4 = Ipv4Addr::from_str(gw_ip_addr_str).expect("failed to parse gateway ip");
+    let gw_ip_addr_ipv4 = *DEFAULT_IP;
 
     let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(gw_ip_addr_ipv4, 24),
@@ -78,7 +71,7 @@ pub async fn if_up(
         seed,
     );
 
-    spawner.spawn(wifi_up(controller, config)).ok();
+    spawner.spawn(wifi_up(wifi_controller, config)).ok();
     spawner.spawn(net_up(runner)).ok();
     spawner.spawn(dhcp_server(ap_stack, gw_ip_addr_ipv4)).ok();
 
@@ -99,43 +92,50 @@ pub async fn if_up(
     Ok(ap_stack)
 }
 
-pub async fn accept_requests(stack: Stack<'static>, uart: &BufferedUart) -> ! {
-    let rx_buffer = mk_static!([u8; 1536], [0; 1536]);
-    let tx_buffer = mk_static!([u8; 1536], [0; 1536]);
+pub async fn ap_stack_disable() -> () {
+    // drop ap_stack
+    println!("AP Stack disabled");
+    // TODO: Correctly disable/restart AP Stack and/or send messsage to user over SSH
+    software_reset();
+}
 
-    loop {
-        let mut socket = TcpSocket::new(stack, rx_buffer, tx_buffer);
+pub async fn tcp_socket_disable() -> () {
+    // drop tcp stack
+    println!("TCP socket disabled");
+    // TODO: Correctly disable/restart tcp socket and/or send messsage to user over SSH
+    software_reset();
+}
 
-        println!("Waiting for SSH client...");
+pub async fn accept_requests<'a>(
+    tcp_stack: Stack<'a>,
+    rx_buffer: &'a mut [u8],
+    tx_buffer: &'a mut [u8],
+) -> TcpSocket<'a> {
+    let mut tcp_socket = TcpSocket::new(tcp_stack, rx_buffer, tx_buffer);
 
-        if let Err(e) = socket
-            .accept(IpListenEndpoint {
-                addr: None,
-                port: 22,
-            })
-            .await
-        {
-            println!("connect error: {:?}", e);
-            continue;
-        }
-
-        println!("Connected, port 22");
-        match crate::serve::handle_ssh_session(&mut socket, uart).await {
-            Ok(_) => (),
-            Err(e) => {
-                println!("SSH client fatal error: {}", e);
-            }
-        };
+    println!("Waiting for SSH client...");
+    if let Err(e) = tcp_socket
+        .accept(IpListenEndpoint {
+            addr: None,
+            port: 22,
+        })
+        .await
+    {
+        println!("connect error: {:?}", e);
+        // continue;
+        tcp_socket_disable().await;
     }
+    println!("Connected, port 22");
+
+    tcp_socket
 }
 
 #[embassy_executor::task]
-async fn wifi_up(
-    mut controller: WifiController<'static>,
+pub async fn wifi_up(
+    mut wifi_controller: WifiController<'static>,
     config: &'static SunsetMutex<SSHStampConfig>,
 ) {
-    println!("Device capabilities: {:?}", controller.capabilities());
-
+    println!("Device capabilities: {:?}", wifi_controller.capabilities());
     let wifi_ssid = {
         let guard = config.lock().await;
         guard.wifi_ssid.clone()
@@ -144,25 +144,39 @@ async fn wifi_up(
     // TODO: No wifi password(s) yet...
     //let wifi_password = config.lock().await.wifi_pw;
 
+    println!("Starting Wifi");
+
     loop {
-        if matches!(controller.is_connected(), Ok(true)) {
+        if esp_radio::wifi::ap_state() == WifiApState::Started {
             // wait until we're no longer connected
-            controller.wait_for_event(WifiEvent::StaDisconnected).await;
+            wifi_controller.wait_for_event(WifiEvent::ApStop).await;
             Timer::after(Duration::from_millis(5000)).await
         }
-        if !matches!(controller.is_started(), Ok(true)) {
-            let client_config = ModeConfig::AccessPoint(
-                AccessPointConfig::default().with_ssid(wifi_ssid.as_str().into()), // Ugly
-            );
-            controller.set_config(&client_config).unwrap();
+        if !matches!(wifi_controller.is_started(), Ok(true)) {
+            let ssid_string = String::<63>::from_str(&wifi_ssid)
+                .unwrap()
+                .to_ascii_lowercase();
+            let client_config =
+                ModeConfig::AccessPoint(AccessPointConfig::default().with_ssid(ssid_string));
+            wifi_controller.set_config(&client_config).unwrap();
             println!("Starting wifi");
-            controller.start_async().await.unwrap();
+            wifi_controller.start_async().await.unwrap();
             println!("Wifi started!");
         }
         Timer::after(Duration::from_millis(10)).await;
     }
 }
 
+pub async fn wifi_controller_disable() -> () {
+    // TODO: Correctly disable wifi controller
+    // pub async fn wifi_disable(wifi_controller: EspWifiController<'_>) -> (){
+    // drop wifi controller
+    // esp_wifi::deinit_unchecked()
+    // wifi_controller.deinit_unchecked()
+    software_reset();
+}
+
+use esp_radio::wifi::WifiDevice;
 #[embassy_executor::task]
 async fn net_up(mut runner: Runner<'static, WifiDevice<'static>>) {
     println!("Bringing up network stack...\n");

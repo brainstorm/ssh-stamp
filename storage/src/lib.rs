@@ -3,7 +3,15 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// TODO: When the time comes, generalize the flash so it can be used with all supported targets
+/// Module defining the ESP32-specific storage traits implementations for OTA updates
+#[cfg(any(
+    feature = "esp32",
+    feature = "esp32s2",
+    feature = "esp32s3",
+    feature = "esp32c3",
+    feature = "esp32c6"
+))]
+// TODO: When the time comes, generalise the flash so it can be used with all supported targets
 /// [[flash]] is a packet to provide safe access to the Flash storage used by SSH-Stamp
 ///
 /// It does so by storing the FlashStorage and a buffer for read/write operations in a single structure

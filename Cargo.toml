@@ -4,8 +4,10 @@
 
 [package]
 name = "ssh-stamp"
-version = "0.1.0"
-authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
+version = "0.2.0"
+authors = [ "Julio Beltran Ortega <jubeormk1@gmail.com>",
+            "Anthony Tambasco <anthony.github@fastmail.com>",
+            "Roman Valls Guimera <brainstorm@nopcode.org>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
 
@@ -13,21 +15,21 @@ license = "MIT OR Apache-2.0"
 members = ["storage", "ota"]
 
 [workspace.dependencies]
-
-sunset = { git = "https://github.com/mkj/sunset", default-features = false, features = [
+sunset = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false, features = [
     "openssh-key",
     "embedded-io",
 ] }
-sunset-async = { git = "https://github.com/mkj/sunset", default-features = false, features = [
+sunset-async = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false, features = [
     "multi-thread",
 ] }
-sunset-sshwire-derive = { git = "https://github.com/mkj/sunset", default-features = false }
+sunset-sshwire-derive = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false }
+sunset-sftp = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-start", default-features = false }
 
 sha2 = { version = "0.10", default-features = false }
-rustc-hash = { version = "2.1", default-features = false }
+rustc-hash = { version = "2.1", default-features = false } # For hash in the OTA SFTP server TODO: For the optimisation task: Remove this dependency and use sha2 instead?
 log = "0.4"
 
-esp-hal = { version = "1.0.0", features = ["unstable", "log-04"] }
+esp-hal = { version = "1", features = ["unstable", "log-04"] }
 embedded-storage = "0.3.1"
 esp-storage = { version = "0.8.0" }
 esp-bootloader-esp-idf = { version = "0.4.0" }
@@ -39,22 +41,11 @@ once_cell = { version = "1", features = [
 ], default-features = false }
 
 [dependencies]
-
 storage = { path = "storage" }
 ota = { path = "ota" }
 
-sunset = { workspace = true }
-sunset-async = { workspace = true }
-sunset-sshwire-derive = { workspace = true }
 sha2 = { workspace = true }
 rustc-hash = { workspace = true }
-log = { workspace = true }
-esp-hal = { workspace = true }
-embedded-storage = { workspace = true }
-esp-storage = { workspace = true }
-esp-bootloader-esp-idf = { workspace = true }
-static_cell = { workspace = true }
-once_cell = { workspace = true }
 
 cfg-if = "1"
 ed25519-dalek = { version = "2", default-features = false }
@@ -71,23 +62,30 @@ smoltcp = { version = "0.12", default-features = false, features = [
 ] }
 embassy-time = { version = "0.5.0" }
 embedded-io-async = "0.6.1"
-esp-alloc = "0.9.0"
+esp-alloc = { version ="0.9.0"}
 esp-backtrace = { version = "0.18.0", features = ["panic-handler", "println"] }
-
+esp-hal = { workspace = true }
 esp-rtos = { version = "0.2.0", features = ["embassy", "log-04", "esp-radio"] }
 esp-radio = { version = "0.17.0", features = ["wifi", "log-04"] }
 esp-println = { version = "0.16", features = ["log-04"] }
 hex = { version = "0.4", default-features = false }
-
+log = { version = "0.4" }
+static_cell = { workspace = true }
 ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
+sunset = { workspace = true }
+sunset-async = { workspace = true }
+sunset-sshwire-derive = { workspace = true }
+sunset-sftp = { workspace = true }
 getrandom = { version = "0.2.10", features = ["custom"] }
 embassy-sync = "0.7"
 heapless = "0.8"
 embassy-futures = "0.1.2"
 edge-dhcp = "0.6"
 edge-nal = "0.5"
-edge-nal-embassy = "0.6"
+edge-nal-embassy = "0.7"
 #sequential-storage = { version = "4", features = ["heapless"] }
+esp-storage = { workspace = true }
+embedded-storage = { workspace = true }
 embassy-embedded-hal = "0.3"
 bcrypt = { version = "0.17", default-features = false }
 subtle = { version = "2", default-features = false }
@@ -99,6 +97,7 @@ digest = { version = "0.10", default-features = false, features = [
 ] }
 embedded-storage-async = "0.4"
 portable-atomic = "1"
+esp-bootloader-esp-idf = { workspace = true }
 snafu = { version = "0.8", default-features = false }
 paste = "1"
 pretty-hex = { version = "0.4", default-features = false }
@@ -131,8 +130,9 @@ opt-level = "s"
 
 [features]
 ipv6 = []
+
+# Enables the SFTP OTA Subsystem. Use ota-packer to pack a binary and PUT it over sftp
 sftp-ota = []
-default = ["esp32c6"]
 
 # MCU options
 esp32 = [
@@ -166,7 +166,7 @@ esp32c3 = [
     "esp-bootloader-esp-idf/esp32c3",
 ]
 #esp32c5 = [
-#    "esp-hal/esp32c5", 
+#    "esp-hal/esp32c5",
 #    "esp-alloc/esp32c5",
 #    "esp-backtrace/esp32c5",
 #    "esp-radio/esp32c5",
