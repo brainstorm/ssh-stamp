@@ -20,7 +20,7 @@ use sunset::{
     sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
 };
 
-use crate::settings::{DEFAULT_SSID, DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS};
+use crate::settings::{DEFAULT_SSID, DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS, PASSWORD_AUTHENTICATION};
 
 #[derive(Debug, PartialEq)]
 pub struct SSHStampConfig {
@@ -88,7 +88,7 @@ impl SSHStampConfig {
 
         Ok(SSHStampConfig {
             hostkey,
-            password_authentication: true,
+            password_authentication: PASSWORD_AUTHENTICATION,
             admin_pw: None,
             admin_keys: Default::default(),
             wifi_ssid,

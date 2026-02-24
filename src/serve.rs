@@ -2,29 +2,53 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::config::SSHStampConfig;
+// Espressif HAL
+use esp_hal::system::software_reset;
+
+// Crate
+use crate::errors::Error;
+use crate::config::{PwHash, SSHStampConfig};
 use crate::settings::UART_BUFFER_SIZE;
+use crate::espressif::buffered_uart::UART_SIGNAL;
 use crate::store;
+use storage::flash;
+
 use core::option::Option::{self, None, Some};
 use core::result::Result;
-use storage::flash;
-// Embassy
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-use embassy_sync::channel::Channel;
-use embassy_sync::mutex::Mutex;
-// use embedded_storage::Storage;
-use esp_hal::system::software_reset;
 use heapless::String;
+
+// Embassy
+use embassy_sync::blocking_mutex::raw::{ NoopRawMutex };
+use embassy_sync::channel::Channel;
+use embassy_sync::mutex::{ Mutex };
+
+// Sunset
 use sunset_async::SunsetMutex;
-// use sunset::sshwire::SSHEncode;
-use crate::espressif::buffered_uart::UART_SIGNAL;
-use esp_println::{dbg, println};
-use sunset::{ChanHandle, ServEvent, error};
+use sunset::{ChanHandle, ServEvent, event::ServPasswordAuth, error};
 use sunset_async::{ProgressHolder, SSHServer};
+
+use esp_println::{dbg, println};
 
 pub enum SessionType {
     Bridge(ChanHandle),
     Sftp(ChanHandle),
+}
+
+pub async fn handle_password_auth(a: ServPasswordAuth<'_, '_>, passwd_hash: Option<PwHash>) -> Result<(), Error> {
+    let password = match a.password() {
+        Ok(u) => u,
+        Err(_) => return Ok(()),
+    };
+
+    let p = passwd_hash.unwrap();
+
+    if p.check(password) {
+        a.allow()?
+    } else {
+        a.reject()?
+    }
+
+    Ok(())
 }
 
 pub async fn connection_loop(
@@ -36,7 +60,7 @@ pub async fn connection_loop(
     let mut session: Option<ChanHandle> = None;
 
     println!("Entering connection_loop and prog_loop is next...");
-    let mut config_changed: bool = false;
+    let config_changed: bool = false;
     loop {
         let mut ph = ProgressHolder::new();
         // dbg!("Waiting for ssh server event");
@@ -97,12 +121,14 @@ pub async fn connection_loop(
             ServEvent::Hostkeys(h) => {
                 println!("ServEvent::Hostkeys");
                 let config_guard = config.lock().await;
+                // Just take it from config as private hostkey is generated on first boot.
                 h.hostkeys(&[&config_guard.hostkey])?;
             }
             ServEvent::PasswordAuth(a) => {
-                println!("ServEvent::PasswordAuth");
-                a.allow()?;
-            }
+                let config_guard = config.lock().await;
+                let admin_pw = config_guard.admin_pw.clone();
+                handle_password_auth(a, admin_pw).await.unwrap();
+            },
             ServEvent::PubkeyAuth(a) => {
                 println!("ServEvent::PubkeyAuth");
                 a.allow()?;
@@ -130,37 +156,6 @@ pub async fn connection_loop(
                 // config.change(c): Apply the config change to the relevant subsystem.
                 // i.e: if UART_TX_PIN or UART_RX_PIN, we update the PinChannel with with_channel() to change pins live.
                 match a.name()? {
-                    "SAVE_CONFIG" => {
-                        if a.value()? == "1" {
-                            dbg!("Triggering config save...");
-                            todo!("Implement config save to flash");
-                        }
-                    }
-                    // If the env var is UART_TX_PIN or UART_RX_PIN
-                    "UART_TX_PIN" => {
-                        let val = a.value()?;
-                        dbg!("Updating UART TX pin to ", val);
-                        if let Ok(pin_num) = val.parse::<u8>() {
-                            let mut config_lock = config.lock().await;
-                            config_lock.uart_pins.tx = pin_num;
-                            config_changed = true;
-                            dbg!("TX pin updated");
-                        } else {
-                            dbg!("Invalid TX pin value");
-                        }
-                    }
-                    "UART_RX_PIN" => {
-                        let val = a.value()?;
-                        dbg!("Updating UART RX pin to ", val);
-                        if let Ok(pin_num) = val.parse::<u8>() {
-                            let mut config_lock = config.lock().await;
-                            config_lock.uart_pins.rx = pin_num;
-                            config_changed = true;
-                            dbg!("RX pin updated");
-                        } else {
-                            dbg!("Invalid RX pin value");
-                        }
-                    }
                     _ => {
                         dbg!("Unknown/unsupported ENV var");
                     }
@@ -183,9 +178,7 @@ pub async fn connection_loop(
                 println!("Expected caller to handle event");
                 error::BadUsage.fail()?
             }
-            ServEvent::PollAgain => {
-                // println!("ServEvent::PollAgain");
-            }
+            ServEvent::PollAgain => {}
             _ => (),
         }
     }
