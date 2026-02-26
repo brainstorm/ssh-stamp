@@ -63,7 +63,11 @@ impl BufferedUart {
         loop {
             let rd_from = async {
                 loop {
-                    let n = uart_rx.read_async(&mut uart_rx_buf).await.unwrap();
+                    let Ok(n) = uart_rx.read_async(&mut uart_rx_buf).await.inspect_err(|e| {
+                        println!("UART RX error: {e}, continuing");
+                    }) else {
+                        continue;
+                    };
 
                     let mut rx_slice = &uart_rx_buf[..n];
 
@@ -262,11 +266,12 @@ pub async fn uart_task(
         );
 
         dbg!("UART setup pins");
-        let uart = Uart::new(uart1, uart_config)
-            .unwrap()
-            .with_rx(rx_pin)
-            .with_tx(tx_pin)
-            .into_async();
+        let Ok(uart) = Uart::new(uart1, uart_config).inspect_err(|e| {
+            println!("UART: failed to initialise: {e}");
+        }) else {
+            return;
+        };
+        let uart = uart.with_rx(rx_pin).with_tx(tx_pin).into_async();
 
         // Run the main buffered TX/RX loop
         dbg!("uart_task running UART");
