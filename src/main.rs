@@ -23,7 +23,7 @@ use esp_rtos::embassy::InterruptExecutor;
 use ssh_stamp::{
     config::SSHStampConfig,
     espressif::{
-        buffered_uart::{BufferedUart, GPIOS, UART_BUF, uart_task},
+        buffered_uart::{BufferedUart, UART_BUF, UartPins, uart_task},
         net, rng,
     },
     serve,
@@ -96,31 +96,27 @@ async fn main(spawner: Spawner) -> ! {
 
     println!("Initialising gpio ");
     // Only certain GPIO are available for each target.
-    // TODO: Confirm working pins on every target.
+    // Pins are selected at compile time based on the target chip.
     cfg_if::cfg_if!(
         if #[cfg(any(feature = "esp32"))]{
-            let gpios = GPIOS {
-            gpio13: Some(peripherals.GPIO13.into()),
-            gpio14: Some(peripherals.GPIO14.into()),
-            .. Default::default()
+            let pins = UartPins {
+                rx: peripherals.GPIO13.into(),
+                tx: peripherals.GPIO14.into(),
             };
         } else if #[cfg(feature = "esp32c2")] {
-            let gpios = GPIOS {
-            gpio9: Some(peripherals.GPIO9.into()),
-            gpio10: Some(peripherals.GPIO10.into()),
-            .. Default::default()
+            let pins = UartPins {
+                rx: peripherals.GPIO9.into(),
+                tx: peripherals.GPIO10.into(),
             };
         } else if #[cfg(feature = "esp32c3")] {
-            let gpios = GPIOS {
-            gpio20: Some(peripherals.GPIO20.into()),
-            gpio21: Some(peripherals.GPIO21.into()),
-            .. Default::default()
+            let pins = UartPins {
+                rx: peripherals.GPIO20.into(),
+                tx: peripherals.GPIO21.into(),
             };
         } else {
-            let gpios = GPIOS {
-            gpio10: Some(peripherals.GPIO10.into()),
-            gpio11: Some(peripherals.GPIO11.into()),
-            .. Default::default()
+            let pins = UartPins {
+                rx: peripherals.GPIO10.into(),
+                tx: peripherals.GPIO11.into(),
             };
         }
     );
@@ -160,7 +156,7 @@ async fn main(spawner: Spawner) -> ! {
     // Use the same config reference for UART task.
     // Pass GPIO peripherals which can then be selected from config values
     interrupt_spawner
-        .spawn(uart_task(uart_buf, peripherals.UART1, config, gpios))
+        .spawn(uart_task(uart_buf, peripherals.UART1, config, pins))
         .unwrap();
 
     let peripherals_enabled_struct = SshStampInit {
