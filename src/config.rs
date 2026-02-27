@@ -14,13 +14,16 @@ use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
 use sunset::packets::Ed25519PubKey;
-use sunset::{KeyType, Result, sshwire};
+use sunset::{KeyType, Result};
 use sunset::{
     SignKey,
     sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
 };
 
 use crate::settings::{DEFAULT_SSID, DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS};
+
+// Compile-time verification that DEFAULT_SSID fits in String<32>
+const _: () = assert!(DEFAULT_SSID.len() <= 32, "DEFAULT_SSID must fit in 32 bytes");
 
 #[derive(Debug, PartialEq)]
 pub struct SSHStampConfig {
@@ -116,6 +119,7 @@ impl SSHStampConfig {
 
     pub(crate) fn default_ssid() -> String<32> {
         let mut s = String::<32>::new();
+        // SAFETY: verified at compile time by const assert above
         s.push_str(DEFAULT_SSID).unwrap();
         s
     }
@@ -371,8 +375,7 @@ impl PwHash {
     }
 
     fn prehash(pw: &str, salt: &[u8]) -> [u8; 32] {
-        // OK unwrap: can't fail, accepts any length
-        // TODO: Generalise, not only Espressif esp_hal
+        // SAFETY: HMAC-SHA256 accepts any key length per FIPS 198-1
         let mut prehash = Hmac::<Sha256>::new_from_slice(salt).unwrap();
         prehash.update(pw.as_bytes());
         prehash.finalize().into_bytes().into()
@@ -405,6 +408,7 @@ impl<'de> SSHDecode<'de> for PwHash {
     }
 }
 
+/* UNUSED function
 pub fn roundtrip_config() {
     // default config
     let c1 = SSHStampConfig::new().unwrap();
@@ -414,3 +418,4 @@ pub fn roundtrip_config() {
     let c2: SSHStampConfig = sshwire::read_ssh(v, None).unwrap();
     assert_eq!(c1, c2);
 }
+*/
