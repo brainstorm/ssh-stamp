@@ -104,9 +104,10 @@ async fn main(spawner: Spawner) -> ! {
                 tx: peripherals.GPIO14.into(),
             };
         } else if #[cfg(feature = "esp32c2")] {
+            // GPIO9 is a strapping pin - use GPIO18/19 instead to avoid boot interference
             let pins = UartPins {
-                rx: peripherals.GPIO9.into(),
-                tx: peripherals.GPIO10.into(),
+                rx: peripherals.GPIO18.into(),
+                tx: peripherals.GPIO19.into(),
             };
         } else if #[cfg(feature = "esp32c3")] {
             let pins = UartPins {
