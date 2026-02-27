@@ -6,8 +6,6 @@ use esp_println::{dbg, println};
 use pretty_hex::PrettyHex;
 use sha2::Digest;
 
-use core::borrow::Borrow;
-
 use crate::errors::Error as SSHStampError;
 use sunset::error::Error as SunsetError;
 
@@ -111,18 +109,19 @@ pub async fn load(fl: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetErro
         return Err(SunsetError::msg("wrong config version"));
     }
 
-    let calc_hash = config_hash(flash_config.config.borrow()).unwrap();
+    // OwnOrBorrow::Own is the only variant that can be decoded from bytes
+    let config = match flash_config.config {
+        OwnOrBorrow::Own(c) => c,
+        OwnOrBorrow::Borrow(_) => return Err(SunsetError::msg("unexpected borrowed config")),
+    };
+
+    let calc_hash = config_hash(&config)?;
 
     if calc_hash != flash_config.hash {
         return Err(SunsetError::msg("bad config hash"));
     }
 
-    if let OwnOrBorrow::Own(c) = flash_config.config {
-        Ok(c)
-    } else {
-        // OK panic - OwnOrBorrow always decodes to Own variant
-        panic!()
-    }
+    Ok(config)
 }
 
 pub async fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(), SunsetError> {
@@ -156,9 +155,17 @@ pub async fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(
             CONFIG_OFFSET as u32,
             (CONFIG_OFFSET + CONFIG_AREA_SIZE) as u32,
         )
-        .unwrap();
+        .map_err(|e| {
+            dbg!("flash erase error: {:?}", e);
+            SunsetError::msg("flash erase error")
+        })?;
 
-    fl.flash.write(CONFIG_OFFSET as u32, &fl.buf).unwrap();
+    fl.flash
+        .write(CONFIG_OFFSET as u32, &fl.buf)
+        .map_err(|e| {
+            dbg!("flash write error: {:?}", e);
+            SunsetError::msg("flash write error")
+        })?;
 
     println!("flash save done");
     Ok(())
