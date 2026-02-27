@@ -191,11 +191,7 @@ impl<'a> TlvsSource<'a> {
             core::mem::size_of::<tlv::OtaTlvType>() + core::mem::size_of::<tlv::OtaTlvLen>();
         if *current_len >= slice_value_start {
             // try reading bytes to complete the value
-            let val_len = tlv::OtaTlvLen::from_be_bytes(
-                tlv_holder[slice_len_start..slice_value_start]
-                    .try_into()
-                    .unwrap(),
-            ) as usize;
+            let val_len = tlv_holder[slice_len_start] as usize;
             debug!(
                 "value length: {}, Source remaining bytes: {}",
                 val_len,
