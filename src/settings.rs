@@ -21,8 +21,9 @@ cfg_if::cfg_if!(
         pub(crate) const DEFAULT_UART_TX_PIN: u8 = 14;
         pub(crate) const DEFAULT_UART_RX_PIN: u8 = 13;
     } else if #[cfg(feature = "esp32c2")] {
-        pub(crate) const DEFAULT_UART_TX_PIN: u8 = 10;
-        pub(crate) const DEFAULT_UART_RX_PIN: u8 = 9;
+        // GPIO9 is a strapping pin - use GPIO18/19 instead to avoid boot interference
+        pub(crate) const DEFAULT_UART_TX_PIN: u8 = 19;
+        pub(crate) const DEFAULT_UART_RX_PIN: u8 = 18;
     } else if #[cfg(feature = "esp32c3")] {
         pub(crate) const DEFAULT_UART_TX_PIN: u8 = 21;
         pub(crate) const DEFAULT_UART_RX_PIN: u8 = 20;

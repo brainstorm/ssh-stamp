@@ -18,7 +18,6 @@ use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals::UART1;
 use esp_hal::system::software_reset;
 use esp_hal::uart::{Config, RxConfig, Uart};
-use esp_println::dbg;
 use esp_println::println;
 use portable_atomic::{AtomicUsize, Ordering};
 use static_cell::StaticCell;
@@ -63,9 +62,9 @@ impl BufferedUart {
         loop {
             let rd_from = async {
                 loop {
-                    let Ok(n) = uart_rx.read_async(&mut uart_rx_buf).await.inspect_err(|e| {
-                        println!("UART RX error: {e}, continuing");
-                    }) else {
+                    // Note: println! is intentionally avoided here as this runs in an
+                    // InterruptExecutor at high priority. Blocking I/O would cause scheduler panics.
+                    let Ok(n) = uart_rx.read_async(&mut uart_rx_buf).await else {
                         continue;
                     };
 
@@ -169,29 +168,25 @@ pub async fn uart_task(
     _config: &'static SunsetMutex<SSHStampConfig>,
     pins: UartPins<'static>,
 ) {
-    dbg!("UART task started");
+    // Note: dbg!/println! avoided throughout as this task runs in an InterruptExecutor
+    // at high priority where blocking I/O can cause scheduler panics.
 
     // Wait until ssh shell complete
     UART_SIGNAL.wait().await;
-    dbg!("UART signal received");
 
     // Hardware UART setup - pins are already selected at compile time
-    dbg!("UART config");
     let uart_config = Config::default().with_rx(
         RxConfig::default()
             .with_fifo_full_threshold(16)
             .with_timeout(1),
     );
 
-    dbg!("UART setup pins");
-    let Ok(uart) = Uart::new(uart1, uart_config).inspect_err(|e| {
-        println!("UART: failed to initialise: {e}");
-    }) else {
+    // Silent failure to avoid println! in interrupt context
+    let Ok(uart) = Uart::new(uart1, uart_config) else {
         return;
     };
     let uart = uart.with_rx(pins.rx).with_tx(pins.tx).into_async();
 
     // Run the main buffered TX/RX loop
-    dbg!("uart_task running UART");
     uart_buf.run(uart).await;
 }
