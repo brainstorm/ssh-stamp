@@ -7,8 +7,8 @@ use esp_hal::system::software_reset;
 
 // Crate
 use crate::config::SSHStampConfig;
-use crate::settings::UART_BUFFER_SIZE;
 use crate::espressif::buffered_uart::UART_SIGNAL;
+use crate::settings::UART_BUFFER_SIZE;
 use crate::store;
 use storage::flash;
 
@@ -17,13 +17,13 @@ use core::result::Result;
 use heapless::String;
 
 // Embassy
-use embassy_sync::blocking_mutex::raw::{ NoopRawMutex };
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
-use embassy_sync::mutex::{ Mutex };
+use embassy_sync::mutex::Mutex;
 
 // Sunset
-use sunset_async::SunsetMutex;
 use sunset::{ChanHandle, ServEvent, error};
+use sunset_async::SunsetMutex;
 use sunset_async::{ProgressHolder, SSHServer};
 
 use esp_println::{dbg, println};
@@ -117,7 +117,7 @@ pub async fn connection_loop(
                 } else {
                     a.reject()?
                 }
-            },
+            }
             ServEvent::PubkeyAuth(a) => {
                 println!("ServEvent::PubkeyAuth");
                 a.allow()?;
@@ -144,10 +144,13 @@ pub async fn connection_loop(
                 //
                 // config.change(c): Apply the config change to the relevant subsystem.
                 // i.e: if UART_TX_PIN or UART_RX_PIN, we update the PinChannel with with_channel() to change pins live.
-                match a.name()? {
-                    _ => {
-                        dbg!("Unknown/unsupported ENV var");
-                    }
+                // match a.name()? {
+                //     _ => {
+                //        dbg!("Unknown/unsupported ENV var");
+                //    }
+                a.name()?;
+                {
+                    dbg!("Unsupported environment variable");
                 }
 
                 // config.save(a): Potentially an optional special environment variable SAVE_CONFIG=1

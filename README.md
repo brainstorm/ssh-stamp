@@ -6,19 +6,9 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 # SSH Stamp
 
-Sponsored by:
-
-![nlnet_zero_commons][nlnet_zero_commons]
-
-# ⚠️ WARNING: Pre-alpha PoC quality, DO NOT use in production. Currently contains highly unsafe business logic auth issues (both password and key management handlers need to be fixed). 
-
-# ⚠️ WARNING: Do not file CVEs reports since deficiencies are very much known at this point in time and they'll be worked on soon as part of [this NLNet SSH-Stamp research and development grant][nlnet-grant] ;)
-
-Expect panics, lost bytes on the UART and other tricky UX issues, we are working on it, pull-requests are accepted too!
+Your everyday SSH secured serial access.
 
 ## Description
-
-Your everyday SSH secured serial access.
 
 The **SSH Stamp** is a secure wireless to UART bridge
 implemented in Rust (no_std, no_alloc and no_unsafe whenever possible)
@@ -148,6 +138,10 @@ Here are some PoC shots:
 cargo install cargo-cyclonedx
 cargo cyclonedx -f json --manifest-path ./docs/
 ```
+
+Sponsored by:
+
+![nlnet_zero_commons][nlnet_zero_commons]
 
 [nlnet-grant]: https://nlnet.nl/project/SSH-Stamp/
 [openwrt_mediatek_no_monitor]: https://github.com/openwrt/openwrt/issues/16279
