@@ -18,7 +18,6 @@ use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals::UART1;
 use esp_hal::system::software_reset;
 use esp_hal::uart::{Config, RxConfig, Uart};
-use esp_println::dbg;
 use esp_println::println;
 use portable_atomic::{AtomicUsize, Ordering};
 use static_cell::StaticCell;
@@ -63,7 +62,11 @@ impl BufferedUart {
         loop {
             let rd_from = async {
                 loop {
-                    let n = uart_rx.read_async(&mut uart_rx_buf).await.unwrap();
+                    // Note: println! is intentionally avoided here as this runs in an
+                    // InterruptExecutor at high priority. Blocking I/O would cause scheduler panics.
+                    let Ok(n) = uart_rx.read_async(&mut uart_rx_buf).await else {
+                        continue;
+                    };
 
                     let mut rx_slice = &uart_rx_buf[..n];
 
@@ -142,16 +145,13 @@ pub async fn uart_disable() -> () {
     software_reset();
 }
 
-#[derive(Default)]
-pub struct GPIOS<'a> {
-    pub gpio9: Option<AnyPin<'a>>,
-    pub gpio10: Option<AnyPin<'a>>,
-    pub gpio11: Option<AnyPin<'a>>,
-    pub gpio12: Option<AnyPin<'a>>,
-    pub gpio13: Option<AnyPin<'a>>,
-    pub gpio14: Option<AnyPin<'a>>,
-    pub gpio20: Option<AnyPin<'a>>,
-    pub gpio21: Option<AnyPin<'a>>,
+/// UART pins for the buffered UART task.
+///
+/// Pins are selected at compile time based on the target chip.
+/// Each target only populates the pins it actually uses.
+pub struct UartPins<'a> {
+    pub rx: AnyPin<'a>,
+    pub tx: AnyPin<'a>,
 }
 
 pub static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();
@@ -166,112 +166,27 @@ pub async fn uart_task(
     uart_buf: &'static BufferedUart,
     uart1: UART1<'static>,
     _config: &'static SunsetMutex<SSHStampConfig>,
-    gpios: GPIOS<'static>,
-) -> () {
-    dbg!("UART task started");
+    pins: UartPins<'static>,
+) {
+    // Note: dbg!/println! avoided throughout as this task runs in an InterruptExecutor
+    // at high priority where blocking I/O can cause scheduler panics.
 
     // Wait until ssh shell complete
     UART_SIGNAL.wait().await;
-    dbg!("UART signal recieved");
 
-    // Temporarily hardcoded pin numbers. Restore once ServEvent::SessionEnv properly updates config
-    // let config_lock = config.lock().await;
-    // let rx: u8 = config_lock.uart_pins.rx;
-    // let tx: u8 = config_lock.uart_pins.tx;
-    cfg_if::cfg_if!(
-        if #[cfg(feature = "esp32")] {
-            let rx: u8 = 13;
-            let tx: u8 = 14;
-        } else if #[cfg(feature = "esp32c2")] {
-            let rx: u8 = 9;
-            let tx: u8 = 10;
-        } else if #[cfg(feature = "esp32c3")] {
-            let rx: u8 = 20;
-            let tx: u8 = 21;
-        } else {
-            let rx: u8 = 10;
-            let tx: u8 = 11;
-        }
+    // Hardware UART setup - pins are already selected at compile time
+    let uart_config = Config::default().with_rx(
+        RxConfig::default()
+            .with_fifo_full_threshold(16)
+            .with_timeout(1),
     );
 
-    println!("Config Read - RX Pin: {}  TX Pin: {}", rx, tx);
-    if rx != tx {
-        let mut _holder9 = Some(gpios.gpio9);
-        let mut _holder10 = Some(gpios.gpio10);
-        let mut _holder11 = Some(gpios.gpio11);
-        let mut _holder13 = Some(gpios.gpio13);
-        let mut _holder14 = Some(gpios.gpio14);
-        let mut _holder20 = Some(gpios.gpio20);
-        let mut _holder21 = Some(gpios.gpio21);
-        // Not every GPIO is available for every target.
-        // TODO: Merge all targets to only match on available GPIO
-        cfg_if::cfg_if!(
-            if #[cfg(feature = "esp32")] {
-                let rx_pin = match rx {
-                    13 => _holder13.take().unwrap().unwrap(),
-                    14 => _holder14.take().unwrap().unwrap(),
-                    _ => _holder13.take().unwrap().unwrap(),
-                };
-                let tx_pin = match tx {
-                    13 => _holder13.take().unwrap().unwrap(),
-                    14 => _holder14.take().unwrap().unwrap(),
-                    _ => _holder13.take().unwrap().unwrap(),
-                };
-            } else if #[cfg(feature = "esp32c2")] {
-                let rx_pin = match rx {
-                    9 => _holder9.take().unwrap().unwrap(),
-                    10 => _holder10.take().unwrap().unwrap(),
-                    _ => _holder9.take().unwrap().unwrap(),
-                };
-                let tx_pin = match tx {
-                    9 => _holder9.take().unwrap().unwrap(),
-                    10 => _holder10.take().unwrap().unwrap(),
-                    _ => _holder10.take().unwrap().unwrap(),
-                };
-            } else if #[cfg(feature = "esp32c3")] {
-                let rx_pin = match rx {
-                    20 => _holder20.take().unwrap().unwrap(),
-                    21 => _holder21.take().unwrap().unwrap(),
-                    _ => _holder20.take().unwrap().unwrap(),
-                };
-                let tx_pin = match tx {
-                    20 => _holder20.take().unwrap().unwrap(),
-                    21 => _holder21.take().unwrap().unwrap(),
-                    _ => _holder21.take().unwrap().unwrap(),
-                };
-            } else {
-                let rx_pin = match rx {
-                    10 => _holder10.take().unwrap().unwrap(),
-                    11 => _holder11.take().unwrap().unwrap(),
-                    _ => _holder10.take().unwrap().unwrap(),
-                };
-                let tx_pin = match tx {
-                    10 => _holder10.take().unwrap().unwrap(),
-                    11 => _holder11.take().unwrap().unwrap(),
-                    _ => _holder11.take().unwrap().unwrap(),
-                };
-            }
-        );
+    // Silent failure to avoid println! in interrupt context
+    let Ok(uart) = Uart::new(uart1, uart_config) else {
+        return;
+    };
+    let uart = uart.with_rx(pins.rx).with_tx(pins.tx).into_async();
 
-        // Hardware UART setup
-        dbg!("UART config");
-        let uart_config = Config::default().with_rx(
-            RxConfig::default()
-                .with_fifo_full_threshold(16)
-                .with_timeout(1),
-        );
-
-        dbg!("UART setup pins");
-        let uart = Uart::new(uart1, uart_config)
-            .unwrap()
-            .with_rx(rx_pin)
-            .with_tx(tx_pin)
-            .into_async();
-
-        // Run the main buffered TX/RX loop
-        dbg!("uart_task running UART");
-        uart_buf.run(uart).await;
-    }
-    // TODO: Pin config error
-    dbg!("uart_task Pin config error! Using the same pin number for RX and TX!");
+    // Run the main buffered TX/RX loop
+    uart_buf.run(uart).await;
 }
