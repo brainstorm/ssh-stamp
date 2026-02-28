@@ -160,12 +160,10 @@ pub async fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(
             SunsetError::msg("flash erase error")
         })?;
 
-    fl.flash
-        .write(CONFIG_OFFSET as u32, &fl.buf)
-        .map_err(|e| {
-            dbg!("flash write error: {:?}", e);
-            SunsetError::msg("flash write error")
-        })?;
+    fl.flash.write(CONFIG_OFFSET as u32, &fl.buf).map_err(|e| {
+        dbg!("flash write error: {:?}", e);
+        SunsetError::msg("flash write error")
+    })?;
 
     println!("flash save done");
     Ok(())
