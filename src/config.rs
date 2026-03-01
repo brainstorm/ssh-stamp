@@ -21,18 +21,17 @@ use sunset::{
 };
 
 use crate::settings::{
-    DEFAULT_SSID, DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS, PASSWORD_AUTHENTICATION,
+    DEFAULT_SSID, DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS, PASSWORD_AUTH,
 };
 
 #[derive(Debug, PartialEq)]
 pub struct SSHStampConfig {
-    //pub first_boot: bool,
     pub hostkey: SignKey,
 
     /// Authentication
     pub password_authentication: bool,
-    pub admin_pw: Option<PwHash>,
-    pub admin_keys: [Option<Ed25519PubKey>; KEY_SLOTS],
+    pub password: Option<PwHash>,
+    pub pubkeys: [Option<Ed25519PubKey>; KEY_SLOTS],
 
     /// WiFi
     pub wifi_ssid: String<32>,
@@ -90,9 +89,9 @@ impl SSHStampConfig {
 
         Ok(SSHStampConfig {
             hostkey,
-            password_authentication: PASSWORD_AUTHENTICATION,
-            admin_pw: None,
-            admin_keys: Default::default(),
+            password_authentication: PASSWORD_AUTH,
+            password: None,
+            pubkeys: Default::default(),
             wifi_ssid,
             wifi_pw,
             mac,
@@ -103,13 +102,13 @@ impl SSHStampConfig {
         })
     }
 
-    pub fn set_admin_pw(&mut self, pw: Option<&str>) -> Result<()> {
-        self.admin_pw = pw.map(PwHash::new).transpose()?;
+    pub fn set_password(&mut self, pw: Option<&str>) -> Result<()> {
+        self.password = pw.map(PwHash::new).transpose()?;
         Ok(())
     }
 
-    pub fn check_admin_pw(&mut self, pw: &str) -> bool {
-        if let Some(ref p) = self.admin_pw {
+    pub fn check_password(&mut self, pw: &str) -> bool {
+        if let Some(ref p) = self.password {
             p.check(pw)
         } else {
             false
@@ -258,9 +257,9 @@ impl SSHEncode for SSHStampConfig {
 
         // Authentication
         self.password_authentication.enc(s)?;
-        enc_option(&self.admin_pw, s)?;
+        enc_option(&self.password, s)?;
 
-        for k in self.admin_keys.iter() {
+        for k in self.pubkeys.iter() {
             enc_option(k, s)?;
         }
 
@@ -289,9 +288,9 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
 
         // Authentication
         let password_authentication = SSHDecode::dec(s)?;
-        let admin_pw = dec_option(s)?;
-        let mut admin_keys = [None; KEY_SLOTS];
-        for k in admin_keys.iter_mut() {
+        let password = dec_option(s)?;
+        let mut pubkeys= [None; KEY_SLOTS];
+        for k in pubkeys.iter_mut() {
             *k = dec_option(s)?;
         }
 
@@ -313,8 +312,8 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         Ok(Self {
             hostkey,
             password_authentication,
-            admin_pw,
-            admin_keys,
+            password,
+            pubkeys,
             wifi_ssid,
             wifi_pw,
             mac,

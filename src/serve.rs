@@ -8,7 +8,7 @@ use esp_hal::system::software_reset;
 // Crate
 use crate::config::SSHStampConfig;
 use crate::espressif::buffered_uart::UART_SIGNAL;
-use crate::settings::UART_BUFFER_SIZE;
+use crate::settings::{PASSWORD_AUTH, PUBKEY_AUTH, UART_BUFFER_SIZE};
 use crate::store;
 use storage::flash;
 
@@ -38,7 +38,7 @@ pub async fn connection_loop(
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
     config: &SunsetMutex<SSHStampConfig>,
 ) -> Result<(), sunset::Error> {
-    let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
+    //let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
     let mut session: Option<ChanHandle> = None;
 
     println!("Entering connection_loop and prog_loop is next...");
@@ -93,12 +93,16 @@ pub async fn connection_loop(
                     a.fail()?;
                 }
             }
-            ServEvent::FirstAuth(ref a) => {
+            ServEvent::FirstAuth(mut a) => {
                 println!("ServEvent::FirstAuth");
                 // record the username
-                if username.lock().await.push_str(a.username()?).is_err() {
-                    println!("Too long username")
-                }
+                // if username.lock().await.push_str(a.username()?).is_err() {
+                //     println!("Too long username")
+                // }
+                a.enable_password_auth(PASSWORD_AUTH)?;
+                a.enable_pubkey_auth(PUBKEY_AUTH)?;
+                a.allow()?; // SECURITY: Controversial (but necessary?)
+                            // to provision client pubkeys to device?
             }
             ServEvent::Hostkeys(h) => {
                 println!("ServEvent::Hostkeys");
@@ -109,7 +113,7 @@ pub async fn connection_loop(
             ServEvent::PasswordAuth(a) => {
                 if let Ok(password) = a.password() {
                     let mut config_guard = config.lock().await;
-                    if config_guard.check_admin_pw(password) {
+                    if config_guard.check_password(password) {
                         a.allow()?
                     } else {
                         a.reject()?
@@ -118,9 +122,15 @@ pub async fn connection_loop(
                     a.reject()?
                 }
             }
-            ServEvent::PubkeyAuth(a) => {
+            ServEvent::PubkeyAuth(_a) => {
                 println!("ServEvent::PubkeyAuth");
-                a.allow()?;
+                // let mut config_guard = config.lock().await;
+                // let client_pubkey  = a.pubkey()?;
+                // if config_guard.pubkeys.iter().any(|k| k.as_ref() == Some(&client_pubkey)) {
+                //     a.allow()?;
+                // } else {
+                //     a.reject()?;
+                // }
             }
             ServEvent::OpenSession(a) => {
                 println!("ServEvent::OpenSession");
@@ -139,15 +149,6 @@ pub async fn connection_loop(
                 dbg!(a.name()?);
                 dbg!(a.value()?);
 
-                // TODO: Logic to serialise/validate env vars? I.e:
-                // a.name.validate(); // Checks the input variable, sanitizes, assigns a target subsystem
-                //
-                // config.change(c): Apply the config change to the relevant subsystem.
-                // i.e: if UART_TX_PIN or UART_RX_PIN, we update the PinChannel with with_channel() to change pins live.
-                // match a.name()? {
-                //     _ => {
-                //        dbg!("Unknown/unsupported ENV var");
-                //    }
                 a.name()?;
                 {
                     dbg!("Unsupported environment variable");
