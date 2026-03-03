@@ -14,7 +14,7 @@ use storage::flash;
 
 use core::option::Option::{self, None, Some};
 use core::result::Result;
-use log::warn;
+use log::{info, warn};
 
 // Embassy
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
@@ -161,16 +161,24 @@ pub async fn connection_loop(
                 dbg!(a.value()?);
 
                 match a.name()? {
-                    "pub_key" => {
+                    "LANG" => {
+                        // Ignore, but succeed to avoid client-side warnings
+                        // This env variable will always be sent by OpenSSH client.
+                        a.succeed()?;
+                    },
+                    "SSH_PUBKEY" => {
                         let mut config_guard = config.lock().await;
                         if config_guard.add_pubkey(a.value()?).is_ok() {
+                            info!("Added new pubkey from ENV");
                             a.succeed()?;
                         } else {
+                            warn!("Failed to add new pubkey from ENV");
                             a.fail()?;
                         }
                     }
                     _ => {
                         warn!("Unsupported environment variable");
+                        a.fail()?;
                     }
                 }
 

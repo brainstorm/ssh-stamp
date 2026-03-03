@@ -1,3 +1,4 @@
+use core::fmt::Debug;
 use core::net::Ipv4Addr;
 #[cfg(feature = "ipv6")]
 use core::net::Ipv6Addr;
@@ -6,20 +7,20 @@ use embassy_net::{Ipv4Cidr, StaticConfigV4};
 use embassy_net::{Ipv6Cidr, StaticConfigV6};
 use heapless::String;
 
-use esp_println::dbg;
-
 use bcrypt;
 use hmac::{Hmac, Mac};
+use log::{ info, warn, debug };
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
 use sunset::packets::Ed25519PubKey;
-use sunset::{Error, KeyType, Result, sshwire};
+use sunset::{KeyType, Result, sshwire};
 use sunset::{
     SignKey,
     sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
 };
 
+use crate::errors::Error;
 use crate::settings::{
     DEFAULT_SSID, DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS, PASSWORD_AUTH,
 };
@@ -125,8 +126,12 @@ impl SSHStampConfig {
         // Accept OpenSSH public key format (e.g. "ssh-ed25519 AAAA...") and
         // validate it is an Ed25519 key. Insert into the first empty slot or
         // overwrite slot 0 if none empty.
-        let openssh = ssh_key::PublicKey::from_openssh(key_str)
-            .map_err(|_| Error::msg("Unsupported public key format"))?;
+
+        info!("Checking pubkey string passed through ENV: {}", key_str);
+
+        let openssh = ssh_key::PublicKey::from_openssh(key_str)?;
+
+        info!("Public key format valid, continuing to parse");
 
         match openssh.key_data() {
             ssh_key::public::KeyData::Ed25519(k) => {
@@ -135,6 +140,7 @@ impl SSHStampConfig {
                     key: sunset::sshwire::Blob(bytes),
                 };
 
+                info!("Parsed Ed25519 public key, adding to config");
                 for slot in self.pubkeys.iter_mut() {
                     if slot.is_none() {
                         *slot = Some(newk);
@@ -142,16 +148,15 @@ impl SSHStampConfig {
                     }
                 }
 
+                warn!("Public key slots full, overwriting the first one");
+                // TODO SECURITY: Remove this fallback after FirstAuth.
                 // No empty slot: overwrite the first one.
                 self.pubkeys[0] = Some(newk);
                 Ok(())
             }
-            _ => Err(Error::msg("Not an Ed25519 public key")),
+            _ => Err(Error::BadKey),
         }
     }
-    // pub fn config_change(&mut self, conf: SSHConfig) -> Result<()> {
-    //      ServEvent::ConfigChange();
-    // }
 }
 
 fn random_mac() -> Result<[u8; 6]> {
@@ -209,7 +214,7 @@ fn enc_ipv4_config(v: &Option<StaticConfigV4>, s: &mut dyn SSHSink) -> WireResul
     v.is_some().enc(s)?;
     if let Some(v) = v {
         v.address.address().to_bits().enc(s)?;
-        dbg!("enc_ipv4_config: prefix", &v.address.prefix_len());
+        debug!("enc_ipv4_config: prefix {}", &v.address.prefix_len());
         v.address.prefix_len().enc(s)?;
         // to u32
         let gw = v.gateway.map(|a| a.to_bits());
