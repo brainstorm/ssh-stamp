@@ -1,3 +1,5 @@
+use log::debug;
+
 use core::net::Ipv4Addr;
 #[cfg(feature = "ipv6")]
 use core::net::Ipv6Addr;
@@ -5,8 +7,6 @@ use embassy_net::{Ipv4Cidr, StaticConfigV4};
 #[cfg(feature = "ipv6")]
 use embassy_net::{Ipv6Cidr, StaticConfigV6};
 use heapless::String;
-
-use esp_println::dbg;
 
 use bcrypt;
 use hmac::{Hmac, Mac};
@@ -180,7 +180,7 @@ fn enc_ipv4_config(v: &Option<StaticConfigV4>, s: &mut dyn SSHSink) -> WireResul
     v.is_some().enc(s)?;
     if let Some(v) = v {
         v.address.address().to_bits().enc(s)?;
-        dbg!("enc_ipv4_config: prefix", &v.address.prefix_len());
+        debug!("enc_ipv4_config: prefix = {}", &v.address.prefix_len());
         v.address.prefix_len().enc(s)?;
         // to u32
         let gw = v.gateway.map(|a| a.to_bits());
