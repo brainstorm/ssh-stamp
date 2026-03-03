@@ -1,3 +1,5 @@
+use log::{debug, info};
+
 use core::net::Ipv4Addr;
 #[cfg(feature = "ipv6")]
 use core::net::Ipv6Addr;
@@ -5,8 +7,6 @@ use embassy_net::{Ipv4Cidr, StaticConfigV4};
 #[cfg(feature = "ipv6")]
 use embassy_net::{Ipv6Cidr, StaticConfigV6};
 use heapless::String;
-
-use esp_println::dbg;
 
 use bcrypt;
 use hmac::{Hmac, Mac};
@@ -63,7 +63,6 @@ impl Default for UartPins {
         }
     }
 }
-use esp_println::println;
 
 impl SSHStampConfig {
     /// Bump this when the format changes
@@ -81,7 +80,7 @@ impl SSHStampConfig {
         let wifi_pw = None;
 
         let uart_pins = UartPins::default();
-        println!(
+        info!(
             "SSH Stamp Config new() - RX Pin: {}  TX Pin: {}",
             uart_pins.rx, uart_pins.tx
         );
@@ -180,7 +179,7 @@ fn enc_ipv4_config(v: &Option<StaticConfigV4>, s: &mut dyn SSHSink) -> WireResul
     v.is_some().enc(s)?;
     if let Some(v) = v {
         v.address.address().to_bits().enc(s)?;
-        dbg!("enc_ipv4_config: prefix", &v.address.prefix_len());
+        debug!("enc_ipv4_config: prefix = {}", &v.address.prefix_len());
         v.address.prefix_len().enc(s)?;
         // to u32
         let gw = v.gateway.map(|a| a.to_bits());
