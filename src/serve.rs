@@ -83,6 +83,8 @@ pub async fn connection_loop(
                         let _result = store::save(&mut flash_storage, &config_guard).await;
                     }
                     debug_assert!(ch.num() == a.channel());
+                    // TODO: Handle ssh-copy-id incantations
+                    dbg!(a.command()?);
                     a.succeed()?;
                     dbg!("We got shell");
                     // Signal for uart task to configure pins and run. Value is irrelevant.
@@ -165,6 +167,7 @@ pub async fn connection_loop(
                 a.succeed()?;
             }
             ServEvent::SessionExec(a) => {
+                println!("ServEvent::SessionExec");
                 a.fail()?;
             }
             ServEvent::Defunct | ServEvent::SessionShell(_) => {
