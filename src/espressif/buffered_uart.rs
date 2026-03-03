@@ -148,7 +148,11 @@ pub async fn uart_disable() -> () {
 /// UART pins for the buffered UART task.
 ///
 /// Pins are selected at compile time based on the target chip.
-/// Each target only populates the pins it actually uses.
+/// Each target only populates the pins it actually uses.l
+///
+/// SECURITY: In the future, the pins could be selected at runtime
+/// via SSH Env variables, think and evaluate if that could pose
+/// a security threat.
 pub struct UartPins<'a> {
     pub rx: AnyPin<'a>,
     pub tx: AnyPin<'a>,
