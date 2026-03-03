@@ -14,7 +14,7 @@ use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
 use sunset::packets::Ed25519PubKey;
-use sunset::{KeyType, Result, sshwire};
+use sunset::{Error, KeyType, Result, sshwire};
 use sunset::{
     SignKey,
     sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
@@ -121,6 +121,34 @@ impl SSHStampConfig {
         s
     }
 
+    pub(crate) fn add_pubkey(&mut self, key_str: &str) -> Result<(), Error> {
+        // Accept OpenSSH public key format (e.g. "ssh-ed25519 AAAA...") and
+        // validate it is an Ed25519 key. Insert into the first empty slot or
+        // overwrite slot 0 if none empty.
+        let openssh = ssh_key::PublicKey::from_openssh(key_str)
+            .map_err(|_| Error::msg("Unsupported public key format"))?;
+
+        match openssh.key_data() {
+            ssh_key::public::KeyData::Ed25519(k) => {
+                let bytes = k.0; // [u8; 32]
+                let newk = Ed25519PubKey {
+                    key: sunset::sshwire::Blob(bytes),
+                };
+
+                for slot in self.pubkeys.iter_mut() {
+                    if slot.is_none() {
+                        *slot = Some(newk);
+                        return Ok(());
+                    }
+                }
+
+                // No empty slot: overwrite the first one.
+                self.pubkeys[0] = Some(newk);
+                Ok(())
+            }
+            _ => Err(Error::msg("Not an Ed25519 public key")),
+        }
+    }
     // pub fn config_change(&mut self, conf: SSHConfig) -> Result<()> {
     //      ServEvent::ConfigChange();
     // }
@@ -289,7 +317,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         // Authentication
         let password_authentication = SSHDecode::dec(s)?;
         let password = dec_option(s)?;
-        let mut pubkeys= [None; KEY_SLOTS];
+        let mut pubkeys = [None; KEY_SLOTS];
         for k in pubkeys.iter_mut() {
             *k = dec_option(s)?;
         }

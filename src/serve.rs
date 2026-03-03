@@ -14,12 +14,11 @@ use storage::flash;
 
 use core::option::Option::{self, None, Some};
 use core::result::Result;
-use heapless::String;
+use log::warn;
 
 // Embassy
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
-use embassy_sync::mutex::Mutex;
 
 // Sunset
 use sunset::{ChanHandle, ServEvent, error};
@@ -95,14 +94,14 @@ pub async fn connection_loop(
             }
             ServEvent::FirstAuth(mut a) => {
                 println!("ServEvent::FirstAuth");
-                // record the username
+                // SECURITY: We have all and no users, let's confuse the audit tools? :)
                 // if username.lock().await.push_str(a.username()?).is_err() {
                 //     println!("Too long username")
                 // }
                 a.enable_password_auth(PASSWORD_AUTH)?;
                 a.enable_pubkey_auth(PUBKEY_AUTH)?;
                 a.allow()?; // SECURITY: Controversial (but necessary?)
-                            // to provision client pubkeys to device?
+                // to provision client pubkeys to device?
             }
             ServEvent::Hostkeys(h) => {
                 println!("ServEvent::Hostkeys");
@@ -122,15 +121,27 @@ pub async fn connection_loop(
                     a.reject()?
                 }
             }
-            ServEvent::PubkeyAuth(_a) => {
+            ServEvent::PubkeyAuth(a) => {
                 println!("ServEvent::PubkeyAuth");
-                // let mut config_guard = config.lock().await;
-                // let client_pubkey  = a.pubkey()?;
-                // if config_guard.pubkeys.iter().any(|k| k.as_ref() == Some(&client_pubkey)) {
-                //     a.allow()?;
-                // } else {
-                //     a.reject()?;
-                // }
+                let config_guard = config.lock().await;
+                let client_pubkey = a.pubkey()?;
+
+                let allowed = config_guard.pubkeys.iter().any(|slot| {
+                    if let Some(stored) = slot.as_ref() {
+                        match &client_pubkey {
+                            sunset::packets::PubKey::Ed25519(presented) => stored == presented,
+                            _ => false,
+                        }
+                    } else {
+                        false
+                    }
+                });
+
+                if allowed {
+                    a.allow()?;
+                } else {
+                    a.reject()?;
+                }
             }
             ServEvent::OpenSession(a) => {
                 println!("ServEvent::OpenSession");
@@ -149,16 +160,25 @@ pub async fn connection_loop(
                 dbg!(a.name()?);
                 dbg!(a.value()?);
 
-                a.name()?;
-                {
-                    dbg!("Unsupported environment variable");
+                match a.name()? {
+                    "pub_key" => {
+                        let mut config_guard = config.lock().await;
+                        if config_guard.add_pubkey(a.value()?).is_ok() {
+                            a.succeed()?;
+                        } else {
+                            a.fail()?;
+                        }
+                    }
+                    _ => {
+                        warn!("Unsupported environment variable");
+                    }
                 }
 
                 // config.save(a): Potentially an optional special environment variable SAVE_CONFIG=1
                 // that serialises current config to flash
                 // Only save once all ENV requests have been recorded?
 
-                a.succeed()?;
+                //a.succeed()?;
             }
             ServEvent::SessionPty(a) => {
                 println!("ServEvent::SessionPty");
