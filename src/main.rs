@@ -194,7 +194,7 @@ pub struct PeripheralsEnabled<'a> {
 
 async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Error> {
     info!("HSM: peripherals_enabled");
-    let controller = esp_radio::init().unwrap();
+    let controller = esp_radio::init().map_err(|_| sunset::error::BadUsage.build())?;
 
     let peripherals_enabled_struct = PeripheralsEnabled {
         rng: s.rng,
@@ -224,9 +224,7 @@ pub struct WifiControllerEnabled<'a> {
 
 pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(), sunset::Error> {
     info!("HSM: wifi_controller_enabled");
-    let tcp_stack = net::if_up(s.spawner, s.controller, s.wifi, s.rng, s.config)
-        .await
-        .unwrap();
+    let tcp_stack = net::if_up(s.spawner, s.controller, s.wifi, s.rng, s.config).await?;
 
     let wifi_controller_enabled_stack = WifiControllerEnabled {
         config: s.config,
