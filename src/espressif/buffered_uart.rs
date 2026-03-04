@@ -18,10 +18,11 @@ use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals::UART1;
 use esp_hal::system::software_reset;
 use esp_hal::uart::{Config, RxConfig, Uart};
-use esp_println::println;
 use portable_atomic::{AtomicUsize, Ordering};
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
+
+use log::info;
 
 // Sizes of the software buffers. Inward is more
 // important as an overrun here drops bytes. A full outward
@@ -132,7 +133,7 @@ impl Default for BufferedUart {
 
 pub async fn uart_buffer_disable() -> () {
     // disable uart buffer
-    println!("UART buffer disabled");
+    info!("UART buffer disabled");
     // TODO: Correctly disable/restart UART buffer and/or send messsage to user over SSH
     software_reset();
 }
@@ -140,7 +141,7 @@ pub async fn uart_buffer_disable() -> () {
 
 pub async fn uart_disable() -> () {
     // disable uart
-    println!("UART disabled");
+    info!("UART disabled");
     // TODO: Correctly disable/restart UART and/or send messsage to user over SSH
     software_reset();
 }

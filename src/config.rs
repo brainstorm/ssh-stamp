@@ -1,4 +1,4 @@
-use log::debug;
+use log::{debug, info};
 
 use core::net::Ipv4Addr;
 #[cfg(feature = "ipv6")]
@@ -63,7 +63,6 @@ impl Default for UartPins {
         }
     }
 }
-use esp_println::println;
 
 impl SSHStampConfig {
     /// Bump this when the format changes
@@ -81,7 +80,7 @@ impl SSHStampConfig {
         let wifi_pw = None;
 
         let uart_pins = UartPins::default();
-        println!(
+        info!(
             "SSH Stamp Config new() - RX Pin: {}  TX Pin: {}",
             uart_pins.rx, uart_pins.tx
         );

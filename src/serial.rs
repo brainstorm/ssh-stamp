@@ -4,10 +4,10 @@
 
 use embassy_futures::select::select;
 use embedded_io_async::{Read, Write};
+use log::{info, warn};
 
 // Espressif specific crates
 use crate::espressif::buffered_uart::BufferedUart;
-use esp_println::println;
 
 /// Forwards an incoming SSH connection to/from the local UART, until
 /// the connection drops
@@ -16,10 +16,10 @@ pub async fn serial_bridge(
     chanw: impl Write<Error = sunset::Error>,
     uart: &BufferedUart,
 ) -> Result<(), sunset::Error> {
-    println!("Starting serial <--> SSH bridge");
+    info!("Starting serial <--> SSH bridge");
 
     select(uart_to_ssh(uart, chanw), ssh_to_uart(chanr, uart)).await;
-    println!("Stopping serial <--> SSH bridge");
+    info!("Stopping serial <--> SSH bridge");
     Ok(())
 }
 
@@ -32,7 +32,7 @@ async fn uart_to_ssh(
         let dropped = uart_buf.check_dropped_bytes();
         if dropped > 0 {
             // TODO: should this also go to the SSH client?
-            println!("UART RX dropped {} bytes", dropped);
+            warn!("UART RX dropped {} bytes", dropped);
         }
         let n = uart_buf.read(&mut ssh_tx_buf).await;
         chanw.write_all(&ssh_tx_buf[..n]).await?;
