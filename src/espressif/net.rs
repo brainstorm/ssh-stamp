@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#[allow(unused_imports)]
 use log::{debug, error, info};
 
 use crate::config::SSHStampConfig;
