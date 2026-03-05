@@ -1,4 +1,4 @@
-use log::{debug, info};
+use log::{debug, info, warn};
 
 use core::net::Ipv4Addr;
 #[cfg(feature = "ipv6")]
@@ -10,7 +10,6 @@ use heapless::String;
 
 use bcrypt;
 use hmac::{Hmac, Mac};
-use log::{ info, warn, debug };
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use log::{debug, info};
+use log::{debug, info, warn};
 
 use crate::config::SSHStampConfig;
 use crate::espressif::buffered_uart::UART_SIGNAL;
@@ -12,23 +12,18 @@ use storage::flash;
 
 use core::option::Option::{self, None, Some};
 use core::result::Result;
-use log::{info, warn};
 
 // Embassy
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
-use embassy_sync::mutex::Mutex;
-// use embedded_storage::Storage;
 use esp_hal::system::software_reset;
-use heapless::String;
-use sunset_async::SunsetMutex;
-// use sunset::sshwire::SSHEncode;
-use crate::espressif::buffered_uart::UART_SIGNAL;
+
+// Sunset
 use sunset::{ChanHandle, ServEvent, error};
 use sunset_async::SunsetMutex;
 use sunset_async::{ProgressHolder, SSHServer};
 
-use esp_println::{dbg, println};
+use esp_println::println;
 
 pub enum SessionType {
     Bridge(ChanHandle),
@@ -49,7 +44,6 @@ pub async fn connection_loop(
         let mut ph = ProgressHolder::new();
         let ev = serv.progress(&mut ph).await?;
         // debug!(&ev);
-        #[allow(unreachable_patterns)]
         match ev {
             // #[cfg(feature = "sftp-ota")]
             ServEvent::SessionSubsystem(a) => {
@@ -73,6 +67,7 @@ pub async fn connection_loop(
                 if let Some(ch) = session.take() {
                     // Save config after connection successful (SessionEnv completed)
                     if config_changed {
+                        config_changed = false; // TODO: Avoid unnecessary "does not neet to be mutable" warnings for now
                         let config_guard = config.lock().await;
                         let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
                             panic!("Could not acquire flash storage lock");
@@ -167,7 +162,7 @@ pub async fn connection_loop(
                         // Ignore, but succeed to avoid client-side warnings
                         // This env variable will always be sent by OpenSSH client.
                         a.succeed()?;
-                    },
+                    }
                     "SSH_PUBKEY" => {
                         let mut config_guard = config.lock().await;
                         if config_guard.add_pubkey(a.value()?).is_ok() {
@@ -197,14 +192,13 @@ pub async fn connection_loop(
             ServEvent::SessionExec(a) => {
                 a.fail()?;
             }
-            ServEvent::Defunct | ServEvent::SessionShell(_) => {
+            ServEvent::Defunct => {
                 info!("Expected caller to handle event");
                 error::BadUsage.fail()?
             }
             ServEvent::PollAgain => {
                 // info!("ServEvent::PollAgain");
             }
-            _ => (),
         }
     }
 }
