@@ -3,6 +3,7 @@ use log::{debug, info, warn};
 use core::net::Ipv4Addr;
 #[cfg(feature = "ipv6")]
 use core::net::Ipv6Addr;
+use core::str::FromStr;
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 #[cfg(feature = "ipv6")]
 use embassy_net::{Ipv6Cidr, StaticConfigV6};
@@ -128,7 +129,7 @@ impl SSHStampConfig {
 
         info!("Checking pubkey string passed through ENV: {}", key_str);
 
-        let openssh = ssh_key::PublicKey::from_openssh(key_str)?;
+        let openssh = ssh_key::PublicKey::from_str(key_str)?;
 
         info!("Public key format valid, continuing to parse");
 
@@ -148,7 +149,7 @@ impl SSHStampConfig {
                 }
 
                 warn!("Public key slots full, overwriting the first one");
-                // TODO SECURITY: Remove this fallback after FirstAuth.
+                // TODO SECURITY: Remove this fallback after FirstAuth ON FIRST BOOT ONLY.
                 // No empty slot: overwrite the first one.
                 self.pubkeys[0] = Some(newk);
                 Ok(())

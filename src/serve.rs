@@ -90,7 +90,7 @@ pub async fn connection_loop(
                 }
             }
             ServEvent::FirstAuth(mut a) => {
-                println!("ServEvent::FirstAuth");
+                info!("ServEvent::FirstAuth");
                 // SECURITY: We have all and no users, let's confuse the audit tools? :)
                 // if username.lock().await.push_str(a.username()?).is_err() {
                 //     println!("Too long username")
