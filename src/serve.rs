@@ -212,7 +212,6 @@ pub async fn ssh_disable() -> () {
     software_reset();
 }
 
-// use crate::serve::SessionType;
 use crate::espressif::buffered_uart::BufferedUart;
 use crate::serial::serial_bridge;
 use sunset_async::ChanInOut;
@@ -233,10 +232,19 @@ pub async fn handle_ssh_client<'a, 'b>(
             info!("Starting bridge");
             serial_bridge(stdio, stdio2, uart_buff).await?
         }
-        SessionType::Sftp(_ch) => {
-            info!("Handling SFTP session");
-            // Handle SFTP session
-            //     todo!()
+        SessionType::Sftp(ch) => {
+            #[cfg(not(feature = "sftp-ota"))]
+            {
+                info!("SFTP session received but SFTP OTA feature is disabled");
+            }
+            #[cfg(feature = "sftp-ota")]
+            {
+                info!("Handling SFTP session");
+                let stdio = ssh_server.stdio(ch).await?;
+                // TODO: Use a configuration flag to select the hardware specific OtaActions implementer
+                let ota_writer = storage::esp_ota::OtaWriter::new();
+                ota::run_ota_server::<storage::esp_ota::OtaWriter>(stdio, ota_writer).await?
+            }
         }
     };
     Ok(())
@@ -245,6 +253,6 @@ pub async fn handle_ssh_client<'a, 'b>(
 pub async fn bridge_disable() -> () {
     // disable bridge
     info!("Bridge disabled");
-    // TODO: Correctly disable/restart bridge and/or send messsage to user over SSH
+    // TODO: Correctly disable/restart bridge and/or send message to user over SSH
     software_reset();
 }
