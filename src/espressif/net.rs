@@ -227,7 +227,7 @@ async fn dhcp_server(stack: Stack<'static>, ip: Ipv4Addr) {
         )
         .await
         {
-            warn!("DHCP server error: {e:?}");
+            error!("DHCP server error: {e:?}");
         }
         Timer::after(Duration::from_millis(500)).await;
     }
