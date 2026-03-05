@@ -2,11 +2,12 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use log::{debug, error, info, warn};
+
 use crate::config::SSHStampConfig;
 use crate::settings::{DEFAULT_IP, DEFAULT_SSID};
 use core::net::Ipv4Addr;
 use core::net::SocketAddrV4;
-use core::str::FromStr;
 use edge_dhcp;
 use edge_dhcp::{
     io::{self, DEFAULT_SERVER_PORT},
@@ -21,7 +22,6 @@ use embassy_time::{Duration, Timer};
 use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_hal::system::software_reset;
-use esp_println::{dbg, println};
 use esp_radio::Controller;
 use esp_radio::wifi::WifiEvent;
 use esp_radio::wifi::{AccessPointConfig, ModeConfig, WifiApState, WifiController};
@@ -46,12 +46,13 @@ pub async fn if_up(
 ) -> Result<Stack<'static>, sunset::Error> {
     let wifi_init = &*mk_static!(Controller<'static>, controller);
     let (mut wifi_controller, interfaces) =
-        esp_radio::wifi::new(wifi_init, wifi, Default::default()).unwrap();
+        esp_radio::wifi::new(wifi_init, wifi, Default::default())
+            .map_err(|_| sunset::error::BadUsage.build())?;
 
     let ap_config =
         ModeConfig::AccessPoint(AccessPointConfig::default().with_ssid(DEFAULT_SSID.into()));
     let res = wifi_controller.set_config(&ap_config);
-    println!("wifi_set_configuration returned {:?}", res);
+    info!("wifi_set_configuration returned {:?}", res);
 
     let gw_ip_addr_ipv4 = *DEFAULT_IP;
 
@@ -76,7 +77,7 @@ pub async fn if_up(
     spawner.spawn(dhcp_server(ap_stack, gw_ip_addr_ipv4)).ok();
 
     loop {
-        println!("Checking if link is up...\n");
+        debug!("Checking if link is up");
         if ap_stack.is_link_up() {
             break;
         }
@@ -84,7 +85,7 @@ pub async fn if_up(
     }
 
     // TODO: Use wifi_manager instead?
-    println!(
+    info!(
         "Connect to the AP `ssh-stamp` as a DHCP client with IP: {}",
         gw_ip_addr_ipv4
     );
@@ -94,14 +95,14 @@ pub async fn if_up(
 
 pub async fn ap_stack_disable() -> () {
     // drop ap_stack
-    println!("AP Stack disabled");
+    info!("AP Stack disabled");
     // TODO: Correctly disable/restart AP Stack and/or send messsage to user over SSH
     software_reset();
 }
 
 pub async fn tcp_socket_disable() -> () {
     // drop tcp stack
-    println!("TCP socket disabled");
+    info!("TCP socket disabled");
     // TODO: Correctly disable/restart tcp socket and/or send messsage to user over SSH
     software_reset();
 }
@@ -113,7 +114,7 @@ pub async fn accept_requests<'a>(
 ) -> TcpSocket<'a> {
     let mut tcp_socket = TcpSocket::new(tcp_stack, rx_buffer, tx_buffer);
 
-    println!("Waiting for SSH client...");
+    info!("Waiting for SSH client...");
     if let Err(e) = tcp_socket
         .accept(IpListenEndpoint {
             addr: None,
@@ -121,11 +122,11 @@ pub async fn accept_requests<'a>(
         })
         .await
     {
-        println!("connect error: {:?}", e);
+        error!("connect error: {:?}", e);
         // continue;
         tcp_socket_disable().await;
     }
-    println!("Connected, port 22");
+    info!("Connected, port 22");
 
     tcp_socket
 }
@@ -135,7 +136,7 @@ pub async fn wifi_up(
     mut wifi_controller: WifiController<'static>,
     config: &'static SunsetMutex<SSHStampConfig>,
 ) {
-    println!("Device capabilities: {:?}", wifi_controller.capabilities());
+    info!("Device capabilities: {:?}", wifi_controller.capabilities());
     let wifi_ssid = {
         let guard = config.lock().await;
         guard.wifi_ssid.clone()
@@ -144,7 +145,16 @@ pub async fn wifi_up(
     // TODO: No wifi password(s) yet...
     //let wifi_password = config.lock().await.wifi_pw;
 
-    println!("Starting Wifi");
+    debug!("Starting wifi");
+
+    let ssid_string = String::<63>::try_from(wifi_ssid.as_str())
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_else(|_| {
+            warn!("SSID too long, using default");
+            DEFAULT_SSID.into()
+        });
+    let client_config =
+        ModeConfig::AccessPoint(AccessPointConfig::default().with_ssid(ssid_string));
 
     loop {
         if esp_radio::wifi::ap_state() == WifiApState::Started {
@@ -153,15 +163,18 @@ pub async fn wifi_up(
             Timer::after(Duration::from_millis(5000)).await
         }
         if !matches!(wifi_controller.is_started(), Ok(true)) {
-            let ssid_string = String::<63>::from_str(&wifi_ssid)
-                .unwrap()
-                .to_ascii_lowercase();
-            let client_config =
-                ModeConfig::AccessPoint(AccessPointConfig::default().with_ssid(ssid_string));
-            wifi_controller.set_config(&client_config).unwrap();
-            println!("Starting wifi");
-            wifi_controller.start_async().await.unwrap();
-            println!("Wifi started!");
+            if let Err(e) = wifi_controller.set_config(&client_config) {
+                info!("Failed to set wifi config: {:?}", e);
+                Timer::after(Duration::from_millis(1000)).await;
+                continue;
+            }
+            info!("Starting wifi");
+            if let Err(e) = wifi_controller.start_async().await {
+                info!("Failed to start wifi: {:?}", e);
+                Timer::after(Duration::from_millis(1000)).await;
+                continue;
+            }
+            info!("Wifi started!");
         }
         Timer::after(Duration::from_millis(10)).await;
     }
@@ -179,7 +192,7 @@ pub async fn wifi_controller_disable() -> () {
 use esp_radio::wifi::WifiDevice;
 #[embassy_executor::task]
 async fn net_up(mut runner: Runner<'static, WifiDevice<'static>>) {
-    println!("Bringing up network stack...\n");
+    info!("Bringing up network stack...\n");
     runner.run().await
 }
 
@@ -191,25 +204,31 @@ async fn dhcp_server(stack: Stack<'static>, ip: Ipv4Addr) {
 
     let buffers = UdpBuffers::<3, 1024, 1024, 10>::new();
     let unbound_socket = Udp::new(stack, &buffers);
-    let mut bound_socket = unbound_socket
+    let mut bound_socket = match unbound_socket
         .bind(core::net::SocketAddr::V4(SocketAddrV4::new(
             Ipv4Addr::UNSPECIFIED,
             DEFAULT_SERVER_PORT,
         )))
         .await
-        .unwrap();
+    {
+        Ok(socket) => socket,
+        Err(e) => {
+            warn!("Failed to bind DHCP server socket: {e:?}");
+            return;
+        }
+    };
 
     loop {
-        let res = io::server::run(
+        if let Err(e) = io::server::run(
             &mut Server::<_, 64>::new_with_et(ip),
             &ServerOptions::new(ip, Some(&mut gw_buf)),
             &mut bound_socket,
             &mut buf,
         )
         .await
-        .inspect_err(|e| log::warn!("DHCP server error: {e:?}"));
+        {
+            error!("DHCP server error: {e:?}");
+        }
         Timer::after(Duration::from_millis(500)).await;
-
-        dbg!(res.unwrap());
     }
 }

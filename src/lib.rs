@@ -6,6 +6,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 #[deny(clippy::mem_forget)] // avoids any UB, forces use of Drop impl instead
+#[deny(unused_imports)] // avoid accidentally leaving in debug imports
+#[deny(unused_variables)] // avoid accidentally leaving in debug variables
 pub mod config;
 pub mod errors;
 pub mod espressif;
