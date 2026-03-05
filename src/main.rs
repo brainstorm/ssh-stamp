@@ -5,6 +5,22 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use ssh_stamp::{
+    config::SSHStampConfig,
+    espressif::{
+        buffered_uart::{BufferedUart, UART_BUF, UartPins, uart_task},
+        net, rng,
+    },
+    serve,
+    settings::UART_BUFFER_SIZE,
+};
+
+#[cfg(feature = "sftp-ota")]
+use ota::otatraits::OtaActions;
+use storage::flash;
+
+use sunset_async::{SSHServer, SunsetMutex};
+
 use core::result::Result;
 use core::result::Result::Err;
 use core::result::Result::Ok;
@@ -23,18 +39,8 @@ use log::info;
 
 use esp_radio::Controller;
 use esp_rtos::embassy::InterruptExecutor;
-use ssh_stamp::{
-    config::SSHStampConfig,
-    espressif::{
-        buffered_uart::{BufferedUart, UART_BUF, UartPins, uart_task},
-        net, rng,
-    },
-    serve,
-    settings::UART_BUFFER_SIZE,
-};
+
 use static_cell::StaticCell;
-use storage::flash;
-use sunset_async::{SSHServer, SunsetMutex};
 
 cfg_if::cfg_if! {
    if #[cfg(feature = "esp32")] {
@@ -77,9 +83,15 @@ async fn main(spawner: Spawner) -> ! {
     rng::register_custom_rng(rng);
 
     info!("Initialising flash ");
-    // Read SSH configuration from Flash (if it exists)
-    flash::init(peripherals.FLASH);
 
+    flash::init(peripherals.FLASH);
+    #[cfg(feature = "sftp-ota")]
+    {
+        storage::esp_ota::OtaWriter::try_validating_current_ota_partition()
+            .await
+            .expect("Failed to validate the current ota partition");
+    }
+    // Read SSH configuration from Flash (if it exists)
     info!("Loading config ");
     let flash_config = {
         let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {

@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 
+ota = { path = "../ota" }
+
 log.workspace = true
 once_cell.workspace = true
 sunset-async.workspace = true

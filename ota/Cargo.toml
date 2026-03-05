@@ -10,9 +10,11 @@ std = []
 [dependencies]
 sunset.workspace = true
 sunset-async.workspace = true
+sunset-sftp.workspace = true
 
 log.workspace = true
 sha2.workspace = true
+rustc-hash.workspace = true
 
 # Only for helpers and tests
 [target.'cfg(not(target_os = "none"))'.dependencies]
