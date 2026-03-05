@@ -2,8 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#[allow(unused_imports)]
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 
 use crate::config::SSHStampConfig;
 use crate::settings::{DEFAULT_IP, DEFAULT_SSID};
@@ -78,7 +77,7 @@ pub async fn if_up(
     spawner.spawn(dhcp_server(ap_stack, gw_ip_addr_ipv4)).ok();
 
     loop {
-        log::debug!("Checking if link is up");
+        debug!("Checking if link is up");
         if ap_stack.is_link_up() {
             break;
         }
@@ -146,12 +145,12 @@ pub async fn wifi_up(
     // TODO: No wifi password(s) yet...
     //let wifi_password = config.lock().await.wifi_pw;
 
-    log::debug!("Starting wifi");
+    debug!("Starting wifi");
 
     let ssid_string = String::<63>::try_from(wifi_ssid.as_str())
         .map(|s| s.to_ascii_lowercase())
         .unwrap_or_else(|_| {
-            log::warn!("SSID too long, using default");
+            warn!("SSID too long, using default");
             DEFAULT_SSID.into()
         });
     let client_config =
@@ -214,7 +213,7 @@ async fn dhcp_server(stack: Stack<'static>, ip: Ipv4Addr) {
     {
         Ok(socket) => socket,
         Err(e) => {
-            log::warn!("Failed to bind DHCP server socket: {e:?}");
+            warn!("Failed to bind DHCP server socket: {e:?}");
             return;
         }
     };
@@ -228,7 +227,7 @@ async fn dhcp_server(stack: Stack<'static>, ip: Ipv4Addr) {
         )
         .await
         {
-            log::warn!("DHCP server error: {e:?}");
+            warn!("DHCP server error: {e:?}");
         }
         Timer::after(Duration::from_millis(500)).await;
     }
