@@ -104,14 +104,19 @@ pub async fn connection_loop(
                 // and no stored client pubkeys.
                 let config_guard = config.lock().await;
 
+                // Disable password auth method regardless.
+                a.enable_password_auth(false)?;
                 if config_guard.first_boot {
                     // SECURITY: We have no users; enable pubkey auth so the
                     // provisioner can add a key.
                     a.enable_pubkey_auth(PUBKEY_AUTH)?;
-                    a.allow()?; // SECURITY: Controversial (but necessary?)
+                    a.allow()?; // SECURITY: Controversial (but necessary to provision?)
                 } else {
                     // Not first boot: do not auto-allow; reject the first-auth helper.
-                    info!("FirstAuth received but not first-boot; rejecting");
+                    info!(
+                        "FirstAuth received but not first-boot; rejecting any pubkey auth attempts"
+                    );
+                    a.enable_pubkey_auth(false)?;
                     a.reject()?;
                 }
             }
