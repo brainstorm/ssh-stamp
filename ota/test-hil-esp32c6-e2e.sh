@@ -4,15 +4,16 @@
 # the target must be reachable via espflash
 # and the system must automatically connect it to the wifi network created by the board
 # There is also a collection of tools required to run the script ( see check_tools() )
-# TODO: Is there a way in espflash to obtain current running app partition?
 # TODO: Read the partitions.csv to obtain the OTA_1_OFFSET
-# TODO: Interrupting expect does not work
+# TODO: Consider replacing this script with [rexpect](https://crates.io/crates/rexpect) to avoid having to learn tcl language
 
-EXIT_BAD_DIR=100
-EXIT_UNREACHABLE=101
-EXIT_INTERRUPTED=102
-EXIT_MISSING_TOOL=103
-EXIT_BAD_MD5=104
+EXIT_BAD_DIR=100 # The script is not being run from the project root, or the Cargo.toml file does not contain the expected content. Please run it from the correct location.
+EXIT_INTERRUPTED=101 #
+EXIT_MISSING_TOOL=102 # One of the required tools is not installed or not in PATH. See check_tools() function for details.
+EXIT_UNREACHABLE=103 # The board is not reachable in the target network after flashing the app, or it does not open the SSH port within the expected time after OTA update
+EXIT_SFTP_FAILED=104 # The SFTP upload of the OTA file failed or timed out.
+EXIT_BAD_MD5=105 # The MD5 checksum of the OTA partition does not match the local BIN file, indicating an issue with the OTA update process.
+EXIT_BAD_PARTITION=106 # The app partition does not match the expected partition in OTA_1_OFFSET
 
 # Borrowed from https://github.com/mkj/sunset ci tests
 if ! grep -sq '^name = "ssh-stamp"' Cargo.toml; then
@@ -24,8 +25,8 @@ fi
 SSH_STAMP_ELF="target/riscv32imac-unknown-none-elf/release/ssh-stamp"
 
 RETRIES=30
-RETRY_DELAY=1
-DEVICE_IP="192.168.0.1"
+RETRY_DELAY=2
+DEVICE_IP="192.168.4.1"
 OTA_1_OFFSET=0x1f0000 # Offset of ota_1 partition in partitions.csv. Reading this could be automated. Automating everything is a rabbit hole
 OTA_UPLOAD_TIMEOUT=300s
 OUTPUT_DIR="./target/ci"
@@ -71,9 +72,12 @@ pack_ota(){
     cargo ota-packer -- $OUTPUT_DIR/app.bin
 }
 
-clean_flash_and_flash_app(){
+clean_flash(){
     echo "Erasing the target device flash"
     espflash erase-flash
+}
+
+flash_app(){
     echo "Flashing the board with the application"
     espflash flash --baud=921600 --partition-table partitions.csv $SSH_STAMP_ELF
 }
@@ -121,7 +125,6 @@ reach_board(){
     done
 }
 
-# TODO: Does not work
 # Trap Ctrl+C to cleanup
 cleanup() {
     echo ""
@@ -134,29 +137,36 @@ trap cleanup SIGINT SIGTERM
 
 
 run_sftp_ota(){
-    local OTA_FILE="$(realpath $OUTPUT_DIR/app.ota)"
+    local OTA_FILE=$(realpath "$OUTPUT_DIR/app.ota")
     echo "Uploading $OTA_FILE to $DEVICE_IP via SFTP (OTA update)"
     echo "Will timeout after $OTA_UPLOAD_TIMEOUT if not completed"
     
-    # Temp script as a workaround to pass ENV to expect
-    cat > $OUTPUT_DIR/sftp_upload.exp <<EOF
-set timeout -1
-spawn sftp user@$DEVICE_IP
-expect "password:"
-send "\r"
-expect "sftp>"
-send "put $OTA_FILE\r"
-expect "sftp>"
+    export DEVICE_IP OTA_FILE OTA_UPLOAD_TIMEOUT # Making them available to expect  
+    expect <<-'EOF'
+    set timeout $env(OTA_UPLOAD_TIMEOUT)
+    spawn sftp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "user@$env(DEVICE_IP)"
+    expect "password:"
+    send "\r"
+    expect "sftp>"
+    send "put \"$env(OTA_FILE)\"\r"
+    expect "sftp>"
+    # Rebooting is rough ATM, the target restarts before closing the channel
+    # send "bye\r" 
+    # expect eof
 EOF
+
     
-    timeout $OTA_UPLOAD_TIMEOUT expect $OUTPUT_DIR/sftp_upload.exp || { echo "SFTP operation timed out or failed"; cleanup; }
-    rm -f $OUTPUT_DIR/sftp_upload.exp
+    OTA_UPLOAD_RESULT=$?
+    if [ $OTA_UPLOAD_RESULT -ne 0 ]; then
+        echo "Error: SFTP upload failed or timed out"
+        exit $EXIT_SFTP_FAILED
+    fi
     
     echo "OTA upload complete. Waiting for the device to reboot and apply the update."
 }
 
 
-validate_ota(){
+check_ota_partition_md5(){
     local BIN_FILE="$(realpath $OUTPUT_DIR/app.bin)"
     
     LOCAL_MD5=$(md5sum $BIN_FILE | sed -e 's/ .*//' -e 's/^0//')
@@ -175,8 +185,61 @@ validate_ota(){
     fi
 }
 
-set -v
-set -e 
+check_app_offset(){
+# "I (344) boot: Loaded app from partition at offset 0x1f0000"
+    export OTA_1_OFFSET OTA_UPLOAD_TIMEOUT EXIT_BAD_PARTITION
+    expect <<'EOF'
+    set timeout $env(OTA_UPLOAD_TIMEOUT)
+    spawn espflash monitor
+    
+    # Wait for the command prompt or EOF
+    expect {
+        -re {Commands:} {
+            puts "Received Commands. Time to reset the board"
+            sleep 1
+        }
+        timeout {
+            puts "ERROR: espflash monitor finished without prompting commands. Bad port?"
+            exit 1
+        }
+        eof {
+            puts "ERROR: espflash monitor finished without prompting commands. Bad port?"
+            exit 1
+        }
+    }
+
+    # ascii code for Ctrl+r or Device Ctrl 2
+    puts "Sending return carriage and CTRL+R"
+    send  "\r" 
+    sleep 0.5
+    send  "\x12" 
+    
+    
+    expect {
+        -re {boot: Loaded app from partition at offset (.*?)\r} {
+            puts "\n\n\n\rOutput after sending CTRL+R:\n"
+            set app_offset_output $expect_out(1,string)
+            
+            if { $env(OTA_1_OFFSET) == $app_offset_output } { 
+                puts "Offset match the expected ota partition offset: $app_offset_output"
+                exit 0
+            } else { 
+                puts "Offset do not match the expected ota partition offset: expected='$env(OTA_1_OFFSET)' vs obtained='$app_offset_output'"
+                exit $env(EXIT_BAD_PARTITION)
+            }
+        }
+        eof {
+            puts "ERROR: espflash monitor finished without an app offset. Bad regexp?"
+            exit 1
+        }
+    }
+
+    sleep 10
+EOF
+}
+
+set -v # Print commands as they are executed for better visibility in CI logs
+set -e # Exit immediately if a command exits with a non-zero status
 
 check_tools
 
@@ -186,7 +249,9 @@ build_app
 
 pack_ota
 
-clean_flash_and_flash_app
+clean_flash
+
+flash_app
 
 reach_board
 
@@ -194,7 +259,9 @@ reach_app
 
 run_sftp_ota
 
-validate_ota
+check_ota_partition_md5
+
+check_app_offset
 
 echo "OTA test completed successfully."
 exit 0
