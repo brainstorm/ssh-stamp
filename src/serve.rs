@@ -25,6 +25,7 @@ use sunset_async::{ProgressHolder, SSHServer};
 
 pub enum SessionType {
     Bridge(ChanHandle),
+    #[cfg(feature = "sftp-ota")]
     Sftp(ChanHandle),
 }
 
@@ -50,10 +51,19 @@ pub async fn connection_loop(
                 if a.command()?.to_lowercase().as_str() == "sftp" {
                     if let Some(ch) = session.take() {
                         debug_assert!(ch.num() == a.channel());
+                        #[cfg(feature = "sftp-ota")]
+                        {
+                            a.succeed()?;
+                            info!("We got SFTP subsystem");
+                            let _ = chan_pipe.try_send(SessionType::Sftp(ch));
+                        }
+                        #[cfg(not(feature = "sftp-ota"))]
+                        {
+                            use log::warn;
 
-                        a.succeed()?;
-                        info!("We got SFTP subsystem");
-                        let _ = chan_pipe.try_send(SessionType::Sftp(ch));
+                            warn!("SFTP subsystem requested but not supported in this build");
+                            a.fail()?;
+                        }
                     } else {
                         a.fail()?;
                     }
@@ -232,12 +242,8 @@ pub async fn handle_ssh_client<'a, 'b>(
             info!("Starting bridge");
             serial_bridge(stdio, stdio2, uart_buff).await?
         }
+        #[cfg(feature = "sftp-ota")]
         SessionType::Sftp(ch) => {
-            #[cfg(not(feature = "sftp-ota"))]
-            {
-                info!("SFTP session received but SFTP OTA feature is disabled");
-            }
-            #[cfg(feature = "sftp-ota")]
             {
                 info!("Handling SFTP session");
                 let stdio = ssh_server.stdio(ch).await?;
