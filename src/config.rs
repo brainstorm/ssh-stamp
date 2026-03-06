@@ -80,7 +80,7 @@ impl SSHStampConfig {
             uart_pins.rx, uart_pins.tx
         );
 
-        // No password config fields nor logic: only pubkey auth supported. 
+        // No password config fields nor logic: only pubkey auth supported.
         // Leave password fields out (except wifi one).
 
         Ok(SSHStampConfig {
@@ -132,8 +132,7 @@ impl SSHStampConfig {
                 }
 
                 warn!("Public key slots full, overwriting the first one");
-                // TODO SECURITY: Remove this fallback after FirstAuth ON FIRST BOOT ONLY.
-                // No empty slot: overwrite the first one.
+                // SECURITY: Allow this on FirstAuth ON FIRST BOOT ONLY.
                 self.pubkeys[0] = Some(newk);
                 Ok(())
             }

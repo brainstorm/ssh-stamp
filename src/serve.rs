@@ -96,7 +96,7 @@ pub async fn connection_loop(
                 // and no stored client pubkeys.
                 let config_guard = config.lock().await;
 
-                if config_guard.first_boot{
+                if config_guard.first_boot {
                     // SECURITY: We have no users; enable pubkey auth so the
                     // provisioner can add a key.
                     a.enable_pubkey_auth(PUBKEY_AUTH)?;
@@ -162,12 +162,12 @@ pub async fn connection_loop(
                         // This env variable will always be sent by OpenSSH client.
                         a.succeed()?;
                     }
-                    "SSH_PUBKEY" => {
+                    "SSH_STAMP_PUBKEY" => {
                         let mut config_guard = config.lock().await;
                         // Only allow adding a pubkey via ENV on first-boot-like configs.
 
                         if !config_guard.first_boot {
-                            warn!("SSH_PUBKEY env received but not first-boot; rejecting");
+                            warn!("SSH_STAMP_PUBKEY env received but not first-boot; rejecting");
                             a.fail()?;
                         } else if config_guard.add_pubkey(a.value()?).is_ok() {
                             info!("Added new pubkey from ENV");
