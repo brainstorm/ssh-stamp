@@ -27,6 +27,7 @@ use esp_println::println;
 
 pub enum SessionType {
     Bridge(ChanHandle),
+    #[cfg(feature = "sftp-ota")]
     Sftp(ChanHandle),
 }
 
@@ -51,10 +52,17 @@ pub async fn connection_loop(
                 if a.command()?.to_lowercase().as_str() == "sftp" {
                     if let Some(ch) = session.take() {
                         debug_assert!(ch.num() == a.channel());
-
-                        a.succeed()?;
-                        info!("SFTP subsystem is up and running");
-                        let _ = chan_pipe.try_send(SessionType::Sftp(ch));
+                        #[cfg(feature = "sftp-ota")]
+                        {
+                            a.succeed()?;
+                            info!("We got SFTP subsystem");
+                            let _ = chan_pipe.try_send(SessionType::Sftp(ch));
+                        }
+                        #[cfg(not(feature = "sftp-ota"))]
+                        {
+                            warn!("SFTP subsystem requested but not supported in this build");
+                            a.fail()?;
+                        }
                     } else {
                         a.fail()?;
                     }
@@ -232,7 +240,6 @@ pub async fn ssh_disable() -> () {
     software_reset();
 }
 
-// use crate::serve::SessionType;
 use crate::espressif::buffered_uart::BufferedUart;
 use crate::serial::serial_bridge;
 use sunset_async::ChanInOut;
@@ -253,10 +260,15 @@ pub async fn handle_ssh_client<'a, 'b>(
             info!("Starting bridge");
             serial_bridge(stdio, stdio2, uart_buff).await?
         }
-        SessionType::Sftp(_ch) => {
-            info!("Handling SFTP session");
-            // Handle SFTP session
-            //     todo!()
+        #[cfg(feature = "sftp-ota")]
+        SessionType::Sftp(ch) => {
+            {
+                info!("Handling SFTP session");
+                let stdio = ssh_server.stdio(ch).await?;
+                // TODO: Use a configuration flag to select the hardware specific OtaActions implementer
+                let ota_writer = storage::esp_ota::OtaWriter::new();
+                ota::run_ota_server::<storage::esp_ota::OtaWriter>(stdio, ota_writer).await?
+            }
         }
     };
     Ok(())
@@ -265,6 +277,6 @@ pub async fn handle_ssh_client<'a, 'b>(
 pub async fn bridge_disable() -> () {
     // disable bridge
     info!("Bridge disabled");
-    // TODO: Correctly disable/restart bridge and/or send messsage to user over SSH
+    // TODO: Correctly disable/restart bridge and/or send message to user over SSH
     software_reset();
 }

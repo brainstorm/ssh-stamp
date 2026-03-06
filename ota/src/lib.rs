@@ -3,6 +3,25 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// Runs the ota server taking care of reading ota file metadata,
+/// internal state, storage and target reset
+///
+/// Entry point for this crate when used as an OTA server
+#[cfg(target_os = "none")]
+pub use sftpserver::run_ota_server;
+/// Module handling OTA update metadata and header parsing
+///
+/// It will be called from the sftpserver module to handle the OTA update process
+#[cfg(target_os = "none")]
+mod handler;
+/// Defining the target hardware abstraction for OTA updates
+///
+/// This module defines traits for platform specific implementations
+pub mod otatraits;
+/// Module implementing the OTA SFTP server
+#[cfg(target_os = "none")]
+mod sftpserver;
+
 /// Module defining TLV types and constants for OTA updates
 ///
 /// Re-exporting this module for easier access from outside the crate: ota-packer
@@ -18,7 +37,7 @@ mod ota_tlv_tests {
 
     use crate::OtaHeader;
     use crate::tlv::*;
-    use sunset::sshwire;
+    use sunset::sshwire::{self, SSHDecode, SSHEncode};
 
     #[test]
     fn test_ota_tlv_round_trip() {
