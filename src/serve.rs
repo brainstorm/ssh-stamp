@@ -6,7 +6,7 @@ use log::{debug, info, warn};
 
 use crate::config::SSHStampConfig;
 use crate::espressif::buffered_uart::UART_SIGNAL;
-use crate::settings::{PASSWORD_AUTH, PUBKEY_AUTH, UART_BUFFER_SIZE};
+use crate::settings::{PUBKEY_AUTH, UART_BUFFER_SIZE};
 use crate::store;
 use storage::flash;
 
@@ -53,7 +53,7 @@ pub async fn connection_loop(
                         debug_assert!(ch.num() == a.channel());
 
                         a.succeed()?;
-                        info!("We got SFTP subsystem");
+                        info!("SFTP subsystem is up and running");
                         let _ = chan_pipe.try_send(SessionType::Sftp(ch));
                     } else {
                         a.fail()?;
@@ -91,14 +91,21 @@ pub async fn connection_loop(
             }
             ServEvent::FirstAuth(mut a) => {
                 info!("ServEvent::FirstAuth");
-                // SECURITY: We have all and no users, let's confuse the audit tools? :)
-                // if username.lock().await.push_str(a.username()?).is_err() {
-                //     println!("Too long username")
-                // }
-                a.enable_password_auth(PASSWORD_AUTH)?;
-                a.enable_pubkey_auth(PUBKEY_AUTH)?;
-                a.allow()?; // SECURITY: Controversial (but necessary?)
-                // to provision client pubkeys to device?
+                // Allow the "first auth" behaviour only on first-boot-like configs.
+                // Consider the device in first-boot state when there is no password
+                // and no stored client pubkeys.
+                let config_guard = config.lock().await;
+
+                if config_guard.first_boot{
+                    // SECURITY: We have no users; enable pubkey auth so the
+                    // provisioner can add a key.
+                    a.enable_pubkey_auth(PUBKEY_AUTH)?;
+                    a.allow()?; // SECURITY: Controversial (but necessary?)
+                } else {
+                    // Not first boot: do not auto-allow; reject the first-auth helper.
+                    info!("FirstAuth received but not first-boot; rejecting");
+                    a.reject()?;
+                }
             }
             ServEvent::Hostkeys(h) => {
                 info!("ServEvent::Hostkeys");
@@ -107,16 +114,8 @@ pub async fn connection_loop(
                 h.hostkeys(&[&config_guard.hostkey])?;
             }
             ServEvent::PasswordAuth(a) => {
-                if let Ok(password) = a.password() {
-                    let mut config_guard = config.lock().await;
-                    if config_guard.check_password(password) {
-                        a.allow()?
-                    } else {
-                        a.reject()?
-                    }
-                } else {
-                    a.reject()?
-                }
+                // Password auth is not supported; always reject.
+                a.reject()?;
             }
             ServEvent::PubkeyAuth(a) => {
                 println!("ServEvent::PubkeyAuth");
@@ -165,9 +164,18 @@ pub async fn connection_loop(
                     }
                     "SSH_PUBKEY" => {
                         let mut config_guard = config.lock().await;
-                        if config_guard.add_pubkey(a.value()?).is_ok() {
+                        // Only allow adding a pubkey via ENV on first-boot-like configs.
+
+                        if !config_guard.first_boot {
+                            warn!("SSH_PUBKEY env received but not first-boot; rejecting");
+                            a.fail()?;
+                        } else if config_guard.add_pubkey(a.value()?).is_ok() {
                             info!("Added new pubkey from ENV");
                             a.succeed()?;
+                            // Mark that config has changed and clear first_boot so
+                            // future connections are not treated as first-boot.
+                            config_guard.first_boot = false;
+                            config_changed = true;
                         } else {
                             warn!("Failed to add new pubkey from ENV");
                             a.fail()?;
