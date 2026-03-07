@@ -134,24 +134,26 @@ pub async fn connection_loop(
                 let config_guard = config.lock().await;
                 let client_pubkey = a.pubkey()?;
 
-                if config_guard.pubkeys.iter().any(|slot| {
-                    if let Some(stored) = slot.as_ref() {
-                        match &client_pubkey {
-                            sunset::packets::PubKey::Ed25519(presented) => {
-                                info!("Stored pubkey: {:?}", stored.key.0);
-                                info!("Presented pubkey: {:?}", presented.key.0);
+                match client_pubkey {
+                    sunset::packets::PubKey::Ed25519(presented) => {
+                        let matched = config_guard
+                            .pubkeys
+                            .iter()
+                            .any(|slot| slot.as_ref().is_some_and(|stored| *stored == presented));
 
-                                stored == presented
-                            },
-                            _ => false,
+                        if matched {
+                            a.allow()?;
+                        } else {
+                            info!("No matching pubkey slot found");
+                            a.reject()?;
+                            software_reset(); // TODO: Handle better HSM-flow-wise.
                         }
-                    } else {
-                        false
                     }
-                }) {
-                    a.allow()?;
-                } else {
-                    a.reject()?;
+                    _ => {
+                        // Only Ed25519 keys supported
+                        a.reject()?;
+                        software_reset(); // TODO: Handle better HSM-flow-wise.
+                    }
                 }
             }
             ServEvent::OpenSession(a) => {
@@ -184,7 +186,7 @@ pub async fn connection_loop(
                         if !config_guard.first_boot {
                             warn!("SSH_STAMP_PUBKEY env received but not first-boot; rejecting");
                             a.fail()?;
-                            continue;
+                            break Ok(()); // TODO: Do better HSM-flow-wise
                         } else if config_guard.add_pubkey(a.value()?).is_ok() {
                             info!("Added new pubkey from ENV");
                             a.succeed()?;
@@ -192,6 +194,8 @@ pub async fn connection_loop(
                             // future connections are not treated as first-boot.
                             config_guard.first_boot = false;
                             config_changed = true;
+                            // Don't immediately allow the new user/key to establish bridge but reboot first?
+                            //software_reset(); // TODO: Do better HSM-flow-wise.
                         } else {
                             warn!("Failed to add new pubkey from ENV");
                             a.fail()?;

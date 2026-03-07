@@ -110,9 +110,12 @@ impl SSHStampConfig {
         // validate it is an Ed25519 key. Insert into the first empty slot or
         // overwrite slot 0 if none empty.
 
-        info!("Checking pubkey string passed through ENV: {}", key_str);
+        info!(
+            "Checking pubkey string passed through ENV: {}",
+            key_str.trim()
+        );
 
-        let openssh = ssh_key::PublicKey::from_str(key_str)?;
+        let openssh = ssh_key::PublicKey::from_str(key_str.trim())?;
 
         info!("Public key format valid, continuing to parse");
 
