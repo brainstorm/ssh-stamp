@@ -2,25 +2,25 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use log::{debug, info};
+use log::{debug, info, warn};
 
 use crate::config::SSHStampConfig;
-use crate::settings::UART_BUFFER_SIZE;
+use crate::espressif::buffered_uart::UART_SIGNAL;
+use crate::settings::{PUBKEY_AUTH, UART_BUFFER_SIZE};
 use crate::store;
+use storage::flash;
+
 use core::option::Option::{self, None, Some};
 use core::result::Result;
-use storage::flash;
+
 // Embassy
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
-use embassy_sync::mutex::Mutex;
-// use embedded_storage::Storage;
 use esp_hal::system::software_reset;
-use heapless::String;
-use sunset_async::SunsetMutex;
-// use sunset::sshwire::SSHEncode;
-use crate::espressif::buffered_uart::UART_SIGNAL;
+
+// Sunset
 use sunset::{ChanHandle, ServEvent, error};
+use sunset_async::SunsetMutex;
 use sunset_async::{ProgressHolder, SSHServer};
 
 pub enum SessionType {
@@ -34,7 +34,7 @@ pub async fn connection_loop(
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
     config: &SunsetMutex<SSHStampConfig>,
 ) -> Result<(), sunset::Error> {
-    let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
+    //let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
     let mut session: Option<ChanHandle> = None;
 
     debug!("Entering connection_loop and prog_loop is next...");
@@ -43,7 +43,6 @@ pub async fn connection_loop(
         let mut ph = ProgressHolder::new();
         let ev = serv.progress(&mut ph).await?;
         // debug!(&ev);
-        #[allow(unreachable_patterns)]
         match ev {
             // #[cfg(feature = "sftp-ota")]
             ServEvent::SessionSubsystem(a) => {
@@ -59,8 +58,6 @@ pub async fn connection_loop(
                         }
                         #[cfg(not(feature = "sftp-ota"))]
                         {
-                            use log::warn;
-
                             warn!("SFTP subsystem requested but not supported in this build");
                             a.fail()?;
                         }
@@ -76,6 +73,7 @@ pub async fn connection_loop(
                 if let Some(ch) = session.take() {
                     // Save config after connection successful (SessionEnv completed)
                     if config_changed {
+                        config_changed = false; // TODO: Avoid unnecessary "does not neet to be mutable" warnings for now
                         let config_guard = config.lock().await;
                         let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
                             panic!("Could not acquire flash storage lock");
@@ -97,25 +95,66 @@ pub async fn connection_loop(
                     a.fail()?;
                 }
             }
-            ServEvent::FirstAuth(ref a) => {
+            ServEvent::FirstAuth(mut a) => {
                 info!("ServEvent::FirstAuth");
-                // record the username
-                if username.lock().await.push_str(a.username()?).is_err() {
-                    info!("Too long username")
+                // Allow the "first auth" behaviour only on first-boot-like configs.
+                // Consider the device in first-boot state when there is no password
+                // and no stored client pubkeys.
+                let config_guard = config.lock().await;
+
+                // Disable password auth method regardless.
+                a.enable_password_auth(false)?;
+                if config_guard.first_boot {
+                    // SECURITY: We have no users; enable pubkey auth so the
+                    // provisioner can add a key.
+                    a.enable_pubkey_auth(PUBKEY_AUTH)?;
+                    a.allow()?; // SECURITY: Controversial (but necessary to provision?)
+                } else {
+                    // Not first boot: do not auto-allow; reject the first-auth helper.
+                    info!(
+                        "FirstAuth received but not first-boot, allowing pubkey auth but rejecting 
+                        additions of new public keys on already provisioned device"
+                    );
+                    a.enable_pubkey_auth(PUBKEY_AUTH)?;
+                    a.reject()?;
                 }
             }
             ServEvent::Hostkeys(h) => {
                 info!("ServEvent::Hostkeys");
                 let config_guard = config.lock().await;
+                // Just take it from config as private hostkey is generated on first boot.
                 h.hostkeys(&[&config_guard.hostkey])?;
             }
             ServEvent::PasswordAuth(a) => {
-                info!("ServEvent::PasswordAuth");
-                a.allow()?;
+                // Password auth is not supported; always reject.
+                a.reject()?;
             }
             ServEvent::PubkeyAuth(a) => {
                 info!("ServEvent::PubkeyAuth");
-                a.allow()?;
+                let config_guard = config.lock().await;
+                let client_pubkey = a.pubkey()?;
+
+                match client_pubkey {
+                    sunset::packets::PubKey::Ed25519(presented) => {
+                        let matched = config_guard
+                            .pubkeys
+                            .iter()
+                            .any(|slot| slot.as_ref().is_some_and(|stored| *stored == presented));
+
+                        if matched {
+                            a.allow()?;
+                        } else {
+                            info!("No matching pubkey slot found");
+                            a.reject()?;
+                            software_reset(); // TODO: Handle better HSM-flow-wise.
+                        }
+                    }
+                    _ => {
+                        // Only Ed25519 keys supported
+                        a.reject()?;
+                        software_reset(); // TODO: Handle better HSM-flow-wise.
+                    }
+                }
             }
             ServEvent::OpenSession(a) => {
                 info!("ServEvent::OpenSession");
@@ -134,45 +173,37 @@ pub async fn connection_loop(
                 debug!("ENV name: {}", a.name()?);
                 debug!("ENV value: {}", a.value()?);
 
-                // TODO: Logic to serialise/validate env vars? I.e:
-                // a.name.validate(); // Checks the input variable, sanitizes, assigns a target subsystem
-                //
-                // config.change(c): Apply the config change to the relevant subsystem.
-                // i.e: if UART_TX_PIN or UART_RX_PIN, we update the PinChannel with with_channel() to change pins live.
                 match a.name()? {
-                    "SAVE_CONFIG" => {
-                        if a.value()? == "1" {
-                            debug!("Triggering config save...");
-                            todo!("Implement config save to flash");
-                        }
+                    "LANG" => {
+                        // Ignore, but succeed to avoid client-side warnings
+                        // This env variable will always be sent by OpenSSH client.
+                        a.succeed()?;
                     }
-                    // If the env var is UART_TX_PIN or UART_RX_PIN
-                    "UART_TX_PIN" => {
-                        let val = a.value()?;
-                        debug!("Updating UART TX pin to {}", val);
-                        if let Ok(pin_num) = val.parse::<u8>() {
-                            let mut config_lock = config.lock().await;
-                            config_lock.uart_pins.tx = pin_num;
+                    "SSH_STAMP_PUBKEY" => {
+                        let mut config_guard = config.lock().await;
+                        // Only allow adding a pubkey via ENV on first-boot-like configs.
+
+                        if !config_guard.first_boot {
+                            warn!("SSH_STAMP_PUBKEY env received but not first-boot; rejecting");
+                            a.fail()?;
+                            break Ok(()); // TODO: Do better HSM-flow-wise
+                        } else if config_guard.add_pubkey(a.value()?).is_ok() {
+                            info!("Added new pubkey from ENV");
+                            a.succeed()?;
+                            // Mark that config has changed and clear first_boot so
+                            // future connections are not treated as first-boot.
+                            config_guard.first_boot = false;
                             config_changed = true;
-                            debug!("TX pin updated");
+                            // Don't immediately allow the new user/key to establish bridge but reboot first?
+                            //software_reset(); // TODO: Do better HSM-flow-wise.
                         } else {
-                            debug!("Invalid TX pin value");
-                        }
-                    }
-                    "UART_RX_PIN" => {
-                        let val = a.value()?;
-                        debug!("Updating UART RX pin to {}", val);
-                        if let Ok(pin_num) = val.parse::<u8>() {
-                            let mut config_lock = config.lock().await;
-                            config_lock.uart_pins.rx = pin_num;
-                            config_changed = true;
-                            debug!("RX pin updated");
-                        } else {
-                            debug!("Invalid RX pin value");
+                            warn!("Failed to add new pubkey from ENV");
+                            a.fail()?;
                         }
                     }
                     _ => {
-                        debug!("Unknown/unsupported ENV var");
+                        warn!("Unsupported environment variable");
+                        a.fail()?;
                     }
                 }
 
@@ -180,7 +211,7 @@ pub async fn connection_loop(
                 // that serialises current config to flash
                 // Only save once all ENV requests have been recorded?
 
-                a.succeed()?;
+                //a.succeed()?;
             }
             ServEvent::SessionPty(a) => {
                 info!("ServEvent::SessionPty");
@@ -189,14 +220,13 @@ pub async fn connection_loop(
             ServEvent::SessionExec(a) => {
                 a.fail()?;
             }
-            ServEvent::Defunct | ServEvent::SessionShell(_) => {
+            ServEvent::Defunct => {
                 info!("Expected caller to handle event");
                 error::BadUsage.fail()?
             }
             ServEvent::PollAgain => {
                 // info!("ServEvent::PollAgain");
             }
-            _ => (),
         }
     }
 }
