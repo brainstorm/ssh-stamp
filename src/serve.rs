@@ -23,8 +23,6 @@ use sunset::{ChanHandle, ServEvent, error};
 use sunset_async::SunsetMutex;
 use sunset_async::{ProgressHolder, SSHServer};
 
-use esp_println::println;
-
 pub enum SessionType {
     Bridge(ChanHandle),
     #[cfg(feature = "sftp-ota")]
@@ -114,9 +112,10 @@ pub async fn connection_loop(
                 } else {
                     // Not first boot: do not auto-allow; reject the first-auth helper.
                     info!(
-                        "FirstAuth received but not first-boot; rejecting any pubkey auth attempts"
+                        "FirstAuth received but not first-boot, allowing pubkey auth but rejecting 
+                        additions of new public keys on already provisioned device"
                     );
-                    a.enable_pubkey_auth(false)?;
+                    a.enable_pubkey_auth(PUBKEY_AUTH)?;
                     a.reject()?;
                 }
             }
@@ -131,22 +130,25 @@ pub async fn connection_loop(
                 a.reject()?;
             }
             ServEvent::PubkeyAuth(a) => {
-                println!("ServEvent::PubkeyAuth");
+                info!("ServEvent::PubkeyAuth");
                 let config_guard = config.lock().await;
                 let client_pubkey = a.pubkey()?;
 
-                let allowed = config_guard.pubkeys.iter().any(|slot| {
+                if config_guard.pubkeys.iter().any(|slot| {
                     if let Some(stored) = slot.as_ref() {
                         match &client_pubkey {
-                            sunset::packets::PubKey::Ed25519(presented) => stored == presented,
+                            sunset::packets::PubKey::Ed25519(presented) => {
+                                info!("Stored pubkey: {:?}", stored.key.0);
+                                info!("Presented pubkey: {:?}", presented.key.0);
+
+                                stored == presented
+                            },
                             _ => false,
                         }
                     } else {
                         false
                     }
-                });
-
-                if allowed {
+                }) {
                     a.allow()?;
                 } else {
                     a.reject()?;
@@ -182,6 +184,7 @@ pub async fn connection_loop(
                         if !config_guard.first_boot {
                             warn!("SSH_STAMP_PUBKEY env received but not first-boot; rejecting");
                             a.fail()?;
+                            continue;
                         } else if config_guard.add_pubkey(a.value()?).is_ok() {
                             info!("Added new pubkey from ENV");
                             a.succeed()?;
