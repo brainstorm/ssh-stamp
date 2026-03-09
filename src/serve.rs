@@ -47,6 +47,16 @@ pub async fn connection_loop(
             // #[cfg(feature = "sftp-ota")]
             ServEvent::SessionSubsystem(a) => {
                 info!("ServEvent::SessionSubsystem");
+                {
+                    let mut config_guard = config.lock().await;
+                    if config_guard.first_boot {
+                        warn!("Unauthenticated SessionSubsystem rejected");
+                        a.fail()?;
+                        // TODO: Handle this gracefully
+                        // TODO: Provide a message back to the client and the close the session?
+                        software_reset();
+                    }
+                }
                 if a.command()?.to_lowercase().as_str() == "sftp" {
                     if let Some(ch) = session.take() {
                         debug_assert!(ch.num() == a.channel());
@@ -70,6 +80,16 @@ pub async fn connection_loop(
             }
             ServEvent::SessionShell(a) => {
                 info!("ServEvent::SessionShell");
+                {
+                    let mut config_guard = config.lock().await;
+                    if config_guard.first_boot {
+                        warn!("Unauthenticated SessionShell rejected");
+                        a.fail()?;
+                        // TODO: Handle this gracefully
+                        // TODO: Provide a message back to the client and the close the session?
+                        software_reset();
+                    }
+                }
                 if let Some(ch) = session.take() {
                     // Save config after connection successful (SessionEnv completed)
                     if config_changed {
