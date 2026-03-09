@@ -48,7 +48,7 @@ pub async fn connection_loop(
             ServEvent::SessionSubsystem(a) => {
                 info!("ServEvent::SessionSubsystem");
                 {
-                    let mut config_guard = config.lock().await;
+                    let config_guard = config.lock().await;
                     if config_guard.first_boot {
                         warn!("Unauthenticated SessionSubsystem rejected");
                         a.fail()?;
@@ -81,7 +81,7 @@ pub async fn connection_loop(
             ServEvent::SessionShell(a) => {
                 info!("ServEvent::SessionShell");
                 {
-                    let mut config_guard = config.lock().await;
+                    let config_guard = config.lock().await;
                     if config_guard.first_boot {
                         warn!("Unauthenticated SessionShell rejected");
                         a.fail()?;
