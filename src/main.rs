@@ -98,9 +98,6 @@ async fn main(spawner: Spawner) -> ! {
             panic!("Could not acquire flash storage lock");
         };
         let mut flash_storage = flash_storage_guard.lock().await;
-        // TODO: Migrate this function/test to embedded-test.
-        // Quick roundtrip test for SSHStampConfig
-        // ssh_stamp::config::roundtrip_config();
         ssh_stamp::store::load_or_create(&mut flash_storage).await
     }
     .expect("Could not load or create SSHStampConfig");

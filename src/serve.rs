@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use log::{debug, info, warn};
+use log::{debug, info, trace, warn};
 
 use crate::config::SSHStampConfig;
 use crate::espressif::buffered_uart::UART_SIGNAL;
-use crate::settings::{PUBKEY_AUTH, UART_BUFFER_SIZE};
+use crate::settings::UART_BUFFER_SIZE;
 use crate::store;
 use storage::flash;
 
@@ -34,7 +34,6 @@ pub async fn connection_loop(
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
     config: &SunsetMutex<SSHStampConfig>,
 ) -> Result<(), sunset::Error> {
-    //let username = Mutex::<NoopRawMutex, _>::new(String::<20>::new());
     let mut session: Option<ChanHandle> = None;
 
     debug!("Entering connection_loop and prog_loop is next...");
@@ -42,7 +41,8 @@ pub async fn connection_loop(
     loop {
         let mut ph = ProgressHolder::new();
         let ev = serv.progress(&mut ph).await?;
-        // debug!(&ev);
+
+        trace!("{:?}", &ev);
         match ev {
             // #[cfg(feature = "sftp-ota")]
             ServEvent::SessionSubsystem(a) => {
@@ -99,9 +99,6 @@ pub async fn connection_loop(
                             panic!("Could not acquire flash storage lock");
                         };
                         let mut flash_storage = flash_storage_guard.lock().await;
-                        // TODO: Migrate this function/test to embedded-test.
-                        // Quick roundtrip test for SSHStampConfig
-                        // ssh_stamp::config::roundtrip_config();
                         let _result = store::save(&mut flash_storage, &config_guard).await;
                     }
                     debug_assert!(ch.num() == a.channel());
@@ -124,10 +121,11 @@ pub async fn connection_loop(
 
                 // Disable password auth method regardless.
                 a.enable_password_auth(false)?;
+
+                // SECURITY: We have no users; enable pubkey auth so the
+                // provisioner can add a key.
+                a.enable_pubkey_auth(true)?;
                 if config_guard.first_boot {
-                    // SECURITY: We have no users; enable pubkey auth so the
-                    // provisioner can add a key.
-                    a.enable_pubkey_auth(PUBKEY_AUTH)?;
                     a.allow()?; // SECURITY: Controversial (but necessary to provision?)
                 } else {
                     // Not first boot: do not auto-allow; reject the first-auth helper.
@@ -135,7 +133,6 @@ pub async fn connection_loop(
                         "FirstAuth received but not first-boot, allowing pubkey auth but rejecting 
                         additions of new public keys on already provisioned device"
                     );
-                    a.enable_pubkey_auth(PUBKEY_AUTH)?;
                     a.reject()?;
                 }
             }
@@ -146,7 +143,7 @@ pub async fn connection_loop(
                 h.hostkeys(&[&config_guard.hostkey])?;
             }
             ServEvent::PasswordAuth(a) => {
-                // Password auth is not supported; always reject.
+                warn!("Password auth is not supported, use public key auth instead.");
                 a.reject()?;
             }
             ServEvent::PubkeyAuth(a) => {
