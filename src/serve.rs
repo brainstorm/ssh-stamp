@@ -15,7 +15,7 @@ use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
 // use embedded_storage::Storage;
-use esp_hal::system::software_reset;
+// use esp_hal::system::software_reset;
 use heapless::String;
 use sunset_async::SunsetMutex;
 // use sunset::sshwire::SSHEncode;
@@ -205,7 +205,7 @@ pub async fn connection_disable() -> () {
     // disable connection loop
     info!("Connection loop disabled");
     // TODO: Correctly disable/restart Conection loop and/or send messsage to user over SSH
-    software_reset();
+    // software_reset();
 }
 
 pub async fn ssh_wait_for_initialisation<'server>(
@@ -219,7 +219,7 @@ pub async fn ssh_disable() -> () {
     // drop ssh server
     info!("SSH Server disabled");
     // TODO: Correctly disable/restart SSH Server and/or send messsage to user over SSH
-    software_reset();
+    // software_reset();
 }
 
 use crate::espressif::buffered_uart::BufferedUart;
@@ -238,9 +238,9 @@ pub async fn handle_ssh_client<'a, 'b>(
         SessionType::Bridge(ch) => {
             info!("Handling bridge session");
             let stdio: ChanInOut<'_> = ssh_server.stdio(ch).await?;
-            let stdio2 = stdio.clone();
+            let (stdin, stdout) = stdio.split();
             info!("Starting bridge");
-            serial_bridge(stdio, stdio2, uart_buff).await?
+            serial_bridge(stdin, stdout, uart_buff).await?
         }
         #[cfg(feature = "sftp-ota")]
         SessionType::Sftp(ch) => {
@@ -260,5 +260,5 @@ pub async fn bridge_disable() -> () {
     // disable bridge
     info!("Bridge disabled");
     // TODO: Correctly disable/restart bridge and/or send message to user over SSH
-    software_reset();
+    // software_reset();
 }
