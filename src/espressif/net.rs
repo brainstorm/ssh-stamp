@@ -103,8 +103,6 @@ pub async fn ap_stack_disable() -> () {
 pub async fn tcp_socket_disable() -> () {
     // drop tcp stack
     info!("TCP socket disabled");
-    // TODO: Correctly disable/restart tcp socket and/or send messsage to user over SSH
-    software_reset();
 }
 
 pub async fn accept_requests<'a>(
