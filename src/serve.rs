@@ -43,21 +43,20 @@ pub async fn connection_loop(
         let ev = serv.progress(&mut ph).await?;
 
         trace!("{:?}", &ev);
-
-        // Guard for authentication state
-        let is_authed = false;
-
         match ev {
+            // #[cfg(feature = "sftp-ota")]
             ServEvent::SessionSubsystem(a) => {
                 info!("ServEvent::SessionSubsystem");
-                if is_authed {
-                    info!("User authenticated, session granted");
-                    a.succeed();
-                } else {
-                    info!("User not authenticated, session denied");
-                    a.fail();
+                {
+                    let config_guard = config.lock().await;
+                    if config_guard.first_boot {
+                        warn!("Unauthenticated SessionSubsystem rejected");
+                        a.fail()?;
+                        // TODO: Handle this gracefully
+                        // TODO: Provide a message back to the client and the close the session?
+                        software_reset();
+                    }
                 }
-
                 if a.command()?.to_lowercase().as_str() == "sftp" {
                     if let Some(ch) = session.take() {
                         debug_assert!(ch.num() == a.channel());
@@ -81,14 +80,16 @@ pub async fn connection_loop(
             }
             ServEvent::SessionShell(a) => {
                 info!("ServEvent::SessionShell");
-                if is_authed {
-                    info!("User authenticated, shell granted");
-                    a.succeed();
-                } else {
-                    info!("User not authenticated, shell denied");
-                    a.fail();
+                {
+                    let config_guard = config.lock().await;
+                    if config_guard.first_boot {
+                        warn!("Unauthenticated SessionShell rejected");
+                        a.fail()?;
+                        // TODO: Handle this gracefully
+                        // TODO: Provide a message back to the client and the close the session?
+                        software_reset();
+                    }
                 }
-
                 if let Some(ch) = session.take() {
                     // Save config after connection successful (SessionEnv completed)
                     if config_changed {
@@ -159,7 +160,6 @@ pub async fn connection_loop(
 
                         if matched {
                             a.allow()?;
-                            is_authed = true;
                         } else {
                             info!("No matching pubkey slot found");
                             a.reject()?;
@@ -212,6 +212,7 @@ pub async fn connection_loop(
                             config_guard.first_boot = false;
                             config_changed = true;
                             // Don't immediately allow the new user/key to establish bridge but reboot first?
+                            //software_reset(); // TODO: Do better HSM-flow-wise.
                         } else {
                             warn!("Failed to add new pubkey from ENV");
                             a.fail()?;
