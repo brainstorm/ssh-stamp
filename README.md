@@ -44,7 +44,7 @@ On a fresh system the following should be enough to build and run on the relevan
 ## Required for all targets:
 ```
 rustup toolchain install stable --component rust-src
-cargo install espflash
+cargo install espflash --locked
 ```
 
 ## ESP32-C6
@@ -58,7 +58,7 @@ cargo run-esp32c6
 
 ## ESP32-C2 / ESP32-C3
 ```
-rustup target add riscv32imc-unknown-none-elf`
+rustup target add riscv32imc-unknown-none-elf
 ```
 ### ESP32-C2
 ```
