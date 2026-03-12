@@ -108,13 +108,12 @@ cargo run-esp32s2
 cargo run-esp32s3
 ```
 
-
 # Default UART Pins
 | Target  | RX | TX | 
 | ----    | -- | -- |
 | ESP32   | 13 | 14 | 
 | ESP32S2 | 11 | 10 | 
-| ESP32C2 |  9 | 10 |
+| ESP32C2 | 18 | 19 |
 | ESP32C3 | 20 | 21 |
 | ESP32C6 | 11 | 10 |
 
@@ -146,11 +145,3 @@ Sponsored by:
 [nlnet-grant]: https://nlnet.nl/project/SSH-Stamp/
 [openwrt_mediatek_no_monitor]: https://github.com/openwrt/openwrt/issues/16279
 [nlnet_zero_commons]: ./docs/nlnet/zero_commons_logo.svg
-
-/dev/ttyUSB0 is ESP32
-
-USB to UART
-sudo minicom --device /dev/ttyUSB1
-
-
-https://docs.espressif.com/projects/esp-matter/en/latest/esp32/optimizations.html
