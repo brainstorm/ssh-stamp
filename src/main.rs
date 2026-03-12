@@ -50,7 +50,7 @@ cfg_if::cfg_if! {
 
 pub async fn peripherals_disable() -> () {
     // drop peripherals
-    software_reset();
+    info!("Disabling peripherals: WIP");
 }
 
 pub struct SshStampInit<'a> {
@@ -188,7 +188,8 @@ async fn main(spawner: Spawner) -> ! {
     }
 
     peripherals_disable().await;
-    // loop{}
+    // loop {}
+    log::warn!("End of Main... Reset!!");
     software_reset();
 }
 

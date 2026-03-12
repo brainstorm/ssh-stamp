@@ -16,7 +16,6 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pipe::Pipe};
 use esp_hal::Async;
 use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals::UART1;
-use esp_hal::system::software_reset;
 use esp_hal::uart::{Config, RxConfig, Uart};
 use portable_atomic::{AtomicUsize, Ordering};
 use static_cell::StaticCell;
@@ -133,17 +132,15 @@ impl Default for BufferedUart {
 
 pub async fn uart_buffer_disable() -> () {
     // disable uart buffer
-    info!("UART buffer disabled");
+    info!("UART buffer disabled: WIP");
     // TODO: Correctly disable/restart UART buffer and/or send messsage to user over SSH
-    software_reset();
 }
 // use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 
 pub async fn uart_disable() -> () {
     // disable uart
-    info!("UART disabled");
+    info!("UART disabled: WIP");
     // TODO: Correctly disable/restart UART and/or send messsage to user over SSH
-    software_reset();
 }
 
 /// UART pins for the buffered UART task.

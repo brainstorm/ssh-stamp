@@ -17,7 +17,6 @@ use core::result::Result;
 // Embassy
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
-use esp_hal::system::software_reset;
 
 // Sunset
 use sunset::{ChanHandle, ServEvent, error};
@@ -168,13 +167,13 @@ pub async fn connection_loop(
                         } else {
                             info!("No matching pubkey slot found");
                             a.reject()?;
-                            software_reset(); // TODO: Handle better HSM-flow-wise.
+                            //software_reset(); // TODO: Handle better HSM-flow-wise.
                         }
                     }
                     _ => {
                         // Only Ed25519 keys supported
                         a.reject()?;
-                        software_reset(); // TODO: Handle better HSM-flow-wise.
+                        //software_reset(); // TODO: Handle better HSM-flow-wise.
                     }
                 }
             }
@@ -263,9 +262,9 @@ pub async fn connection_loop(
 
 pub async fn connection_disable() -> () {
     // disable connection loop
-    info!("Connection loop disabled");
+    info!("Connection loop disabled: WIP");
     // TODO: Correctly disable/restart Conection loop and/or send messsage to user over SSH
-    software_reset();
+    // software_reset();
 }
 
 pub async fn ssh_wait_for_initialisation<'server>(
@@ -277,9 +276,9 @@ pub async fn ssh_wait_for_initialisation<'server>(
 
 pub async fn ssh_disable() -> () {
     // drop ssh server
-    info!("SSH Server disabled");
+    info!("SSH Server disabled: WIP");
     // TODO: Correctly disable/restart SSH Server and/or send messsage to user over SSH
-    software_reset();
+    // software_reset();
 }
 
 use crate::espressif::buffered_uart::BufferedUart;
@@ -316,7 +315,7 @@ pub async fn handle_ssh_client<'a, 'b>(
 
 pub async fn bridge_disable() -> () {
     // disable bridge
-    info!("Bridge disabled");
+    info!("Bridge disabled: WIP");
     // TODO: Correctly disable/restart bridge and/or send message to user over SSH
-    software_reset();
+    // software_reset();
 }
