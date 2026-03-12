@@ -139,7 +139,6 @@ pub async fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(
         });
     };
 
-    //   debug!("Saving config: ", &config);
     debug!("Before write_ssh, with hash: {}", &sc.hash.hex_dump());
     let l = sshwire::write_ssh(&mut fl.buf, &sc)?;
     let buf = &fl.buf[..l];

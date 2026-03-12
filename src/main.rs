@@ -43,9 +43,9 @@ use esp_rtos::embassy::InterruptExecutor;
 use static_cell::StaticCell;
 
 cfg_if::cfg_if! {
-   if #[cfg(feature = "esp32")] {
+    if #[cfg(feature = "esp32")] {
         use esp_hal::timer::timg::TimerGroup;
-   }
+    }
 }
 
 pub async fn peripherals_disable() -> () {

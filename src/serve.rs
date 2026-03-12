@@ -49,16 +49,13 @@ pub async fn connection_loop(
 
         trace!("{:?}", &ev);
         match ev {
-            // #[cfg(feature = "sftp-ota")]
             ServEvent::SessionSubsystem(a) => {
                 info!("ServEvent::SessionSubsystem");
 
                 if !auth_checked {
                     warn!("Unauthenticated SessionSubsystem rejected");
                     a.fail()?;
-                    // TODO: Handle this gracefully
                     // TODO: Provide a message back to the client and the close the session?
-                    //software_reset();
                 } else if a.command()?.to_lowercase().as_str() == "sftp" {
                     if let Some(ch) = session.take() {
                         debug_assert!(ch.num() == a.channel());
@@ -89,7 +86,6 @@ pub async fn connection_loop(
                     a.fail()?;
                     // TODO: Handle this gracefully
                     // TODO: Provide a message back to the client and the close the session?
-                    //software_reset();
                 } else if let Some(ch) = session.take() {
                     // Save config after connection successful (SessionEnv completed)
                     if config_changed {
@@ -167,13 +163,11 @@ pub async fn connection_loop(
                         } else {
                             info!("No matching pubkey slot found");
                             a.reject()?;
-                            //software_reset(); // TODO: Handle better HSM-flow-wise.
                         }
                     }
                     _ => {
                         // Only Ed25519 keys supported
                         a.reject()?;
-                        //software_reset(); // TODO: Handle better HSM-flow-wise.
                     }
                 }
             }
@@ -216,8 +210,6 @@ pub async fn connection_loop(
                             config_guard.first_boot = false;
                             config_changed = true;
                             auth_checked = true;
-                            // Don't immediately allow the new user/key to establish bridge but reboot first?
-                            //software_reset(); // TODO: Do better HSM-flow-wise.
                         } else {
                             warn!("Failed to add new pubkey from ENV");
                             a.fail()?;
@@ -228,12 +220,6 @@ pub async fn connection_loop(
                         a.fail()?;
                     }
                 }
-
-                // config.save(a): Potentially an optional special environment variable SAVE_CONFIG=1
-                // that serialises current config to flash
-                // Only save once all ENV requests have been recorded?
-
-                //a.succeed()?;
             }
             ServEvent::SessionPty(a) => {
                 let first_boot = { config.lock().await.first_boot };
@@ -261,10 +247,8 @@ pub async fn connection_loop(
 }
 
 pub async fn connection_disable() -> () {
-    // disable connection loop
     info!("Connection loop disabled: WIP");
     // TODO: Correctly disable/restart Conection loop and/or send messsage to user over SSH
-    // software_reset();
 }
 
 pub async fn ssh_wait_for_initialisation<'server>(
@@ -275,10 +259,8 @@ pub async fn ssh_wait_for_initialisation<'server>(
 }
 
 pub async fn ssh_disable() -> () {
-    // drop ssh server
     info!("SSH Server disabled: WIP");
     // TODO: Correctly disable/restart SSH Server and/or send messsage to user over SSH
-    // software_reset();
 }
 
 use crate::espressif::buffered_uart::BufferedUart;

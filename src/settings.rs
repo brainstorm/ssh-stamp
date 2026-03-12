@@ -16,7 +16,6 @@ pub(crate) const DEFAULT_IP: &Ipv4Addr = &Ipv4Addr::new(192, 168, 4, 1);
 pub const UART_BUFFER_SIZE: usize = 4096;
 
 cfg_if::cfg_if!(
-    // if #[cfg(feature = "esp32")] {
     if #[cfg(feature = "esp32")] {
         pub(crate) const DEFAULT_UART_TX_PIN: u8 = 14;
         pub(crate) const DEFAULT_UART_RX_PIN: u8 = 13;
