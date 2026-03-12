@@ -10,6 +10,7 @@ use crate::settings::UART_BUFFER_SIZE;
 use crate::store;
 use storage::flash;
 
+use core::fmt::Debug;
 use core::option::Option::{self, None, Some};
 use core::result::Result;
 
@@ -23,6 +24,7 @@ use sunset::{ChanHandle, ServEvent, error};
 use sunset_async::SunsetMutex;
 use sunset_async::{ProgressHolder, SSHServer};
 
+#[derive(Debug)]
 pub enum SessionType {
     Bridge(ChanHandle),
     #[cfg(feature = "sftp-ota")]
@@ -38,6 +40,10 @@ pub async fn connection_loop(
 
     debug!("Entering connection_loop and prog_loop is next...");
     let mut config_changed: bool = false;
+
+    // Will be set in `ev` PubkeyAuth is accepted and cleared once the channel is sent down chan_pipe
+    let mut auth_checked = false;
+
     loop {
         let mut ph = ProgressHolder::new();
         let ev = serv.progress(&mut ph).await?;
@@ -47,24 +53,24 @@ pub async fn connection_loop(
             // #[cfg(feature = "sftp-ota")]
             ServEvent::SessionSubsystem(a) => {
                 info!("ServEvent::SessionSubsystem");
-                {
-                    let config_guard = config.lock().await;
-                    if config_guard.first_boot {
-                        warn!("Unauthenticated SessionSubsystem rejected");
-                        a.fail()?;
-                        // TODO: Handle this gracefully
-                        // TODO: Provide a message back to the client and the close the session?
-                        software_reset();
-                    }
-                }
-                if a.command()?.to_lowercase().as_str() == "sftp" {
+
+                if !auth_checked {
+                    warn!("Unauthenticated SessionSubsystem rejected");
+                    a.fail()?;
+                    // TODO: Handle this gracefully
+                    // TODO: Provide a message back to the client and the close the session?
+                    //software_reset();
+                } else if a.command()?.to_lowercase().as_str() == "sftp" {
                     if let Some(ch) = session.take() {
                         debug_assert!(ch.num() == a.channel());
                         #[cfg(feature = "sftp-ota")]
                         {
                             a.succeed()?;
                             info!("We got SFTP subsystem");
-                            let _ = chan_pipe.try_send(SessionType::Sftp(ch));
+                            match chan_pipe.try_send(SessionType::Sftp(ch)) {
+                                Ok(_) => auth_checked = false,
+                                Err(e) => error!("Could not send the channel: {:?}", e),
+                            };
                         }
                         #[cfg(not(feature = "sftp-ota"))]
                         {
@@ -74,23 +80,18 @@ pub async fn connection_loop(
                     } else {
                         a.fail()?;
                     }
-                } else {
-                    a.fail()?;
                 }
             }
             ServEvent::SessionShell(a) => {
                 info!("ServEvent::SessionShell");
-                {
-                    let config_guard = config.lock().await;
-                    if config_guard.first_boot {
-                        warn!("Unauthenticated SessionShell rejected");
-                        a.fail()?;
-                        // TODO: Handle this gracefully
-                        // TODO: Provide a message back to the client and the close the session?
-                        software_reset();
-                    }
-                }
-                if let Some(ch) = session.take() {
+
+                if !auth_checked {
+                    warn!("Unauthenticated SessionShell rejected");
+                    a.fail()?;
+                    // TODO: Handle this gracefully
+                    // TODO: Provide a message back to the client and the close the session?
+                    //software_reset();
+                } else if let Some(ch) = session.take() {
                     // Save config after connection successful (SessionEnv completed)
                     if config_changed {
                         config_changed = false; // TODO: Avoid unnecessary "does not neet to be mutable" warnings for now
@@ -107,7 +108,10 @@ pub async fn connection_loop(
                     // Signal for uart task to configure pins and run. Value is irrelevant.
                     UART_SIGNAL.signal(1);
                     info!("Connection loop: UART_SIGNAL sent");
-                    let _ = chan_pipe.try_send(SessionType::Bridge(ch));
+                    match chan_pipe.try_send(SessionType::Bridge(ch)) {
+                        Ok(_) => auth_checked = false,
+                        Err(e) => log::error!("Could not send the channel: {:?}", e),
+                    };
                 } else {
                     a.fail()?;
                 }
@@ -160,6 +164,7 @@ pub async fn connection_loop(
 
                         if matched {
                             a.allow()?;
+                            auth_checked = true;
                         } else {
                             info!("No matching pubkey slot found");
                             a.reject()?;
@@ -211,6 +216,7 @@ pub async fn connection_loop(
                             // future connections are not treated as first-boot.
                             config_guard.first_boot = false;
                             config_changed = true;
+                            auth_checked = true;
                             // Don't immediately allow the new user/key to establish bridge but reboot first?
                             //software_reset(); // TODO: Do better HSM-flow-wise.
                         } else {
@@ -231,8 +237,15 @@ pub async fn connection_loop(
                 //a.succeed()?;
             }
             ServEvent::SessionPty(a) => {
-                info!("ServEvent::SessionPty");
-                a.succeed()?;
+                let first_boot = { config.lock().await.first_boot };
+
+                if auth_checked || first_boot {
+                    info!("ServEvent::SessionPty: Session granted");
+                    a.succeed()?;
+                } else {
+                    info!("ServEvent::SessionPty: No auth not session");
+                    a.fail()?;
+                }
             }
             ServEvent::SessionExec(a) => {
                 a.fail()?;
