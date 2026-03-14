@@ -17,7 +17,7 @@ use sunset::{
 };
 
 use crate::errors::Error;
-use crate::settings::{DEFAULT_SSID, DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS};
+use crate::settings::{DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS, DEFAULT_SSID};
 
 #[derive(Debug, PartialEq)]
 pub struct SSHStampConfig {

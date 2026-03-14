@@ -24,7 +24,6 @@ use sunset_async::{SSHServer, SunsetMutex};
 use core::result::Result;
 use core::result::Result::Err;
 use core::result::Result::Ok;
-// use core::error::Error;
 use core::future::Future;
 use embassy_executor::Spawner;
 use embassy_futures::select::{Either3, select3};
