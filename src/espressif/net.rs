@@ -23,15 +23,17 @@ use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_radio::Controller;
 use esp_radio::wifi::WifiEvent;
-use esp_radio::wifi::{AccessPointConfig, ModeConfig, WifiApState, WifiController, AuthMethod::Wpa3Personal};
+use esp_radio::wifi::{
+    AccessPointConfig, AuthMethod::Wpa2Wpa3Personal, ModeConfig, WifiApState, WifiController,
+};
 use heapless::String;
-use core::fmt::Write;
 extern crate alloc;
-use alloc::string::String as AllocString;
 use crate::store;
+use alloc::string::String as AllocString;
 use storage::flash;
-use sunset::random;
 use sunset_async::SunsetMutex;
+
+const PASSWORD_CHARS: &[u8; 62] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {
@@ -55,10 +57,40 @@ pub async fn if_up(
         esp_radio::wifi::new(wifi_init, wifi, Default::default())
             .map_err(|_| sunset::error::BadUsage.build())?;
 
-    let ap_config =
-        ModeConfig::AccessPoint(AccessPointConfig::default()
+    // Ensure WPA3 PSK exists before applying AP config to avoid esp_wifi_set_config errors
+    {
+        let mut guard = config.lock().await;
+        if guard.wifi_pw.is_none() {
+            let mut rnd = [0u8; 24];
+            for chunk in rnd.chunks_exact_mut(4) {
+                chunk.copy_from_slice(&rng.random().to_le_bytes());
+            }
+
+            let mut pw = String::<63>::new();
+            for &byte in rnd.iter() {
+                let _ = pw.push(PASSWORD_CHARS[(byte as usize) % 62] as char);
+            }
+
+            warn!("wifi_pw missing from config, generated new password");
+            guard.wifi_pw = Some(pw);
+
+            let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
+                panic!("Flash storage not initialized; cannot persist wifi password");
+            };
+            let mut flash_storage = flash_storage_guard.lock().await;
+            if let Err(e) = store::save(&mut flash_storage, &guard).await {
+                panic!("Failed to persist generated wifi password: {:?}", e);
+            }
+        }
+        info!("WiFi WPA3 PSK: {}", guard.wifi_pw.as_ref().unwrap());
+    }
+
+    let ap_config = ModeConfig::AccessPoint(
+        AccessPointConfig::default()
             .with_ssid(AllocString::from(wifi_ssid(config).await.as_str()))
-            .with_auth_method(Wpa3Personal));
+            .with_auth_method(Wpa2Wpa3Personal)
+            .with_password(AllocString::from(wifi_password(config).await.as_str())),
+    );
     let res = wifi_controller.set_config(&ap_config);
     info!("wifi_set_configuration returned {:?}", res);
 
@@ -153,6 +185,16 @@ pub async fn wifi_ssid(config: &'static SunsetMutex<SSHStampConfig>) -> String<6
     default
 }
 
+pub async fn wifi_password(config: &'static SunsetMutex<SSHStampConfig>) -> String<63> {
+    let guard = config.lock().await;
+    match &guard.wifi_pw {
+        Some(pw) => String::<63>::try_from(pw.as_str()).unwrap_or_else(|_| {
+            panic!("wifi_pw stored value exceeds 63 characters");
+        }),
+        None => panic!("wifi_pw must be set before calling wifi_password()"),
+    }
+}
+
 #[embassy_executor::task]
 pub async fn wifi_up(
     mut wifi_controller: WifiController<'static>,
@@ -167,56 +209,28 @@ pub async fn wifi_up(
 
     debug!("Starting wifi");
 
-    // Ensure a WPA3 password exists on first boot. Generate a random PSK,
-    // display it on the console and persist it to flash so it survives reboot.
-    {
-        let mut g = config.lock().await;
-        if g.first_boot && g.wifi_pw.is_none() {
-            let mut rnd = [0u8; 24];
-            if random::fill_random(&mut rnd).is_ok() {
-                let mut pw = String::<63>::new();
-                for b in rnd.iter() {
-                    // hex encoding
-                    let _ = write!(pw, "{:02x}", b);
-                }
-                info!("First-boot generated WiFi WPA3 PSK: {}", pw);
-                g.wifi_pw = Some(pw.clone());
-                // Persist to flash immediately
-                match flash::get_flash_n_buffer() {
-                    Some(flash_storage_guard) => {
-                        let mut flash_storage = flash_storage_guard.lock().await;
-                        if let Err(e) = store::save(&mut flash_storage, &g).await {
-                            warn!("Failed to persist config with generated wifi password: {:?}", e);
-                        }
-                    }
-                    None => {
-                        warn!("Flash storage not initialised; cannot persist wifi password");
-                    }
-                }
-            } else {
-                warn!("Failed to generate random bytes for wifi password");
-            }
-        }
-    }
+    // (PSK generation handled in if_up on first boot)
 
-        let ssid_string = match String::<63>::try_from(configured_ssid.as_str()) {
-            Ok(s) => {
-                let mut lowered = String::<63>::new();
-                for ch in s.as_str().chars() {
-                    let _ = lowered.push(ch.to_ascii_lowercase());
-                }
-                lowered
+    let ssid_string = match String::<63>::try_from(configured_ssid.as_str()) {
+        Ok(s) => {
+            let mut lowered = String::<63>::new();
+            for ch in s.as_str().chars() {
+                let _ = lowered.push(ch.to_ascii_lowercase());
             }
-            Err(_) => {
-                warn!("SSID too long, using default");
-                wifi_ssid(config).await
-            }
-        };
-        let client_config = ModeConfig::AccessPoint(
-            AccessPointConfig::default()
-                .with_ssid(AllocString::from(ssid_string.as_str()))
-                .with_auth_method(Wpa3Personal),
-        );
+            lowered
+        }
+        Err(_) => {
+            warn!("SSID too long, using default");
+            wifi_ssid(config).await
+        }
+    };
+    let pw_string = wifi_password(config).await;
+    let client_config = ModeConfig::AccessPoint(
+        AccessPointConfig::default()
+            .with_ssid(AllocString::from(ssid_string.as_str()))
+            .with_auth_method(Wpa2Wpa3Personal)
+            .with_password(AllocString::from(pw_string.as_str())),
+    );
 
     loop {
         if esp_radio::wifi::ap_state() == WifiApState::Started {

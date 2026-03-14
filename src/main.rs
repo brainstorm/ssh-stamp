@@ -21,10 +21,10 @@ use storage::flash;
 
 use sunset_async::{SSHServer, SunsetMutex};
 
+use core::future::Future;
 use core::result::Result;
 use core::result::Result::Err;
 use core::result::Result::Ok;
-use core::future::Future;
 use embassy_executor::Spawner;
 use embassy_futures::select::{Either3, select3};
 use embassy_net::{Stack, tcp::TcpSocket};

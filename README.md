@@ -10,103 +10,70 @@ Your everyday SSH secured serial access.
 
 ## Description
 
-The **SSH Stamp** is a secure wireless to UART bridge
-implemented in Rust (no_std, no_alloc and no_unsafe whenever possible)
-with simplicity and robustness as its main design tenets.
+The **SSH Stamp** is a secure wireless to UART bridge implemented in Rust (no_std, no_alloc and no_unsafe whenever possible) with simplicity and robustness as its main design tenets.
 
-The firmware runs on a microcontroller running Secure SHell Protocol
-(RFC 4253 and related IETF standards series). This firmware can be
-used for multiple purposes, conveniently avoiding physical
-tethering and securely tunneling traffic via SSH by default: easily
-add telemetry to a (moving) robot, monitor and operate any (domestic)
-appliance remotely, conduct remote cybersecurity audits on
-network gear of a company, reverse engineer hardware and software for
-right to repair purposes, just to name a few examples.
+The firmware runs on a microcontroller running Secure SHell Protocol (RFC 4253 and related IETF standards series). This firmware can be used for multiple purposes, conveniently avoiding physical tethering and securely tunneling traffic via SSH by default: easily add telemetry to a (moving) robot, monitor and operate any (domestic) appliance remotely, conduct remote cybersecurity audits on network gear of a company, reverse engineer hardware and software for right to repair purposes, just to name a few examples.
 
 A "low level to SSH Swiss army knife".
 
 # Building
 
-Rust versions are controlled via `rust-toolchain.toml` and the equivalent defined on the CI workflow.
+Tooling is controlled by `rust-toolchain.toml`. On a fresh host you'll typically need the Rust source component and a flasher (we use `espflash` below as an example):
 
-On a fresh system the following should be enough to build and run on the relevant ESP32 dev boards.
-
-## Required for all targets:
 ```
 rustup toolchain install stable --component rust-src
 cargo install espflash --locked
 ```
 
-## ESP32-C6
-
+Build/flash for your board using the short command pattern (replace `<target>`):
 
 ```
-rustup target add riscv32imac-unknown-none-elf
-cargo build-esp32c6
+rustup target add <platform-target-if-needed>
+cargo build-<target>     # e.g. cargo build-esp32c6, cargo build-esp32c3, cargo build-esp32
+cargo run-<target>       # convenience helper (if supported) that builds + flashes
+```
+
+Xtensa targets (ESP32/ESP32-S2/S3) require `espup` — follow esp-rs docs if you target those. If you prefer manual flashing, build `--release` and use `espflash`.
+
+## First boot & provisioning (quick)
+
+1. Flash the firmware and open the serial console (example):
+
+```
+# build & flash (example for esp32c6)
+cargo build-esp32c6 --release
 cargo run-esp32c6
 ```
 
-## ESP32-C2 / ESP32-C3
+2. On first boot the device generates a random WPA3 PSK and prints it to the serial console with an info message `First-boot generated WiFi WPA3 PSK: <PSK>`; the default SSID is `ssh-stamp` and the AP IP is `192.168.4.1`.
+
+3. Connect a laptop/phone to the `ssh-stamp` AP using the printed PSK, then SSH into the device at `root@192.168.4.1`.
+
+4. Provisioning via SSH environment variables
+
+You can provision the device by sending these environment variables with your SSH client. Examples below use OpenSSH and `SendEnv` to forward local environment variables to the device.
+
+- Add your public key (first-boot only):
+
 ```
-rustup target add riscv32imc-unknown-none-elf
-```
-### ESP32-C2
-```
-cargo build-esp32c2
-cargo run-esp32c2
-```
-### ESP32-C3
-```
-cargo build-esp32c2
-cargo run-esp32c3
+export SSH_STAMP_PUBKEY="$(cat ~/.ssh/id_ed25519.pub)"
+ssh -o SendEnv=SSH_STAMP_PUBKEY root@192.168.4.1
 ```
 
+- Set a custom SSID and WPA3 PSK (allowed on first-boot or any authenticated session):
 
-## ESP32 / ESP32-S2 / ESP32-S3 (Xtensa Cores)
-Install esp toolchain first: https://github.com/esp-rs/espup
 ```
-cargo install espup                                      
-espup install                                            
-source $HOME/export-esp.sh                                                         
-```
-
-### ESP32
-```
-cargo +esp build-esp32
-cargo +esp run-esp32
-```
-### ESP32-S2
-```
-cargo +esp build-esp32s2
-cargo +esp run-esp32s2
-```
-### ESP32-S3
-```
-cargo +esp build-esp32s3
-cargo +esp run-esp32s3
+export SSH_STAMP_WIFI_SSID="MyHomeSSID"
+export SSH_STAMP_WPA3_PSK="my-super-secret-psk"
+ssh -o SendEnv=SSH_STAMP_WIFI_SSID -o SendEnv=SSH_STAMP_WPA3_PSK root@192.168.4.1
 ```
 
-### Using rustup toolchain override (Doesn't require `+esp`)
-To set rustup override:
-```
-rustup override set esp   
-```
-To remove rustup override:
-```
-cargo override unset
-```
-Build:
-```
-cargo build-esp32
-cargo build-esp32s2
-cargo build-esp32s3
-```
-Run:
-```
-cargo run-esp32
-cargo run-esp32s2
-cargo run-esp32s3
-```
+Notes:
+- `SSH_STAMP_PUBKEY` is accepted on first-boot to add the initial admin key.
+- `SSH_STAMP_WIFI_SSID` and `SSH_STAMP_WPA3_PSK` may be applied while authenticated via pubkey (or on first-boot). After a successful change the device persists the settings and performs a software reset so the new WiFi settings take effect.
+- If you prefer a single-step provisioning, export all three env vars locally and forward them with `SendEnv` in the same SSH invocation.
+
+If your SSH client doesn't forward environment variables by default, use the `-o SendEnv=VAR` option as shown above or configure `SendEnv` in your SSH client config.
 
 # Default UART Pins
 | Target  | RX | TX | 

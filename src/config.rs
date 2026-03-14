@@ -17,7 +17,7 @@ use sunset::{
 };
 
 use crate::errors::Error;
-use crate::settings::{DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS, DEFAULT_SSID};
+use crate::settings::{DEFAULT_SSID, DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS};
 
 #[derive(Debug, PartialEq)]
 pub struct SSHStampConfig {
@@ -40,8 +40,8 @@ pub struct SSHStampConfig {
     pub ipv6_static: Option<StaticConfigV6>,
     /// UART
     pub uart_pins: UartPins,
-    /// True until the device has been provisioned for the first time.
-    pub first_boot: bool,
+    /// True until a pubkey is provisioned. Further changes require authentication.
+    pub first_login: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -60,6 +60,8 @@ impl Default for UartPins {
     }
 }
 
+const PASSWORD_CHARS: &[u8; 62] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
 impl SSHStampConfig {
     /// Bump this when the format changes
     pub const CURRENT_VERSION: u8 = 8;
@@ -72,16 +74,13 @@ impl SSHStampConfig {
 
         let wifi_ssid = Self::default_ssid();
         let mac = random_mac()?;
-        let wifi_pw = None;
+        let wifi_pw = Some(Self::generate_wifi_password()?);
 
         let uart_pins = UartPins::default();
         info!(
             "SSH Stamp Config new() - RX Pin: {}  TX Pin: {}",
             uart_pins.rx, uart_pins.tx
         );
-
-        // No password config fields nor logic: only pubkey auth supported.
-        // Leave password fields out (except wifi one).
 
         Ok(SSHStampConfig {
             hostkey,
@@ -93,8 +92,18 @@ impl SSHStampConfig {
             #[cfg(feature = "ipv6")]
             ipv6_static: None,
             uart_pins,
-            first_boot: true,
+            first_login: true,
         })
+    }
+
+    fn generate_wifi_password() -> Result<String<63>> {
+        let mut rnd = [0u8; 24];
+        sunset::random::fill_random(&mut rnd)?;
+        let mut pw = String::<63>::new();
+        for &byte in rnd.iter() {
+            let _ = pw.push(PASSWORD_CHARS[(byte as usize) % 62] as char);
+        }
+        Ok(pw)
     }
 
     // Password functions removed; pubkey-only auth supported.
@@ -289,8 +298,8 @@ impl SSHEncode for SSHStampConfig {
         self.uart_pins.rx.enc(s)?;
         self.uart_pins.tx.enc(s)?;
 
-        // Persist first-boot marker
-        self.first_boot.enc(s)?;
+        // Persist first-login marker
+        self.first_login.enc(s)?;
 
         Ok(())
     }
@@ -323,7 +332,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         let tx: u8 = SSHDecode::dec(s)?;
         let uart_pins = UartPins { rx, tx };
 
-        let first_boot = SSHDecode::dec(s)?;
+        let first_login = SSHDecode::dec(s)?;
 
         Ok(Self {
             hostkey,
@@ -335,7 +344,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
             #[cfg(feature = "ipv6")]
             ipv6_static,
             uart_pins,
-            first_boot,
+            first_login,
         })
     }
 }

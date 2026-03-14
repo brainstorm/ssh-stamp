@@ -5,11 +5,11 @@
 use log::{debug, info, trace, warn};
 
 use crate::config::SSHStampConfig;
-use esp_hal::system::software_reset;
-use heapless::String;
 use crate::espressif::buffered_uart::UART_SIGNAL;
 use crate::settings::UART_BUFFER_SIZE;
 use crate::store;
+use esp_hal::system::software_reset;
+use heapless::String;
 use storage::flash;
 
 use core::fmt::Debug;
@@ -115,23 +115,16 @@ pub async fn connection_loop(
             }
             ServEvent::FirstAuth(mut a) => {
                 info!("ServEvent::FirstAuth");
-                // Allow the "first auth" behaviour only on first-boot-like configs.
-                // Consider the device in first-boot state when there is no password
-                // and no stored client pubkeys.
                 let config_guard = config.lock().await;
 
-                // Disable password auth method regardless.
                 a.enable_password_auth(false)?;
 
-                // SECURITY: We have no users; enable pubkey auth so the
-                // provisioner can add a key.
                 a.enable_pubkey_auth(true)?;
-                if config_guard.first_boot {
-                    a.allow()?; // SECURITY: Controversial (but necessary to provision?)
+                if config_guard.first_login {
+                    a.allow()?;
                 } else {
-                    // Not first boot: do not auto-allow; reject the first-auth helper.
                     info!(
-                        "FirstAuth received but not first-boot, allowing pubkey auth but rejecting 
+                        "FirstAuth received but not first-login, allowing pubkey auth but rejecting 
                         additions of new public keys on already provisioned device"
                     );
                     a.reject()?;
@@ -195,32 +188,31 @@ pub async fn connection_loop(
                         // Ignore, but succeed to avoid client-side warnings
                         // This env variable will always be sent by OpenSSH client.
                         a.succeed()?;
-                    },
+                    }
                     "SSH_STAMP_PUBKEY" => {
                         let mut config_guard = config.lock().await;
-                        // Only allow adding a pubkey via ENV on first-boot-like configs.
 
-                        if !config_guard.first_boot {
-                            warn!("SSH_STAMP_PUBKEY env received but not first-boot; rejecting");
+                        if !config_guard.first_login {
+                            warn!("SSH_STAMP_PUBKEY env received but not first-login; rejecting");
                             a.fail()?;
-                            break Ok(()); // TODO: Do better HSM-flow-wise
+                            break Ok(());
                         } else if config_guard.add_pubkey(a.value()?).is_ok() {
                             info!("Added new pubkey from ENV");
                             a.succeed()?;
-                            // Mark that config has changed and clear first_boot so
-                            // future connections are not treated as first-boot.
-                            config_guard.first_boot = false;
+                            config_guard.first_login = false;
                             config_changed = true;
                             auth_checked = true;
                         } else {
                             warn!("Failed to add new pubkey from ENV");
                             a.fail()?;
                         }
-                    },
+                    }
                     "SSH_STAMP_WIFI_SSID" => {
                         let mut config_guard = config.lock().await;
-                        if !(auth_checked || config_guard.first_boot) {
-                            warn!("SSH_STAMP_WIFI_SSID env received but not authenticated; rejecting");
+                        if !(auth_checked || config_guard.first_login) {
+                            warn!(
+                                "SSH_STAMP_WIFI_SSID env received but not authenticated; rejecting"
+                            );
                             a.fail()?;
                             break Ok(());
                         } else {
@@ -229,21 +221,17 @@ pub async fn connection_loop(
                                 config_guard.wifi_ssid = s;
                                 info!("Set wifi SSID from ENV");
                                 a.succeed()?;
-                                // Mark provisioned
-                                config_guard.first_boot = false;
-                                // Persist immediately
                                 let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
                                     warn!("Could not persist wifi SSID: flash not initialized");
                                     config_changed = true;
                                     continue;
                                 };
                                 let mut flash_storage = flash_storage_guard.lock().await;
-                                if let Err(e) = store::save(&mut flash_storage, &config_guard).await {
+                                if let Err(e) = store::save(&mut flash_storage, &config_guard).await
+                                {
                                     warn!("Failed to persist config with wifi SSID: {:?}", e);
                                     config_changed = true;
                                 } else {
-                                    // saved successfully, reboot to apply changes
-                                    // unsure if reboot is necessary to apply wifi changes.
                                     drop(config_guard);
                                     software_reset();
                                 }
@@ -252,42 +240,52 @@ pub async fn connection_loop(
                                 a.fail()?;
                             }
                         }
-                    },
+                    }
                     "SSH_STAMP_WPA3_PSK" => {
                         let mut config_guard = config.lock().await;
-                        if !(auth_checked || config_guard.first_boot) {
-                            warn!("SSH_STAMP_WPA3_PSK env received but not authenticated; rejecting");
+                        if !(auth_checked || config_guard.first_login) {
+                            warn!(
+                                "SSH_STAMP_WPA3_PSK env received but not authenticated; rejecting"
+                            );
                             a.fail()?;
                             break Ok(());
                         } else {
-                            let mut s = String::<63>::new();
-                            if s.push_str(a.value()?).is_ok() {
-                                config_guard.wifi_pw = Some(s);
-                                info!("Set wifi WPA3 PSK from ENV");
-                                a.succeed()?;
-                                // Mark provisioned
-                                config_guard.first_boot = false;
-                                // Persist immediately
-                                let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
-                                    warn!("Could not persist wifi PSK: flash not initialized");
-                                    config_changed = true;
-                                    continue;
-                                };
-                                let mut flash_storage = flash_storage_guard.lock().await;
-                                if let Err(e) = store::save(&mut flash_storage, &config_guard).await {
-                                    warn!("Failed to persist config with wifi PSK: {:?}", e);
-                                    config_changed = true;
-                                } else {
-                                    // saved successfully, reboot to apply changes
-                                    drop(config_guard);
-                                    software_reset();
-                                }
-                            } else {
-                                warn!("SSH_STAMP_WPA3_PSK too long");
+                            let value = a.value()?;
+                            if value.len() < 8 {
+                                warn!("SSH_STAMP_WPA3_PSK too short (min 8 characters)");
                                 a.fail()?;
+                            } else if value.len() > 63 {
+                                warn!("SSH_STAMP_WPA3_PSK too long (max 63 characters)");
+                                a.fail()?;
+                            } else {
+                                let mut s = String::<63>::new();
+                                if s.push_str(value).is_ok() {
+                                    config_guard.wifi_pw = Some(s);
+                                    info!("Set wifi WPA3 PSK from ENV");
+                                    a.succeed()?;
+                                    let Some(flash_storage_guard) = flash::get_flash_n_buffer()
+                                    else {
+                                        warn!("Could not persist wifi PSK: flash not initialized");
+                                        config_changed = true;
+                                        continue;
+                                    };
+                                    let mut flash_storage = flash_storage_guard.lock().await;
+                                    if let Err(e) =
+                                        store::save(&mut flash_storage, &config_guard).await
+                                    {
+                                        warn!("Failed to persist config with wifi PSK: {:?}", e);
+                                        config_changed = true;
+                                    } else {
+                                        drop(config_guard);
+                                        software_reset();
+                                    }
+                                } else {
+                                    warn!("SSH_STAMP_WPA3_PSK push_str failed unexpectedly");
+                                    a.fail()?;
+                                }
                             }
                         }
-                    },
+                    }
                     _ => {
                         warn!("Unsupported environment variable");
                         a.fail()?;
@@ -295,9 +293,9 @@ pub async fn connection_loop(
                 }
             }
             ServEvent::SessionPty(a) => {
-                let first_boot = { config.lock().await.first_boot };
+                let first_login = { config.lock().await.first_login };
 
-                if auth_checked || first_boot {
+                if auth_checked || first_login {
                     info!("ServEvent::SessionPty: Session granted");
                     a.succeed()?;
                 } else {
