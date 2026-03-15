@@ -11,6 +11,10 @@ pub(crate) const DEFAULT_SSID: &str = "ssh-stamp";
 pub(crate) const KEY_SLOTS: usize = 1; // TODO: Document whether this a "reasonable default"? Justify why?
 pub(crate) const DEFAULT_IP: &Ipv4Addr = &Ipv4Addr::new(192, 168, 4, 1);
 
+// WiFi password generation
+pub(crate) const WIFI_PASSWORD_CHARS: &[u8; 62] =
+    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
 // UART settings
 //pub(crate) const BAUD_RATE: u32 = 115200;
 //pub(crate) const UART_SETTINGS: &str = "8N1";

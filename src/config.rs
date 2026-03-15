@@ -10,14 +10,16 @@ use embassy_net::{Ipv6Cidr, StaticConfigV6};
 use heapless::String;
 
 use sunset::packets::Ed25519PubKey;
-use sunset::{KeyType, Result};
 use sunset::{
-    SignKey,
     sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
+    SignKey,
 };
+use sunset::{KeyType, Result};
 
 use crate::errors::Error;
-use crate::settings::{DEFAULT_SSID, DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS};
+use crate::settings::{
+    DEFAULT_SSID, DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS, WIFI_PASSWORD_CHARS,
+};
 
 #[derive(Debug, PartialEq)]
 pub struct SSHStampConfig {
@@ -60,8 +62,6 @@ impl Default for UartPins {
     }
 }
 
-const PASSWORD_CHARS: &[u8; 62] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-
 impl SSHStampConfig {
     /// Bump this when the format changes
     pub const CURRENT_VERSION: u8 = 8;
@@ -101,7 +101,7 @@ impl SSHStampConfig {
         sunset::random::fill_random(&mut rnd)?;
         let mut pw = String::<63>::new();
         for &byte in rnd.iter() {
-            let _ = pw.push(PASSWORD_CHARS[(byte as usize) % 62] as char);
+            let _ = pw.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
         }
         Ok(pw)
     }

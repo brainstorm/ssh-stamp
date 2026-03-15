@@ -5,7 +5,7 @@
 use log::{debug, error, info, warn};
 
 use crate::config::SSHStampConfig;
-use crate::settings::{DEFAULT_IP, DEFAULT_SSID};
+use crate::settings::{DEFAULT_IP, DEFAULT_SSID, WIFI_PASSWORD_CHARS};
 use core::net::Ipv4Addr;
 use core::net::SocketAddrV4;
 use edge_dhcp;
@@ -32,8 +32,6 @@ use crate::store;
 use alloc::string::String as AllocString;
 use storage::flash;
 use sunset_async::SunsetMutex;
-
-const PASSWORD_CHARS: &[u8; 62] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {
@@ -68,7 +66,7 @@ pub async fn if_up(
 
             let mut pw = String::<63>::new();
             for &byte in rnd.iter() {
-                let _ = pw.push(PASSWORD_CHARS[(byte as usize) % 62] as char);
+                let _ = pw.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
             }
 
             warn!("wifi_pw missing from config, generated new password");
