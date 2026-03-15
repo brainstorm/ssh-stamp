@@ -31,10 +31,10 @@ sha2 = { version = "0.10", default-features = false }
 rustc-hash = { version = "2.1", default-features = false } # For hash in the OTA SFTP server TODO: For the optimisation task: Remove this dependency and use sha2 instead?
 log = "0.4"
 
-esp-hal = { version = "1", features = ["unstable", "log-04"] }
+esp-hal = { path = "../esp-hal/esp-hal", features = ["unstable", "log-04"] }
 embedded-storage = "0.3.1"
-esp-storage = { version = "0.8.0" }
-esp-bootloader-esp-idf = { version = "0.4.0" }
+esp-storage = { path = "../esp-hal/esp-storage" }
+esp-bootloader-esp-idf = { path = "../esp-hal/esp-bootloader-esp-idf" }
 
 static_cell = { version = "2.1" }
 # Used for storage::flash singleton
@@ -64,12 +64,12 @@ smoltcp = { version = "0.12", default-features = false, features = [
 ] }
 embassy-time = { version = "0.5.0" }
 embedded-io-async = "0.6.1"
-esp-alloc = { version = "0.9.0" }
-esp-backtrace = { version = "0.18.0", features = ["panic-handler", "println"] }
+esp-alloc = { path = "../esp-hal/esp-alloc" }
+esp-backtrace = { path = "../esp-hal/esp-backtrace", features = ["panic-handler", "println"] }
 esp-hal = { workspace = true }
-esp-rtos = { version = "0.2.0", features = ["embassy", "log-04", "esp-radio"] }
-esp-radio = { version = "0.17.0", features = ["wifi", "log-04"] }
-esp-println = { version = "0.16", features = ["log-04"] }
+esp-rtos = { path = "../esp-hal/esp-rtos", features = ["embassy", "log-04", "esp-radio"] }
+esp-radio = { path = "../esp-hal/esp-radio", features = ["wifi", "log-04"] }
+esp-println = { path = "../esp-hal/esp-println", features = ["log-04"] }
 hex = { version = "0.4", default-features = false }
 log = { version = "0.4" }
 static_cell = { workspace = true }

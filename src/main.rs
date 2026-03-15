@@ -36,7 +36,6 @@ use esp_hal::{peripherals::WIFI, rng::Rng};
 
 use esp_println::logger;
 
-use esp_radio::Controller;
 use esp_rtos::embassy::InterruptExecutor;
 
 use static_cell::StaticCell;
@@ -196,20 +195,17 @@ pub struct PeripheralsEnabled<'a> {
     pub rng: Rng,
     pub wifi: WIFI<'a>,
     pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub controller: Controller<'static>,
     pub uart_buf: &'a BufferedUart,
     pub spawner: Spawner,
 }
 
 async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Error> {
     debug!("HSM: peripherals_enabled");
-    let controller = esp_radio::init().map_err(|_| sunset::error::BadUsage.build())?;
 
     let peripherals_enabled_struct = PeripheralsEnabled {
         rng: s.rng,
         wifi: s.wifi,
         config: s.config,
-        controller,
         uart_buf: s.uart_buf,
         spawner: s.spawner,
     };
@@ -225,7 +221,6 @@ async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Err
 }
 
 pub struct WifiControllerEnabled<'a> {
-    pub rng: Rng,
     pub config: &'a SunsetMutex<SSHStampConfig>,
     pub uart_buf: &'a BufferedUart,
     pub tcp_stack: Stack<'a>,
@@ -233,11 +228,10 @@ pub struct WifiControllerEnabled<'a> {
 
 pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(), sunset::Error> {
     debug!("HSM: wifi_controller_enabled");
-    let tcp_stack = net::if_up(s.spawner, s.controller, s.wifi, s.rng, s.config).await?;
+    let tcp_stack = net::if_up(s.spawner, s.wifi, s.rng, s.config).await?;
 
     let wifi_controller_enabled_stack = WifiControllerEnabled {
         config: s.config,
-        rng: s.rng,
         uart_buf: s.uart_buf,
         tcp_stack,
     };

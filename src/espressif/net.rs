@@ -8,7 +8,6 @@ use crate::config::SSHStampConfig;
 use crate::settings::{DEFAULT_IP, DEFAULT_SSID, WIFI_PASSWORD_CHARS};
 use core::net::Ipv4Addr;
 use core::net::SocketAddrV4;
-use edge_dhcp;
 use edge_dhcp::{
     io::{self, DEFAULT_SERVER_PORT},
     server::{Server, ServerOptions},
@@ -21,10 +20,9 @@ use embassy_net::{Stack, StackResources, tcp::TcpSocket};
 use embassy_time::{Duration, Timer};
 use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
-use esp_radio::Controller;
-use esp_radio::wifi::WifiEvent;
 use esp_radio::wifi::{
-    AccessPointConfig, AuthMethod::Wpa2Personal, ModeConfig, WifiApState, WifiController,
+    ap::AccessPointConfig, AuthenticationMethod, Config, ControllerConfig, WifiAccessPointState,
+    WifiController,
 };
 use heapless::String;
 extern crate alloc;
@@ -45,15 +43,13 @@ macro_rules! mk_static {
 
 pub async fn if_up(
     spawner: Spawner,
-    controller: Controller<'static>,
     wifi: WIFI<'static>,
     rng: Rng,
     config: &'static SunsetMutex<SSHStampConfig>,
 ) -> Result<Stack<'static>, sunset::Error> {
-    let wifi_init = &*mk_static!(Controller<'static>, controller);
+    let controller_config = ControllerConfig::default();
     let (mut wifi_controller, interfaces) =
-        esp_radio::wifi::new(wifi_init, wifi, Default::default())
-            .map_err(|_| sunset::error::BadUsage.build())?;
+        esp_radio::wifi::new(wifi, controller_config).map_err(|_| sunset::error::BadUsage.build())?;
 
     // Ensure WiFi PSK exists before applying AP config to avoid esp_wifi_set_config errors
     {
@@ -83,10 +79,10 @@ pub async fn if_up(
         info!("WiFi WIFI PSK: {}", guard.wifi_pw.as_ref().unwrap());
     }
 
-    let ap_config = ModeConfig::AccessPoint(
+    let ap_config = Config::AccessPoint(
         AccessPointConfig::default()
             .with_ssid(AllocString::from(wifi_ssid(config).await.as_str()))
-            .with_auth_method(Wpa2Personal)
+            .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
             .with_password(AllocString::from(wifi_password(config).await.as_str())),
     );
     let res = wifi_controller.set_config(&ap_config);
@@ -104,7 +100,7 @@ pub async fn if_up(
 
     // Init network stack
     let (ap_stack, runner) = embassy_net::new(
-        interfaces.ap,
+        interfaces.access_point,
         net_config,
         mk_static!(StackResources<3>, StackResources::<3>::new()),
         seed,
@@ -197,7 +193,6 @@ pub async fn wifi_up(
     mut wifi_controller: WifiController<'static>,
     config: &'static SunsetMutex<SSHStampConfig>,
 ) {
-    debug!("Device capabilities: {:?}", wifi_controller.capabilities());
     let configured_ssid = {
         let guard = config.lock().await;
         guard.wifi_ssid.clone()
@@ -222,28 +217,23 @@ pub async fn wifi_up(
         }
     };
     let pw_string = wifi_password(config).await;
-    let client_config = ModeConfig::AccessPoint(
+    let client_config = Config::AccessPoint(
         AccessPointConfig::default()
             .with_ssid(AllocString::from(ssid_string.as_str()))
-            .with_auth_method(Wpa2Personal)
+            .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
             .with_password(AllocString::from(pw_string.as_str())),
     );
 
     loop {
-        if esp_radio::wifi::ap_state() == WifiApState::Started {
-            // wait until we're no longer connected
-            wifi_controller.wait_for_event(WifiEvent::ApStop).await;
+        if esp_radio::wifi::ap_state() == WifiAccessPointState::Started {
+            // wait until we're no longer connected (TODO: use subscribe for events)
             Timer::after(Duration::from_millis(5000)).await
         }
-        if !matches!(wifi_controller.is_started(), Ok(true)) {
+        // The wifi controller automatically starts when config is set
+        // Check AP state instead of is_connected() which is for station mode
+        if esp_radio::wifi::ap_state() != WifiAccessPointState::Started {
             if let Err(e) = wifi_controller.set_config(&client_config) {
                 debug!("Failed to set wifi config: {:?}", e);
-                Timer::after(Duration::from_millis(1000)).await;
-                continue;
-            }
-            debug!("Starting wifi");
-            if let Err(e) = wifi_controller.start_async().await {
-                debug!("Failed to start wifi: {:?}", e);
                 Timer::after(Duration::from_millis(1000)).await;
                 continue;
             }
@@ -263,11 +253,12 @@ pub async fn wifi_controller_disable() -> () {
     //software_reset();
 }
 
-use esp_radio::wifi::WifiDevice;
+use esp_radio::wifi::Interface;
+
 #[embassy_executor::task]
-async fn net_up(mut runner: Runner<'static, WifiDevice<'static>>) {
+async fn net_up(mut _runner: Runner<'static, Interface<'static>>) {
     debug!("Bringing up network stack...\n");
-    runner.run().await
+    _runner.run().await
 }
 
 #[embassy_executor::task]
