@@ -268,6 +268,7 @@ async fn tcp_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Err
     cfg_if::cfg_if!(
         if #[cfg(feature = "esp32")] {
             let mut tcp_socket = TcpSocket::new(s.tcp_stack, &mut rx_buffer, &mut tx_buffer);
+            use log::info;
             info!("Waiting for SSH client...");
             if let Err(e) = tcp_socket
                 .accept(IpListenEndpoint {
