@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use log::{debug, info, trace, warn};
+use log::{debug, trace, warn};
 
 use crate::config::SSHStampConfig;
 use crate::espressif::buffered_uart::UART_SIGNAL;
@@ -52,7 +52,7 @@ pub async fn connection_loop(
         trace!("{:?}", &ev);
         match ev {
             ServEvent::SessionSubsystem(a) => {
-                info!("ServEvent::SessionSubsystem");
+                debug!("ServEvent::SessionSubsystem");
 
                 if !auth_checked {
                     warn!("Unauthenticated SessionSubsystem rejected");
@@ -64,7 +64,7 @@ pub async fn connection_loop(
                         #[cfg(feature = "sftp-ota")]
                         {
                             a.succeed()?;
-                            info!("We got SFTP subsystem");
+                            debug!("We got SFTP subsystem");
                             match chan_pipe.try_send(SessionType::Sftp(ch)) {
                                 Ok(_) => auth_checked = false,
                                 Err(e) => error!("Could not send the channel: {:?}", e),
@@ -81,7 +81,7 @@ pub async fn connection_loop(
                 }
             }
             ServEvent::SessionShell(a) => {
-                info!("ServEvent::SessionShell");
+                debug!("ServEvent::SessionShell");
 
                 if !auth_checked {
                     warn!("Unauthenticated SessionShell rejected");
@@ -101,10 +101,10 @@ pub async fn connection_loop(
                     }
                     debug_assert!(ch.num() == a.channel());
                     a.succeed()?;
-                    info!("We got shell");
+                    debug!("We got shell");
                     // Signal for uart task to configure pins and run. Value is irrelevant.
                     UART_SIGNAL.signal(1);
-                    info!("Connection loop: UART_SIGNAL sent");
+                    debug!("Connection loop: UART_SIGNAL sent");
                     match chan_pipe.try_send(SessionType::Bridge(ch)) {
                         Ok(_) => auth_checked = false,
                         Err(e) => log::error!("Could not send the channel: {:?}", e),
@@ -114,7 +114,7 @@ pub async fn connection_loop(
                 }
             }
             ServEvent::FirstAuth(mut a) => {
-                info!("ServEvent::FirstAuth");
+                debug!("ServEvent::FirstAuth");
                 let config_guard = config.lock().await;
 
                 a.enable_password_auth(false)?;
@@ -123,7 +123,7 @@ pub async fn connection_loop(
                 if config_guard.first_login {
                     a.allow()?;
                 } else {
-                    info!(
+                    debug!(
                         "FirstAuth received but not first-login, allowing pubkey auth but rejecting 
                         additions of new public keys on already provisioned device"
                     );
@@ -131,7 +131,7 @@ pub async fn connection_loop(
                 }
             }
             ServEvent::Hostkeys(h) => {
-                info!("ServEvent::Hostkeys");
+                debug!("ServEvent::Hostkeys");
                 let config_guard = config.lock().await;
                 // Just take it from config as private hostkey is generated on first boot.
                 h.hostkeys(&[&config_guard.hostkey])?;
@@ -141,7 +141,7 @@ pub async fn connection_loop(
                 a.reject()?;
             }
             ServEvent::PubkeyAuth(a) => {
-                info!("ServEvent::PubkeyAuth");
+                debug!("ServEvent::PubkeyAuth");
                 let config_guard = config.lock().await;
                 let client_pubkey = a.pubkey()?;
 
@@ -156,7 +156,7 @@ pub async fn connection_loop(
                             a.allow()?;
                             auth_checked = true;
                         } else {
-                            info!("No matching pubkey slot found");
+                            debug!("No matching pubkey slot found");
                             a.reject()?;
                         }
                     }
@@ -167,7 +167,7 @@ pub async fn connection_loop(
                 }
             }
             ServEvent::OpenSession(a) => {
-                info!("ServEvent::OpenSession");
+                debug!("ServEvent::OpenSession");
                 match session {
                     Some(_) => {
                         todo!("Can't have two sessions");
@@ -197,7 +197,7 @@ pub async fn connection_loop(
                             a.fail()?;
                             break Ok(());
                         } else if config_guard.add_pubkey(a.value()?).is_ok() {
-                            info!("Added new pubkey from ENV");
+                            debug!("Added new pubkey from ENV");
                             a.succeed()?;
                             config_guard.first_login = false;
                             config_changed = true;
@@ -219,7 +219,7 @@ pub async fn connection_loop(
                             let mut s = String::<32>::new();
                             if s.push_str(a.value()?).is_ok() {
                                 config_guard.wifi_ssid = s;
-                                info!("Set wifi SSID from ENV");
+                                debug!("Set wifi SSID from ENV");
                                 a.succeed()?;
                                 let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
                                     warn!("Could not persist wifi SSID: flash not initialized");
@@ -241,27 +241,27 @@ pub async fn connection_loop(
                             }
                         }
                     }
-                    "SSH_STAMP_WPA3_PSK" => {
+                    "SSH_STAMP_WIFI_PSK" => {
                         let mut config_guard = config.lock().await;
                         if !(auth_checked || config_guard.first_login) {
                             warn!(
-                                "SSH_STAMP_WPA3_PSK env received but not authenticated; rejecting"
+                                "SSH_STAMP_WIFI_PSK env received but not authenticated; rejecting"
                             );
                             a.fail()?;
                             break Ok(());
                         } else {
                             let value = a.value()?;
                             if value.len() < 8 {
-                                warn!("SSH_STAMP_WPA3_PSK too short (min 8 characters)");
+                                warn!("SSH_STAMP_WIFI_PSK too short (min 8 characters)");
                                 a.fail()?;
                             } else if value.len() > 63 {
-                                warn!("SSH_STAMP_WPA3_PSK too long (max 63 characters)");
+                                warn!("SSH_STAMP_WIFI_PSK too long (max 63 characters)");
                                 a.fail()?;
                             } else {
                                 let mut s = String::<63>::new();
                                 if s.push_str(value).is_ok() {
                                     config_guard.wifi_pw = Some(s);
-                                    info!("Set wifi WPA3 PSK from ENV");
+                                    debug!("Set wifi WIFI PSK from ENV");
                                     a.succeed()?;
                                     let Some(flash_storage_guard) = flash::get_flash_n_buffer()
                                     else {
@@ -280,7 +280,7 @@ pub async fn connection_loop(
                                         software_reset();
                                     }
                                 } else {
-                                    warn!("SSH_STAMP_WPA3_PSK push_str failed unexpectedly");
+                                    warn!("SSH_STAMP_WIFI_PSK push_str failed unexpectedly");
                                     a.fail()?;
                                 }
                             }
@@ -296,10 +296,10 @@ pub async fn connection_loop(
                 let first_login = { config.lock().await.first_login };
 
                 if auth_checked || first_login {
-                    info!("ServEvent::SessionPty: Session granted");
+                    debug!("ServEvent::SessionPty: Session granted");
                     a.succeed()?;
                 } else {
-                    info!("ServEvent::SessionPty: No auth not session");
+                    debug!("ServEvent::SessionPty: No auth not session");
                     a.fail()?;
                 }
             }
@@ -307,7 +307,7 @@ pub async fn connection_loop(
                 a.fail()?;
             }
             ServEvent::Defunct => {
-                info!("Expected caller to handle event");
+                debug!("Expected caller to handle event");
                 error::BadUsage.fail()?
             }
             ServEvent::PollAgain => {
@@ -318,7 +318,7 @@ pub async fn connection_loop(
 }
 
 pub async fn connection_disable() -> () {
-    info!("Connection loop disabled: WIP");
+    debug!("Connection loop disabled: WIP");
     // TODO: Correctly disable/restart Conection loop and/or send messsage to user over SSH
 }
 
@@ -330,7 +330,7 @@ pub async fn ssh_wait_for_initialisation<'server>(
 }
 
 pub async fn ssh_disable() -> () {
-    info!("SSH Server disabled: WIP");
+    debug!("SSH Server disabled: WIP");
     // TODO: Correctly disable/restart SSH Server and/or send messsage to user over SSH
 }
 
@@ -342,20 +342,20 @@ pub async fn handle_ssh_client<'a, 'b>(
     ssh_server: &'b SSHServer<'a>,
     chan_pipe: &'b Channel<NoopRawMutex, SessionType, 1>,
 ) -> Result<(), sunset::Error> {
-    info!("Preparing bridge");
+    debug!("Preparing bridge");
     let session_type = chan_pipe.receive().await;
-    info!("Checking bridge session type");
+    debug!("Checking bridge session type");
     match session_type {
         SessionType::Bridge(ch) => {
-            info!("Handling bridge session");
+            debug!("Handling bridge session");
             let (stdin, stdout) = ssh_server.stdio(ch).await?.split();
-            info!("Starting bridge");
+            debug!("Starting bridge");
             serial_bridge(stdin, stdout, uart_buff).await?
         }
         #[cfg(feature = "sftp-ota")]
         SessionType::Sftp(ch) => {
             {
-                info!("Handling SFTP session");
+                debug!("Handling SFTP session");
                 let stdio = ssh_server.stdio(ch).await?;
                 // TODO: Use a configuration flag to select the hardware specific OtaActions implementer
                 let ota_writer = storage::esp_ota::OtaWriter::new();
@@ -368,7 +368,7 @@ pub async fn handle_ssh_client<'a, 'b>(
 
 pub async fn bridge_disable() -> () {
     // disable bridge
-    info!("Bridge disabled: WIP");
+    debug!("Bridge disabled: WIP");
     // TODO: Correctly disable/restart bridge and/or send message to user over SSH
     // software_reset();
 }

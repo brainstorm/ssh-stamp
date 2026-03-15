@@ -45,7 +45,7 @@ cargo build-esp32c6 --release
 cargo run-esp32c6
 ```
 
-2. On first boot the device generates a random WPA3 PSK and prints it to the serial console with an info message `First-boot generated WiFi WPA3 PSK: <PSK>`; the default SSID is `ssh-stamp` and the AP IP is `192.168.4.1`.
+2. On first boot the device generates a random WPA2 PSK and prints it to the serial console with an info message `First-boot generated WiFi WPA2 PSK: <PSK>`; the default SSID is `ssh-stamp` and the AP IP is `192.168.4.1`.
 
 3. Connect a laptop/phone to the `ssh-stamp` AP using the printed PSK, then SSH into the device at `root@192.168.4.1`.
 
@@ -60,17 +60,17 @@ export SSH_STAMP_PUBKEY="$(cat ~/.ssh/id_ed25519.pub)"
 ssh -o SendEnv=SSH_STAMP_PUBKEY root@192.168.4.1
 ```
 
-- Set a custom SSID and WPA3 PSK (allowed on first-boot or any authenticated session):
+- Set a custom SSID and WPA2 PSK (allowed on first-boot or any authenticated session):
 
 ```
 export SSH_STAMP_WIFI_SSID="MyHomeSSID"
-export SSH_STAMP_WPA3_PSK="my-super-secret-psk"
-ssh -o SendEnv=SSH_STAMP_WIFI_SSID -o SendEnv=SSH_STAMP_WPA3_PSK root@192.168.4.1
+export SSH_STAMP_WIFI_PSK="my-super-secret-psk"
+ssh -o SendEnv=SSH_STAMP_WIFI_SSID -o SendEnv=SSH_STAMP_WIFI_PSK root@192.168.4.1
 ```
 
 Notes:
 - `SSH_STAMP_PUBKEY` is accepted on first-boot to add the initial admin key.
-- `SSH_STAMP_WIFI_SSID` and `SSH_STAMP_WPA3_PSK` may be applied while authenticated via pubkey (or on first-boot). After a successful change the device persists the settings and performs a software reset so the new WiFi settings take effect.
+- `SSH_STAMP_WIFI_SSID` and `SSH_STAMP_WIFI_PSK` may be applied while authenticated via pubkey (or on first-boot). After a successful change the device persists the settings and performs a software reset so the new WiFi settings take effect.
 - If you prefer a single-step provisioning, export all three env vars locally and forward them with `SendEnv` in the same SSH invocation.
 
 If your SSH client doesn't forward environment variables by default, use the `-o SendEnv=VAR` option as shown above or configure `SendEnv` in your SSH client config.

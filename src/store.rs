@@ -5,7 +5,7 @@ use esp_bootloader_esp_idf::partitions;
 use pretty_hex::PrettyHex;
 use sha2::Digest;
 
-use log::{debug, error, info};
+use log::{debug, error};
 
 use crate::errors::Error as SSHStampError;
 use sunset::error::Error as SunsetError;
@@ -37,8 +37,8 @@ impl FlashConfig<'_> {
     // TODO: Rework Error mapping with esp_storage errors
     /// Finds the NVS partitions and retrieves information about it.
     pub fn find_config_partition(fb: &mut FlashBuffer) -> Result<(), SSHStampError> {
-        info!("Flash size = {} Mb", fb.flash.capacity() / (1024 * 1024));
-        info!("Flash storage : {:?}", fb.flash);
+        debug!("Flash size = {} Mb", fb.flash.capacity() / (1024 * 1024));
+        debug!("Flash storage : {:?}", fb.flash);
         let pt = partitions::read_partition_table(
             &mut fb.flash,
             &mut fb.buf[..esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN],
@@ -60,8 +60,8 @@ impl FlashConfig<'_> {
 
         let nvs_partition = nvs.as_embedded_storage(&mut fb.flash);
 
-        info!("NVS partition size = {}", nvs_partition.capacity());
-        info!("NVS partition offset = 0x{:x}", nvs.offset());
+        debug!("NVS partition size = {}", nvs_partition.capacity());
+        debug!("NVS partition offset = 0x{:x}", nvs.offset());
 
         Ok(())
     }
@@ -77,10 +77,10 @@ fn config_hash(config: &SSHStampConfig) -> Result<[u8; 32], SunsetError> {
 pub async fn load_or_create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
     match load(flash).await {
         Ok(c) => {
-            info!("Good existing config");
+            debug!("Good existing config");
             return Ok(c);
         }
-        Err(e) => info!("Existing config bad, making new. {e}"),
+        Err(e) => debug!("Existing config bad, making new. {e}"),
     }
 
     create(flash).await
@@ -89,7 +89,7 @@ pub async fn load_or_create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfi
 pub async fn create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
     let c = SSHStampConfig::new()?;
     save(flash, &c).await?;
-    info!("Created new config: {:?}", &c);
+    debug!("Created new config: {:?}", &c);
 
     Ok(c)
 }
@@ -149,7 +149,7 @@ pub async fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(
         CONFIG_OFFSET + FlashConfig::BUF_SIZE
     );
 
-    info!("Erasing flash");
+    debug!("Erasing flash");
 
     const { assert!(CONFIG_AREA_SIZE > FlashConfig::BUF_SIZE) };
 
@@ -168,6 +168,6 @@ pub async fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(
         SunsetError::msg("flash write error")
     })?;
 
-    info!("flash save done");
+    debug!("flash save done");
     Ok(())
 }

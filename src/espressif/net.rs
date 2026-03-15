@@ -24,7 +24,7 @@ use esp_hal::rng::Rng;
 use esp_radio::Controller;
 use esp_radio::wifi::WifiEvent;
 use esp_radio::wifi::{
-    AccessPointConfig, AuthMethod::Wpa2Wpa3Personal, ModeConfig, WifiApState, WifiController,
+    AccessPointConfig, AuthMethod::Wpa2Personal, ModeConfig, WifiApState, WifiController,
 };
 use heapless::String;
 extern crate alloc;
@@ -55,7 +55,7 @@ pub async fn if_up(
         esp_radio::wifi::new(wifi_init, wifi, Default::default())
             .map_err(|_| sunset::error::BadUsage.build())?;
 
-    // Ensure WPA3 PSK exists before applying AP config to avoid esp_wifi_set_config errors
+    // Ensure WiFi PSK exists before applying AP config to avoid esp_wifi_set_config errors
     {
         let mut guard = config.lock().await;
         if guard.wifi_pw.is_none() {
@@ -80,17 +80,17 @@ pub async fn if_up(
                 panic!("Failed to persist generated wifi password: {:?}", e);
             }
         }
-        info!("WiFi WPA3 PSK: {}", guard.wifi_pw.as_ref().unwrap());
+        info!("WiFi WIFI PSK: {}", guard.wifi_pw.as_ref().unwrap());
     }
 
     let ap_config = ModeConfig::AccessPoint(
         AccessPointConfig::default()
             .with_ssid(AllocString::from(wifi_ssid(config).await.as_str()))
-            .with_auth_method(Wpa2Wpa3Personal)
+            .with_auth_method(Wpa2Personal)
             .with_password(AllocString::from(wifi_password(config).await.as_str())),
     );
     let res = wifi_controller.set_config(&ap_config);
-    info!("wifi_set_configuration returned {:?}", res);
+    debug!("wifi_set_configuration returned {:?}", res);
 
     let gw_ip_addr_ipv4 = *DEFAULT_IP;
 
@@ -122,7 +122,6 @@ pub async fn if_up(
         Timer::after(Duration::from_millis(500)).await;
     }
 
-    // TODO: Use wifi_manager instead?
     info!(
         "Connect to the AP `ssh-stamp` as a DHCP client with IP: {}",
         gw_ip_addr_ipv4
@@ -133,13 +132,13 @@ pub async fn if_up(
 
 pub async fn ap_stack_disable() -> () {
     // drop ap_stack
-    info!("AP Stack disabled: WIP");
+    debug!("AP Stack disabled: WIP");
     // TODO: Correctly disable/restart AP Stack and/or send messsage to user over SSH
 }
 
 pub async fn tcp_socket_disable() -> () {
     // drop tcp stack
-    info!("TCP socket disabled: WIP");
+    debug!("TCP socket disabled: WIP");
     // TODO: Correctly disable/restart tcp socket and/or send messsage to user over SSH
 }
 
@@ -150,7 +149,7 @@ pub async fn accept_requests<'a>(
 ) -> TcpSocket<'a> {
     let mut tcp_socket = TcpSocket::new(tcp_stack, rx_buffer, tx_buffer);
 
-    info!("Waiting for SSH client...");
+    debug!("Waiting for SSH client...");
     if let Err(e) = tcp_socket
         .accept(IpListenEndpoint {
             addr: None,
@@ -162,7 +161,7 @@ pub async fn accept_requests<'a>(
         // continue;
         tcp_socket_disable().await;
     }
-    info!("Connected, port 22");
+    debug!("Connected, port 22");
 
     tcp_socket
 }
@@ -198,7 +197,7 @@ pub async fn wifi_up(
     mut wifi_controller: WifiController<'static>,
     config: &'static SunsetMutex<SSHStampConfig>,
 ) {
-    info!("Device capabilities: {:?}", wifi_controller.capabilities());
+    debug!("Device capabilities: {:?}", wifi_controller.capabilities());
     let configured_ssid = {
         let guard = config.lock().await;
         guard.wifi_ssid.clone()
@@ -226,7 +225,7 @@ pub async fn wifi_up(
     let client_config = ModeConfig::AccessPoint(
         AccessPointConfig::default()
             .with_ssid(AllocString::from(ssid_string.as_str()))
-            .with_auth_method(Wpa2Wpa3Personal)
+            .with_auth_method(Wpa2Personal)
             .with_password(AllocString::from(pw_string.as_str())),
     );
 
@@ -238,17 +237,17 @@ pub async fn wifi_up(
         }
         if !matches!(wifi_controller.is_started(), Ok(true)) {
             if let Err(e) = wifi_controller.set_config(&client_config) {
-                info!("Failed to set wifi config: {:?}", e);
+                debug!("Failed to set wifi config: {:?}", e);
                 Timer::after(Duration::from_millis(1000)).await;
                 continue;
             }
-            info!("Starting wifi");
+            debug!("Starting wifi");
             if let Err(e) = wifi_controller.start_async().await {
-                info!("Failed to start wifi: {:?}", e);
+                debug!("Failed to start wifi: {:?}", e);
                 Timer::after(Duration::from_millis(1000)).await;
                 continue;
             }
-            info!("Wifi started!");
+            debug!("Wifi started!");
         }
         Timer::after(Duration::from_millis(10)).await;
     }
@@ -260,14 +259,14 @@ pub async fn wifi_controller_disable() -> () {
     // drop wifi controller
     // esp_wifi::deinit_unchecked()
     // wifi_controller.deinit_unchecked()
-    info!("Disabling wifi: WIP");
+    debug!("Disabling wifi: WIP");
     //software_reset();
 }
 
 use esp_radio::wifi::WifiDevice;
 #[embassy_executor::task]
 async fn net_up(mut runner: Runner<'static, WifiDevice<'static>>) {
-    info!("Bringing up network stack...\n");
+    debug!("Bringing up network stack...\n");
     runner.run().await
 }
 

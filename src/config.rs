@@ -1,4 +1,4 @@
-use log::{debug, info, warn};
+use log::{debug, warn};
 
 use core::net::Ipv4Addr;
 #[cfg(feature = "ipv6")]
@@ -10,11 +10,11 @@ use embassy_net::{Ipv6Cidr, StaticConfigV6};
 use heapless::String;
 
 use sunset::packets::Ed25519PubKey;
-use sunset::{
-    sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
-    SignKey,
-};
 use sunset::{KeyType, Result};
+use sunset::{
+    SignKey,
+    sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
+};
 
 use crate::errors::Error;
 use crate::settings::{
@@ -77,7 +77,7 @@ impl SSHStampConfig {
         let wifi_pw = Some(Self::generate_wifi_password()?);
 
         let uart_pins = UartPins::default();
-        info!(
+        debug!(
             "SSH Stamp Config new() - RX Pin: {}  TX Pin: {}",
             uart_pins.rx, uart_pins.tx
         );
@@ -119,14 +119,14 @@ impl SSHStampConfig {
         // validate it is an Ed25519 key. Insert into the first empty slot or
         // overwrite slot 0 if none empty.
 
-        info!(
+        debug!(
             "Checking pubkey string passed through ENV: {}",
             key_str.trim()
         );
 
         let openssh = ssh_key::PublicKey::from_str(key_str.trim())?;
 
-        info!("Public key format valid, continuing to parse");
+        debug!("Public key format valid, continuing to parse");
 
         match openssh.key_data() {
             ssh_key::public::KeyData::Ed25519(k) => {
@@ -135,7 +135,7 @@ impl SSHStampConfig {
                     key: sunset::sshwire::Blob(bytes),
                 };
 
-                info!("Parsed Ed25519 public key, adding to config");
+                debug!("Parsed Ed25519 public key, adding to config");
                 for slot in self.pubkeys.iter_mut() {
                     if slot.is_none() {
                         *slot = Some(newk);
