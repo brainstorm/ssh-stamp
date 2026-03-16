@@ -21,7 +21,6 @@ use embassy_net::{Stack, StackResources, tcp::TcpSocket};
 use embassy_time::{Duration, Timer};
 use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
-use esp_hal::system::software_reset;
 use esp_radio::Controller;
 use esp_radio::wifi::WifiEvent;
 use esp_radio::wifi::{AccessPointConfig, ModeConfig, WifiApState, WifiController};
@@ -95,16 +94,14 @@ pub async fn if_up(
 
 pub async fn ap_stack_disable() -> () {
     // drop ap_stack
-    info!("AP Stack disabled");
+    info!("AP Stack disabled: WIP");
     // TODO: Correctly disable/restart AP Stack and/or send messsage to user over SSH
-    software_reset();
 }
 
 pub async fn tcp_socket_disable() -> () {
     // drop tcp stack
-    info!("TCP socket disabled");
+    info!("TCP socket disabled: WIP");
     // TODO: Correctly disable/restart tcp socket and/or send messsage to user over SSH
-    // software_reset();
 }
 
 pub async fn accept_requests<'a>(
@@ -186,7 +183,8 @@ pub async fn wifi_controller_disable() -> () {
     // drop wifi controller
     // esp_wifi::deinit_unchecked()
     // wifi_controller.deinit_unchecked()
-    software_reset();
+    info!("Disabling wifi: WIP");
+    //software_reset();
 }
 
 use esp_radio::wifi::WifiDevice;

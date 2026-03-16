@@ -6,19 +6,9 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 # SSH Stamp
 
-Sponsored by:
-
-![nlnet_zero_commons][nlnet_zero_commons]
-
-# ⚠️ WARNING: Pre-alpha PoC quality, DO NOT use in production. Currently contains highly unsafe business logic auth issues (both password and key management handlers need to be fixed). 
-
-# ⚠️ WARNING: Do not file CVEs reports since deficiencies are very much known at this point in time and they'll be worked on soon as part of [this NLNet SSH-Stamp research and development grant][nlnet-grant] ;)
-
-Expect panics, lost bytes on the UART and other tricky UX issues, we are working on it, pull-requests are accepted too!
+Your everyday SSH secured serial access.
 
 ## Description
-
-Your everyday SSH secured serial access.
 
 The **SSH Stamp** is a secure wireless to UART bridge
 implemented in Rust (no_std, no_alloc and no_unsafe whenever possible)
@@ -44,7 +34,7 @@ On a fresh system the following should be enough to build and run on the relevan
 ## Required for all targets:
 ```
 rustup toolchain install stable --component rust-src
-cargo install espflash
+cargo install espflash --locked
 ```
 
 ## ESP32-C6
@@ -58,7 +48,7 @@ cargo run-esp32c6
 
 ## ESP32-C2 / ESP32-C3
 ```
-rustup target add riscv32imc-unknown-none-elf`
+rustup target add riscv32imc-unknown-none-elf
 ```
 ### ESP32-C2
 ```
@@ -118,13 +108,12 @@ cargo run-esp32s2
 cargo run-esp32s3
 ```
 
-
 # Default UART Pins
 | Target  | RX | TX | 
 | ----    | -- | -- |
 | ESP32   | 13 | 14 | 
 | ESP32S2 | 11 | 10 | 
-| ESP32C2 |  9 | 10 |
+| ESP32C2 | 18 | 19 |
 | ESP32C3 | 20 | 21 |
 | ESP32C6 | 11 | 10 |
 
@@ -149,14 +138,10 @@ cargo install cargo-cyclonedx
 cargo cyclonedx -f json --manifest-path ./docs/
 ```
 
+Sponsored by:
+
+![nlnet_zero_commons][nlnet_zero_commons]
+
 [nlnet-grant]: https://nlnet.nl/project/SSH-Stamp/
 [openwrt_mediatek_no_monitor]: https://github.com/openwrt/openwrt/issues/16279
 [nlnet_zero_commons]: ./docs/nlnet/zero_commons_logo.svg
-
-/dev/ttyUSB0 is ESP32
-
-USB to UART
-sudo minicom --device /dev/ttyUSB1
-
-
-https://docs.espressif.com/projects/esp-matter/en/latest/esp32/optimizations.html

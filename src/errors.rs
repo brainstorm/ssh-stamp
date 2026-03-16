@@ -9,4 +9,12 @@ pub enum Error {
     InvalidPin,
     #[snafu(display("Flash storage error"))]
     FlashStorageError,
+    BadKey,
+    OpenSSHParseError,
+}
+
+impl From<ssh_key::Error> for Error {
+    fn from(_e: ssh_key::Error) -> Error {
+        Error::OpenSSHParseError
+    }
 }

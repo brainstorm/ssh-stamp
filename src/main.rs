@@ -43,14 +43,14 @@ use esp_rtos::embassy::InterruptExecutor;
 use static_cell::StaticCell;
 
 cfg_if::cfg_if! {
-   if #[cfg(feature = "esp32")] {
+    if #[cfg(feature = "esp32")] {
         use esp_hal::timer::timg::TimerGroup;
-   }
+    }
 }
 
 pub async fn peripherals_disable() -> () {
     // drop peripherals
-    software_reset();
+    info!("Disabling peripherals: WIP");
 }
 
 pub struct SshStampInit<'a> {
@@ -98,9 +98,6 @@ async fn main(spawner: Spawner) -> ! {
             panic!("Could not acquire flash storage lock");
         };
         let mut flash_storage = flash_storage_guard.lock().await;
-        // TODO: Migrate this function/test to embedded-test.
-        // Quick roundtrip test for SSHStampConfig
-        // ssh_stamp::config::roundtrip_config();
         ssh_stamp::store::load_or_create(&mut flash_storage).await
     }
     .expect("Could not load or create SSHStampConfig");
@@ -191,7 +188,8 @@ async fn main(spawner: Spawner) -> ! {
     }
 
     peripherals_disable().await;
-    // loop{}
+    // loop {}
+    log::warn!("End of Main... Reset!!");
     software_reset();
 }
 
