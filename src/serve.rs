@@ -67,7 +67,7 @@ pub async fn connection_loop(
                             debug!("We got SFTP subsystem");
                             match chan_pipe.try_send(SessionType::Sftp(ch)) {
                                 Ok(_) => auth_checked = false,
-                                Err(e) => error!("Could not send the channel: {:?}", e),
+                                Err(e) => log::error!("Could not send the channel: {:?}", e),
                             };
                         }
                         #[cfg(not(feature = "sftp-ota"))]
@@ -222,14 +222,16 @@ pub async fn connection_loop(
                                 debug!("Set wifi SSID from ENV");
                                 a.succeed()?;
                                 let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
-                                    warn!("Could not persist wifi SSID: flash not initialized");
+                                    log::error!(
+                                        "Could not persist wifi SSID: flash not initialized"
+                                    );
                                     config_changed = true;
                                     continue;
                                 };
                                 let mut flash_storage = flash_storage_guard.lock().await;
                                 if let Err(e) = store::save(&mut flash_storage, &config_guard).await
                                 {
-                                    warn!("Failed to persist config with wifi SSID: {:?}", e);
+                                    log::error!("Failed to persist config with wifi SSID: {:?}", e);
                                     config_changed = true;
                                 } else {
                                     drop(config_guard);
@@ -261,7 +263,7 @@ pub async fn connection_loop(
                                 let mut s = String::<63>::new();
                                 if s.push_str(value).is_ok() {
                                     config_guard.wifi_pw = Some(s);
-                                    debug!("Set wifi WIFI PSK from ENV");
+                                    debug!("Set WIFI PSK from ENV");
                                     a.succeed()?;
                                     let Some(flash_storage_guard) = flash::get_flash_n_buffer()
                                     else {

@@ -21,8 +21,8 @@ use embassy_time::{Duration, Timer};
 use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_radio::wifi::{
-    ap::AccessPointConfig, AuthenticationMethod, Config, ControllerConfig, WifiAccessPointState,
-    WifiController,
+    AuthenticationMethod, Config, ControllerConfig, WifiAccessPointState, WifiController,
+    ap::AccessPointConfig,
 };
 use heapless::String;
 extern crate alloc;
@@ -48,8 +48,8 @@ pub async fn if_up(
     config: &'static SunsetMutex<SSHStampConfig>,
 ) -> Result<Stack<'static>, sunset::Error> {
     let controller_config = ControllerConfig::default();
-    let (mut wifi_controller, interfaces) =
-        esp_radio::wifi::new(wifi, controller_config).map_err(|_| sunset::error::BadUsage.build())?;
+    let (mut wifi_controller, interfaces) = esp_radio::wifi::new(wifi, controller_config)
+        .map_err(|_| sunset::error::BadUsage.build())?;
 
     // Ensure WiFi PSK exists before applying AP config to avoid esp_wifi_set_config errors
     {
@@ -76,7 +76,7 @@ pub async fn if_up(
                 panic!("Failed to persist generated wifi password: {:?}", e);
             }
         }
-        info!("WiFi WIFI PSK: {}", guard.wifi_pw.as_ref().unwrap());
+        info!("WIFI PSK: {}", guard.wifi_pw.as_ref().unwrap());
     }
 
     let ap_config = Config::AccessPoint(
