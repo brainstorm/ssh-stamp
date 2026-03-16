@@ -80,7 +80,7 @@ pub async fn if_up(
                 panic!("Failed to persist generated wifi password: {:?}", e);
             }
         }
-        info!("WiFi WIFI PSK: {}", guard.wifi_pw.as_ref().unwrap());
+        info!("WIFI PSK: {}", guard.wifi_pw.as_ref().unwrap());
     }
 
     let ap_config = ModeConfig::AccessPoint(
