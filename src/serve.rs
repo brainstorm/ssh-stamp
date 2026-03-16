@@ -338,6 +338,7 @@ pub async fn ssh_disable() -> () {
 
 use crate::espressif::buffered_uart::BufferedUart;
 use crate::serial::serial_bridge;
+use sunset_async::ChanInOut;
 
 pub async fn handle_ssh_client<'a, 'b>(
     uart_buff: &'a BufferedUart,
@@ -349,9 +350,10 @@ pub async fn handle_ssh_client<'a, 'b>(
     debug!("Checking bridge session type");
     match session_type {
         SessionType::Bridge(ch) => {
-            debug!("Handling bridge session");
-            let (stdin, stdout) = ssh_server.stdio(ch).await?.split();
-            debug!("Starting bridge");
+            info!("Handling bridge session");
+            let stdio: ChanInOut<'_> = ssh_server.stdio(ch).await?;
+            let (stdin, stdout) = stdio.split();
+            info!("Starting bridge");
             serial_bridge(stdin, stdout, uart_buff).await?
         }
         #[cfg(feature = "sftp-ota")]

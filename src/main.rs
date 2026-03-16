@@ -263,6 +263,27 @@ async fn tcp_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Err
 
     let mut rx_buffer = [0u8; 1536];
     let mut tx_buffer = [0u8; 1536];
+    loop {
+        // TO FIX: ESP32 target needs tcp_socket.accept in main.rs - Gets blocked at bridge connection?
+        cfg_if::cfg_if!(
+            if #[cfg(feature = "esp32")] {
+                let mut tcp_socket = TcpSocket::new(s.tcp_stack, &mut rx_buffer, &mut tx_buffer);
+                info!("Waiting for SSH client...");
+                if let Err(e) = tcp_socket
+                    .accept(IpListenEndpoint {
+                        addr: None,
+                        port: 22,
+                    })
+                    .await
+                {
+                    info!("connect error: {:?}", e);
+                    net::tcp_socket_disable().await;
+                }
+                info!("Connected, port 22");
+            } else {
+                let tcp_socket = net::accept_requests(s.tcp_stack, &mut rx_buffer, &mut tx_buffer).await;
+            }
+        );
 
     // TO FIX: ESP32 target needs tcp_socket.accept in main.rs - Gets blocked at bridge connection?
     cfg_if::cfg_if!(
@@ -295,9 +316,9 @@ async fn tcp_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Err
         Err(e) => {
             error!("TCP socket error: {}", e);
         }
+        net::tcp_socket_disable().await;
     }
-    net::tcp_socket_disable().await;
-    Ok(()) // todo!() return relevant value
+    // Ok(()) // todo!() return relevant value
 }
 
 pub struct SocketEnabled<'a> {
