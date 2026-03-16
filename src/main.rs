@@ -43,6 +43,7 @@ use static_cell::StaticCell;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "esp32")] {
+        use log::info;
         use esp_hal::timer::timg::TimerGroup;
     }
 }
@@ -285,36 +286,16 @@ async fn tcp_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Err
             }
         );
 
-    // TO FIX: ESP32 target needs tcp_socket.accept in main.rs - Gets blocked at bridge connection?
-    cfg_if::cfg_if!(
-        if #[cfg(feature = "esp32")] {
-            let mut tcp_socket = TcpSocket::new(s.tcp_stack, &mut rx_buffer, &mut tx_buffer);
-            use log::info;
-            info!("Waiting for SSH client...");
-            if let Err(e) = tcp_socket
-                .accept(IpListenEndpoint {
-                    addr: None,
-                    port: 22,
-                })
-                .await
-            {
-                error!("connect error: {:?}", e);
-                net::tcp_socket_disable().await;
+        let tcp_enabled_struct = TCPEnabled {
+            config: s.config,
+            tcp_socket,
+            uart_buf: s.uart_buf,
+        };
+        match socket_enabled(tcp_enabled_struct).await {
+            Ok(_) => (),
+            Err(e) => {
+                error!("TCP socket error: {}", e);
             }
-            debug!("Connected, port 22");
-        } else {
-            let tcp_socket = net::accept_requests(s.tcp_stack, &mut rx_buffer, &mut tx_buffer).await;
-        }
-    );
-    let tcp_enabled_struct = TCPEnabled {
-        config: s.config,
-        tcp_socket,
-        uart_buf: s.uart_buf,
-    };
-    match socket_enabled(tcp_enabled_struct).await {
-        Ok(_) => (),
-        Err(e) => {
-            error!("TCP socket error: {}", e);
         }
         net::tcp_socket_disable().await;
     }

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use log::{debug, trace, warn};
+use log::{debug, info, trace, warn};
 
 use crate::config::SSHStampConfig;
 use crate::espressif::buffered_uart::UART_SIGNAL;
@@ -312,9 +312,7 @@ pub async fn connection_loop(
                 debug!("Expected caller to handle event");
                 error::BadUsage.fail()?
             }
-            ServEvent::PollAgain => {
-                // info!("ServEvent::PollAgain");
-            }
+            ServEvent::PollAgain => {}
         }
     }
 }
