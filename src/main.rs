@@ -301,7 +301,7 @@ async fn tcp_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Err
         }
         net::tcp_socket_disable().await;
     }
-    Ok(()) // todo!() return relevant value
+    // Ok(()) // todo!() return relevant value
 }
 
 pub struct SocketEnabled<'a> {
