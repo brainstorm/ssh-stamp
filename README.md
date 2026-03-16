@@ -25,17 +25,34 @@ rustup toolchain install stable --component rust-src
 cargo install espflash --locked
 ```
 
-Build/flash for your board using the short command pattern (replace `<target>`):
+Build/flash for your board using the short command pattern (replace `<target>` with the concrete chip you have):
+
+| Machine target | Rust toolchain target |
+| --- | --- |
+| `esp32` | `xtensa-esp32-none-elf` |
+| `esp32c2` | `riscv32imc-unknown-none-elf` |
+| `esp32c3` | `riscv32imc-unknown-none-elf` |
+| `esp32c5` | `riscv32imac-unknown-none-elf` |
+| `esp32c6` | `riscv32imac-unknown-none-elf` |
+| `esp32c61` | `riscv32imac-unknown-none-elf` |
+| `esp32s2` | `xtensa-esp32s2-none-elf` |
+| `esp32s3` | `xtensa-esp32s3-none-elf` |
 
 ```
-rustup target add <platform-target-if-needed>
-cargo build-<target>     # e.g. cargo build-esp32c6, cargo build-esp32c3, cargo build-esp32
-cargo run-<target>       # convenience helper (if supported) that builds + flashes
+rustup target add <rust-toolchain-target>
+cargo build-<machine-target>     # e.g. cargo build-esp32c6, cargo build-esp32c3, cargo build-esp32
+cargo run-<machine-target>       # convenience helper (if supported) that builds + flashes
 ```
 
-Xtensa targets (ESP32/ESP32-S2/S3) require `espup` — follow esp-rs docs if you target those. If you prefer manual flashing, build `--release` and use `espflash`.
+Xtensa targets (ESP32/ESP32-S2/S3) do require `espup` in addition to the `rustup` command above:
 
-## First boot & provisioning (quick)
+```
+cargo install espup
+espup install
+source $HOME/export-esp.sh
+```
+
+## First boot & provisioning
 
 1. Flash the firmware and open the serial console (example):
 
@@ -45,11 +62,17 @@ cargo build-esp32c6 --release
 cargo run-esp32c6
 ```
 
-2. On first boot the device generates a random WPA2 PSK and prints it to the serial console with an info message `First-boot generated WiFi WPA2 PSK: <PSK>`; the default SSID is `ssh-stamp` and the AP IP is `192.168.4.1`.
+1. On first boot the device generates a random WPA2 PSK and prints it to the serial console with the following (or similar) info messages:
 
-3. Connect a laptop/phone to the `ssh-stamp` AP using the printed PSK, then SSH into the device at `root@192.168.4.1`.
+```
+(...)
+INFO - WIFI PSK: <PSK>
+INFO - Connect to the AP `ssh-stamp` as a DHCP client with IP: 192.168.4.1
+```
 
-4. Provisioning via SSH environment variables
+2. Connect a laptop/phone to the `ssh-stamp` AP using the printed PSK, then SSH into the device at `root@192.168.4.1`.
+
+3. Provisioning via SSH environment variables
 
 You can provision the device by sending these environment variables with your SSH client. Examples below use OpenSSH and `SendEnv` to forward local environment variables to the device.
 
