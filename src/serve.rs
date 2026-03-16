@@ -129,7 +129,7 @@ pub async fn connection_loop(
                 } else {
                     // Not first boot: do not auto-allow; reject the first-auth helper.
                     info!(
-                        "FirstAuth received but not first-boot, allowing pubkey auth but rejecting 
+                        "FirstAuth received but not first-boot, allowing pubkey auth but rejecting
                         additions of new public keys on already provisioned device"
                     );
                     a.reject()?;
@@ -265,6 +265,7 @@ pub async fn ssh_disable() -> () {
 
 use crate::espressif::buffered_uart::BufferedUart;
 use crate::serial::serial_bridge;
+use sunset_async::ChanInOut;
 
 pub async fn handle_ssh_client<'a, 'b>(
     uart_buff: &'a BufferedUart,
