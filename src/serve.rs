@@ -41,6 +41,7 @@ pub async fn connection_loop(
 
     debug!("Entering connection_loop and prog_loop is next...");
     let mut config_changed: bool = false;
+    let mut needs_reset: bool = false;
 
     // Will be set in `ev` PubkeyAuth is accepted and cleared once the channel is sent down chan_pipe
     let mut auth_checked = false;
@@ -98,6 +99,10 @@ pub async fn connection_loop(
                         };
                         let mut flash_storage = flash_storage_guard.lock().await;
                         let _result = store::save(&mut flash_storage, &config_guard).await;
+                        if needs_reset {
+                            drop(config_guard);
+                            software_reset();
+                        }
                     }
                     debug_assert!(ch.num() == a.channel());
                     a.succeed()?;
@@ -221,22 +226,8 @@ pub async fn connection_loop(
                                 config_guard.wifi_ssid = s;
                                 debug!("Set wifi SSID from ENV");
                                 a.succeed()?;
-                                let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
-                                    log::error!(
-                                        "Could not persist wifi SSID: flash not initialized"
-                                    );
-                                    config_changed = true;
-                                    continue;
-                                };
-                                let mut flash_storage = flash_storage_guard.lock().await;
-                                if let Err(e) = store::save(&mut flash_storage, &config_guard).await
-                                {
-                                    log::error!("Failed to persist config with wifi SSID: {:?}", e);
-                                    config_changed = true;
-                                } else {
-                                    drop(config_guard);
-                                    software_reset();
-                                }
+                                config_changed = true;
+                                needs_reset = true;
                             } else {
                                 warn!("SSH_STAMP_WIFI_SSID too long");
                                 a.fail()?;
@@ -265,22 +256,8 @@ pub async fn connection_loop(
                                     config_guard.wifi_pw = Some(s);
                                     debug!("Set WIFI PSK from ENV");
                                     a.succeed()?;
-                                    let Some(flash_storage_guard) = flash::get_flash_n_buffer()
-                                    else {
-                                        warn!("Could not persist wifi PSK: flash not initialized");
-                                        config_changed = true;
-                                        continue;
-                                    };
-                                    let mut flash_storage = flash_storage_guard.lock().await;
-                                    if let Err(e) =
-                                        store::save(&mut flash_storage, &config_guard).await
-                                    {
-                                        warn!("Failed to persist config with wifi PSK: {:?}", e);
-                                        config_changed = true;
-                                    } else {
-                                        drop(config_guard);
-                                        software_reset();
-                                    }
+                                    config_changed = true;
+                                    needs_reset = true;
                                 } else {
                                     warn!("SSH_STAMP_WIFI_PSK push_str failed unexpectedly");
                                     a.fail()?;
