@@ -4,7 +4,7 @@
 
 use embassy_futures::select::select;
 use embedded_io_async::{Read, Write};
-use log::{info, warn};
+use log::{debug, info, warn};
 
 // Espressif specific crates
 use crate::espressif::buffered_uart::BufferedUart;
@@ -17,9 +17,8 @@ pub async fn serial_bridge(
     uart: &BufferedUart,
 ) -> Result<(), sunset::Error> {
     info!("Starting serial <--> SSH bridge");
-
     select(uart_to_ssh(uart, chanw), ssh_to_uart(chanr, uart)).await;
-    info!("Stopping serial <--> SSH bridge");
+    debug!("Stopping serial <--> SSH bridge");
     Ok(())
 }
 

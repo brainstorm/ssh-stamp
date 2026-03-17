@@ -21,7 +21,7 @@ use portable_atomic::{AtomicUsize, Ordering};
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
 
-use log::info;
+use log::debug;
 
 // Sizes of the software buffers. Inward is more
 // important as an overrun here drops bytes. A full outward
@@ -132,14 +132,14 @@ impl Default for BufferedUart {
 
 pub async fn uart_buffer_disable() -> () {
     // disable uart buffer
-    info!("UART buffer disabled: WIP");
+    debug!("UART buffer disabled: WIP");
     // TODO: Correctly disable/restart UART buffer and/or send messsage to user over SSH
 }
 // use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 
 pub async fn uart_disable() -> () {
     // disable uart
-    info!("UART disabled: WIP");
+    debug!("UART disabled: WIP");
     // TODO: Correctly disable/restart UART and/or send messsage to user over SSH
 }
 
