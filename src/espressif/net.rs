@@ -24,7 +24,7 @@ use esp_hal::rng::Rng;
 use esp_radio::Controller;
 use esp_radio::wifi::WifiEvent;
 use esp_radio::wifi::{
-    AccessPointConfig, AuthMethod::Wpa2Personal, ModeConfig, WifiApState, WifiController,
+    AccessPointConfig, AuthMethod::Wpa2Wpa3Personal, ModeConfig, WifiApState, WifiController,
 };
 use heapless::String;
 extern crate alloc;
@@ -86,7 +86,7 @@ pub async fn if_up(
     let ap_config = ModeConfig::AccessPoint(
         AccessPointConfig::default()
             .with_ssid(AllocString::from(wifi_ssid(config).await.as_str()))
-            .with_auth_method(Wpa2Personal)
+            .with_auth_method(Wpa2Wpa3Personal)
             .with_password(AllocString::from(wifi_password(config).await.as_str())),
     );
     let res = wifi_controller.set_config(&ap_config);
@@ -166,22 +166,24 @@ pub async fn accept_requests<'a>(
     tcp_socket
 }
 
+/// Returns the configured WiFi SSID from the config, or the default SSID if not set.
 pub async fn wifi_ssid(config: &'static SunsetMutex<SSHStampConfig>) -> String<63> {
-    // Return the configured SSID if present, otherwise the fixed default.
     let guard = config.lock().await;
-    if !guard.wifi_ssid.is_empty() {
-        return String::<63>::try_from(guard.wifi_ssid.as_str()).unwrap_or_else(|_| {
-            let mut fallback = String::<63>::new();
-            fallback.push_str(DEFAULT_SSID).ok();
-            fallback
-        });
-    }
+    let ssid_src = if !guard.wifi_ssid.is_empty() {
+        guard.wifi_ssid.as_str()
+    } else {
+        DEFAULT_SSID
+    };
 
-    let mut default = String::<63>::new();
-    default.push_str(DEFAULT_SSID).ok();
-    default
+    String::<63>::try_from(ssid_src).unwrap_or_else(|_| {
+        let mut fallback = String::<63>::new();
+        fallback.push_str(DEFAULT_SSID).ok();
+        fallback
+    })
 }
 
+/// Returns the WiFi password from the config.
+/// Panics if wifi_pw is not set in the config.
 pub async fn wifi_password(config: &'static SunsetMutex<SSHStampConfig>) -> String<63> {
     let guard = config.lock().await;
     match &guard.wifi_pw {
@@ -192,46 +194,29 @@ pub async fn wifi_password(config: &'static SunsetMutex<SSHStampConfig>) -> Stri
     }
 }
 
+/// Manages the WiFi access point lifecycle.
+/// Starts the AP with the configured SSID and password from the config.
+/// Handles reconnection if the AP stops.
 #[embassy_executor::task]
 pub async fn wifi_up(
     mut wifi_controller: WifiController<'static>,
     config: &'static SunsetMutex<SSHStampConfig>,
 ) {
     debug!("Device capabilities: {:?}", wifi_controller.capabilities());
-    let configured_ssid = {
-        let guard = config.lock().await;
-        guard.wifi_ssid.clone()
-        // drop guard
-    };
 
     debug!("Starting wifi");
 
-    // (PSK generation handled in if_up on first boot)
-
-    let ssid_string = match String::<63>::try_from(configured_ssid.as_str()) {
-        Ok(s) => {
-            let mut lowered = String::<63>::new();
-            for ch in s.as_str().chars() {
-                let _ = lowered.push(ch.to_ascii_lowercase());
-            }
-            lowered
-        }
-        Err(_) => {
-            warn!("SSID too long, using default");
-            wifi_ssid(config).await
-        }
-    };
-    let pw_string = wifi_password(config).await;
-    let client_config = ModeConfig::AccessPoint(
-        AccessPointConfig::default()
-            .with_ssid(AllocString::from(ssid_string.as_str()))
-            .with_auth_method(Wpa2Personal)
-            .with_password(AllocString::from(pw_string.as_str())),
-    );
-
     loop {
+        let ssid_string = wifi_ssid(config).await;
+        let pw_string = wifi_password(config).await;
+        let client_config = ModeConfig::AccessPoint(
+            AccessPointConfig::default()
+                .with_ssid(AllocString::from(ssid_string.as_str()))
+                .with_auth_method(Wpa2Wpa3Personal)
+                .with_password(AllocString::from(pw_string.as_str())),
+        );
+
         if esp_radio::wifi::ap_state() == WifiApState::Started {
-            // wait until we're no longer connected
             wifi_controller.wait_for_event(WifiEvent::ApStop).await;
             Timer::after(Duration::from_millis(5000)).await
         }

@@ -15,6 +15,7 @@ use storage::flash;
 use core::fmt::Debug;
 use core::option::Option::{self, None, Some};
 use core::result::Result;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 // Embassy
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
@@ -32,11 +33,21 @@ pub enum SessionType {
     Sftp(ChanHandle),
 }
 
+static NEEDS_RESET: AtomicBool = AtomicBool::new(false);
+
+pub fn check_and_clear_reset() -> bool {
+    NEEDS_RESET.swap(false, Ordering::SeqCst)
+}
+
+pub struct ConnectionResult {
+    pub needs_reset: bool,
+}
+
 pub async fn connection_loop(
     serv: &SSHServer<'_>,
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
     config: &SunsetMutex<SSHStampConfig>,
-) -> Result<(), sunset::Error> {
+) -> Result<bool, sunset::Error> {
     let mut session: Option<ChanHandle> = None;
 
     debug!("Entering connection_loop and prog_loop is next...");
@@ -87,27 +98,26 @@ pub async fn connection_loop(
                 if !auth_checked {
                     warn!("Unauthenticated SessionShell rejected");
                     a.fail()?;
-                    // TODO: Handle this gracefully
-                    // TODO: Provide a message back to the client and the close the session?
                 } else if let Some(ch) = session.take() {
                     // Save config after connection successful (SessionEnv completed)
                     if config_changed {
-                        config_changed = false; // TODO: Avoid unnecessary "does not neet to be mutable" warnings for now
+                        config_changed = false;
                         let config_guard = config.lock().await;
                         let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
                             panic!("Could not acquire flash storage lock");
                         };
                         let mut flash_storage = flash_storage_guard.lock().await;
                         let _result = store::save(&mut flash_storage, &config_guard).await;
+                        drop(config_guard);
                         if needs_reset {
-                            drop(config_guard);
-                            software_reset();
+                            needs_reset = false;
+                            NEEDS_RESET.store(true, Ordering::SeqCst);
+                            debug!("Configuration saved. Device will reset after disconnect.");
                         }
                     }
                     debug_assert!(ch.num() == a.channel());
                     a.succeed()?;
                     debug!("We got shell");
-                    // Signal for uart task to configure pins and run. Value is irrelevant.
                     UART_SIGNAL.signal(1);
                     debug!("Connection loop: UART_SIGNAL sent");
                     match chan_pipe.try_send(SessionType::Bridge(ch)) {
@@ -200,7 +210,6 @@ pub async fn connection_loop(
                         if !config_guard.first_login {
                             warn!("SSH_STAMP_PUBKEY env received but not first-login; rejecting");
                             a.fail()?;
-                            break Ok(());
                         } else if config_guard.add_pubkey(a.value()?).is_ok() {
                             debug!("Added new pubkey from ENV");
                             a.succeed()?;
@@ -219,7 +228,6 @@ pub async fn connection_loop(
                                 "SSH_STAMP_WIFI_SSID env received but not authenticated; rejecting"
                             );
                             a.fail()?;
-                            break Ok(());
                         } else {
                             let mut s = String::<32>::new();
                             if s.push_str(a.value()?).is_ok() {
@@ -241,7 +249,6 @@ pub async fn connection_loop(
                                 "SSH_STAMP_WIFI_PSK env received but not authenticated; rejecting"
                             );
                             a.fail()?;
-                            break Ok(());
                         } else {
                             let value = a.value()?;
                             if value.len() < 8 {
@@ -266,8 +273,8 @@ pub async fn connection_loop(
                         }
                     }
                     _ => {
-                        warn!("Unsupported environment variable");
-                        a.fail()?;
+                        debug!("Ignoring unknown environment variable: {}", a.name()?);
+                        a.succeed()?;
                     }
                 }
             }
@@ -296,7 +303,6 @@ pub async fn connection_loop(
 
 pub async fn connection_disable() -> () {
     debug!("Connection loop disabled: WIP");
-    // TODO: Correctly disable/restart Conection loop and/or send messsage to user over SSH
 }
 
 pub async fn ssh_wait_for_initialisation<'server>(
@@ -345,9 +351,10 @@ pub async fn handle_ssh_client<'a, 'b>(
     Ok(())
 }
 
-pub async fn bridge_disable() -> () {
-    // disable bridge
-    debug!("Bridge disabled: WIP");
-    // TODO: Correctly disable/restart bridge and/or send message to user over SSH
-    // software_reset();
+pub async fn bridge_disable(should_reset: bool) -> () {
+    debug!("Bridge disabled");
+    if should_reset {
+        info!("Configuration changed - resetting device...");
+        software_reset();
+    }
 }

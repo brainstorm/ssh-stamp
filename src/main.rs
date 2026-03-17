@@ -339,7 +339,7 @@ async fn socket_enabled<'a>(s: TCPEnabled<'a>) -> Result<(), sunset::Error> {
 
 pub struct SshEnabled<'a, 'b, CL>
 where
-    CL: Future<Output = Result<(), sunset::Error>>,
+    CL: Future<Output = Result<bool, sunset::Error>>,
 {
     pub tcp_socket: TcpSocket<'a>,
     pub ssh_server: &'b SSHServer<'a>,
@@ -380,7 +380,7 @@ async fn ssh_enabled<'a>(s: SocketEnabled<'a>) -> Result<(), sunset::Error> {
 
 pub struct ClientConnected<'a, 'b, CL, BR>
 where
-    CL: Future<Output = Result<(), sunset::Error>>,
+    CL: Future<Output = Result<bool, sunset::Error>>,
     BR: Future<Output = Result<(), sunset::Error>>,
 {
     pub ssh_server: &'b SSHServer<'a>,
@@ -391,12 +391,11 @@ where
 
 async fn client_connected<'a, 'b, CL>(s: SshEnabled<'a, 'b, CL>) -> Result<(), sunset::Error>
 where
-    CL: Future<Output = Result<(), sunset::Error>>,
+    CL: Future<Output = Result<bool, sunset::Error>>,
     'a: 'b,
 {
     debug!("HSM: client_connected");
 
-    // // loop {
     debug!("HSM: Setting up serial bridge");
     let bridge = serve::handle_ssh_client(s.uart_buf, s.ssh_server, s.chan_pipe);
 
@@ -413,17 +412,17 @@ where
         }
     }
 
-    serve::bridge_disable().await;
-    // }
+    let should_reset = serve::check_and_clear_reset();
+    serve::bridge_disable(should_reset).await;
 
-    Ok(()) // todo!() return relevant value
+    Ok(())
 }
 
 async fn bridge_connected<'a, 'b, CL, BR>(
     s: ClientConnected<'a, 'b, CL, BR>,
 ) -> Result<(), sunset::Error>
 where
-    CL: Future<Output = Result<(), sunset::Error>>,
+    CL: Future<Output = Result<bool, sunset::Error>>,
     BR: Future<Output = Result<(), sunset::Error>>,
     'a: 'b,
 {
@@ -436,10 +435,12 @@ where
     let bridge = s.bridge;
     debug!("HSM: Main select() in bridge_connected()");
     match select3(server, connection_loop, bridge).await {
-        Either3::First(r) => r,
-        Either3::Second(r) => r,
-        Either3::Third(r) => r,
-    }?;
+        Either3::First(r) => r?,
+        Either3::Second(r) => {
+            r?;
+        }
+        Either3::Third(r) => r?,
+    };
     Result::Ok(())
 }
 
