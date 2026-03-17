@@ -15,7 +15,6 @@ use storage::flash;
 use core::fmt::Debug;
 use core::option::Option::{self, None, Some};
 use core::result::Result;
-use core::sync::atomic::{AtomicBool, Ordering};
 
 // Embassy
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
@@ -33,21 +32,11 @@ pub enum SessionType {
     Sftp(ChanHandle),
 }
 
-static NEEDS_RESET: AtomicBool = AtomicBool::new(false);
-
-pub fn check_and_clear_reset() -> bool {
-    NEEDS_RESET.swap(false, Ordering::SeqCst)
-}
-
-pub struct ConnectionResult {
-    pub needs_reset: bool,
-}
-
 pub async fn connection_loop(
     serv: &SSHServer<'_>,
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
     config: &SunsetMutex<SSHStampConfig>,
-) -> Result<bool, sunset::Error> {
+) -> Result<(), sunset::Error> {
     let mut session: Option<ChanHandle> = None;
 
     debug!("Entering connection_loop and prog_loop is next...");
@@ -110,9 +99,8 @@ pub async fn connection_loop(
                         let _result = store::save(&mut flash_storage, &config_guard).await;
                         drop(config_guard);
                         if needs_reset {
-                            needs_reset = false;
-                            NEEDS_RESET.store(true, Ordering::SeqCst);
-                            debug!("Configuration saved. Device will reset after disconnect.");
+                            info!("Configuration saved. Rebooting to apply WiFi changes...");
+                            software_reset();
                         }
                     }
                     debug_assert!(ch.num() == a.channel());
@@ -303,6 +291,7 @@ pub async fn connection_loop(
 
 pub async fn connection_disable() -> () {
     debug!("Connection loop disabled: WIP");
+    // TODO: Correctly disable/restart Conection loop and/or send messsage to user over SSH
 }
 
 pub async fn ssh_wait_for_initialisation<'server>(
@@ -351,10 +340,9 @@ pub async fn handle_ssh_client<'a, 'b>(
     Ok(())
 }
 
-pub async fn bridge_disable(should_reset: bool) -> () {
-    debug!("Bridge disabled");
-    if should_reset {
-        info!("Configuration changed - resetting device...");
-        software_reset();
-    }
+pub async fn bridge_disable() -> () {
+    // disable bridge
+    debug!("Bridge disabled: WIP");
+    // TODO: Correctly disable/restart bridge and/or send message to user over SSH
+    // software_reset();
 }
