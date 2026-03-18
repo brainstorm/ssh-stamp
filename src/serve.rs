@@ -260,6 +260,56 @@ pub async fn connection_loop(
                             }
                         }
                     }
+                    "SSH_STAMP_WIFI_MAC_ADDRESS" => {
+                        let mut config_guard = config.lock().await;
+                        if !(auth_checked || config_guard.first_login) {
+                            warn!(
+                                "SSH_STAMP_WIFI_MAC_ADDRESS env received but not authenticated; rejecting"
+                            );
+                            a.fail()?;
+                        } else {
+                            let value = a.value()?;
+                            if value.len() != 17 {
+                                warn!(
+                                    "SSH_STAMP_WIFI_MAC_ADDRESS must be XX:XX:XX:XX:XX:XX format"
+                                );
+                                a.fail()?;
+                            } else {
+                                let parts: heapless::Vec<u8, 6> = value
+                                    .split(':')
+                                    .filter_map(|p| u8::from_str_radix(p, 16).ok())
+                                    .collect();
+                                if parts.len() == 6 {
+                                    let mac: [u8; 6] = [
+                                        parts[0], parts[1], parts[2], parts[3], parts[4], parts[5],
+                                    ];
+                                    config_guard.mac = mac;
+                                    debug!("Set MAC address from ENV: {:02X?}", mac);
+                                    a.succeed()?;
+                                    config_changed = true;
+                                    needs_reset = true;
+                                } else {
+                                    warn!("SSH_STAMP_WIFI_MAC_ADDRESS invalid format");
+                                    a.fail()?;
+                                }
+                            }
+                        }
+                    }
+                    "SSH_STAMP_WIFI_MAC_RANDOM" => {
+                        let mut config_guard = config.lock().await;
+                        if !(auth_checked || config_guard.first_login) {
+                            warn!(
+                                "SSH_STAMP_WIFI_MAC_RANDOM env received but not authenticated; rejecting"
+                            );
+                            a.fail()?;
+                        } else {
+                            config_guard.mac = [0xFF; 6];
+                            debug!("Set MAC address to random mode");
+                            a.succeed()?;
+                            config_changed = true;
+                            needs_reset = true;
+                        }
+                    }
                     _ => {
                         debug!("Ignoring unknown environment variable: {}", a.name()?);
                         a.succeed()?;

@@ -19,6 +19,7 @@ use embassy_executor::Spawner;
 use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, StaticConfigV4};
 use embassy_net::{Stack, StackResources, tcp::TcpSocket};
 use embassy_time::{Duration, Timer};
+use esp_hal::efuse::Efuse;
 use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_radio::Controller;
@@ -81,6 +82,16 @@ pub async fn if_up(
             }
         }
         info!("WIFI PSK: {}", guard.wifi_pw.as_ref().unwrap());
+
+        // Set MAC address: use configured MAC (may be random sentinel or hardware default)
+        let mac = guard
+            .resolve_mac()
+            .map_err(|_| sunset::error::BadUsage.build())?;
+        info!(
+            "WIFI MAC: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+        );
+        Efuse::set_mac_address(mac).map_err(|_| sunset::error::BadUsage.build())?;
     }
 
     let ap_config = ModeConfig::AccessPoint(

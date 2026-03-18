@@ -7,6 +7,7 @@ use core::str::FromStr;
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 #[cfg(feature = "ipv6")]
 use embassy_net::{Ipv6Cidr, StaticConfigV6};
+use esp_hal::efuse::Efuse;
 use heapless::String;
 
 use sunset::packets::Ed25519PubKey;
@@ -33,8 +34,9 @@ pub struct SSHStampConfig {
     pub wifi_pw: Option<String<63>>, // Max 64 characters including null-terminator?
 
     /// Networking
-    /// TODO: Populate this field from esp's hardware info or just refer it from HAL?
-    /// Only intended purpose I see for keeping it here is for spoofing?
+    /// MAC address. Special values:
+    /// - `[0xFF; 6]`: Generate random MAC on each boot
+    /// - Otherwise: Use the stored MAC (defaults to hardware eFuse MAC)
     pub mac: [u8; 6],
     /// `None` for DHCP
     pub ipv4_static: Option<StaticConfigV4>,
@@ -62,9 +64,25 @@ impl Default for UartPins {
     }
 }
 
+const MAC_RANDOM_SENTINEL: [u8; 6] = [0xFF; 6];
+
 impl SSHStampConfig {
     /// Bump this when the format changes
-    pub const CURRENT_VERSION: u8 = 8;
+    pub const CURRENT_VERSION: u8 = 9;
+
+    /// Check if configured for random MAC on each boot
+    pub fn is_mac_random(&self) -> bool {
+        self.mac == MAC_RANDOM_SENTINEL
+    }
+
+    /// Get the MAC address to use (resolves random sentinel)
+    pub fn resolve_mac(&self) -> Result<[u8; 6]> {
+        if self.is_mac_random() {
+            random_mac()
+        } else {
+            Ok(self.mac)
+        }
+    }
 
     /// Creates a new config with default parameters.
     ///
@@ -73,7 +91,7 @@ impl SSHStampConfig {
         let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
 
         let wifi_ssid = Self::default_ssid();
-        let mac = random_mac()?;
+        let mac = Efuse::mac_address();
         let wifi_pw = Some(Self::generate_wifi_password()?);
 
         let uart_pins = UartPins::default();
