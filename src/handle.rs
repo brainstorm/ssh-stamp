@@ -407,8 +407,8 @@ pub async fn pubkey_env(
                     debug!("Added new pubkey from ENV");
                     a.succeed()?;
                     config_guard.first_login = false;
-                    *config_changed = true;
-                    *auth_checked = true;
+                    *ctx.config_changed = true;
+                    *ctx.auth_checked = true;
                 } else {
                     warn!("Failed to add new pubkey from ENV");
                     a.fail()?;

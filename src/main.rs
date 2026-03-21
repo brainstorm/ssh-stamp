@@ -362,6 +362,8 @@ async fn socket_enabled(s: TCPEnabled<'_>) -> Result<(), sunset::Error> {
             Result::Err(e)
         }
     }
+
+    serve::ssh_disable().await;
 }
 
 pub struct SshEnabled<'a, 'b, CL>
@@ -377,8 +379,9 @@ where
 }
 
 async fn ssh_enabled(s: SocketEnabled<'_>) -> Result<(), sunset::Error> {
-    debug!("HSM: ssh_enabled. Starting channel pipe");
-    let chan_pipe = Channel::<NoopRawMutex, serve::SessionType, 1>::new();
+    debug!("HSM: ssh_enabled");
+    debug!("HSM: Starting channel pipe");
+    let chan_pipe = Channel::<NoopRawMutex, handle::SessionType, 1>::new();
     debug!("HSM: Started channel pipe. Calling connection_loop from ssh_enabled");
     let connection = serve::connection_loop(&s.ssh_server, &chan_pipe, s.config);
     debug!("HSM: Started connection loop");
@@ -401,6 +404,8 @@ async fn ssh_enabled(s: SocketEnabled<'_>) -> Result<(), sunset::Error> {
             Result::Err(e)
         }
     }
+
+    serve::connection_disable().await;
 }
 
 pub struct ClientConnected<'a, 'b, CL, BR>
@@ -440,6 +445,8 @@ where
             Result::Err(e)
         }
     }
+
+    handle::bridge_disable().await;
 }
 
 async fn bridge_connected<'a, 'b, CL, BR>(
