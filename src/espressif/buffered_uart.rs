@@ -16,12 +16,13 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pipe::Pipe};
 use esp_hal::Async;
 use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals::UART1;
+use esp_hal::system::software_reset;
 use esp_hal::uart::{Config, RxConfig, Uart};
 use portable_atomic::{AtomicUsize, Ordering};
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
 
-use log::{debug, warn};
+use log::{debug, error, warn};
 
 // Sizes of the software buffers. Inward is more
 // important as an overrun here drops bytes. A full outward
@@ -185,7 +186,6 @@ pub async fn uart_task(
 
     // Wait until ssh shell complete
     UART_SIGNAL.wait().await;
-
     // Hardware UART setup - pins are already selected at compile time
     let uart_config = Config::default().with_rx(
         RxConfig::default()
@@ -194,11 +194,15 @@ pub async fn uart_task(
     );
 
     // Silent failure to avoid println! in interrupt context
-    let Ok(uart) = Uart::new(uart1, uart_config) else {
-        return;
+    match Uart::new(uart1, uart_config) {
+        Ok(uart) => {
+            let uart = uart.with_rx(pins.rx).with_tx(pins.tx).into_async();
+            // Run the main buffered TX/RX loop
+            uart_buf.run(uart).await;
+        }
+        Err(e) => {
+            error!("Uart config error {e}. Resetting.");
+            software_reset();
+        }
     };
-    let uart = uart.with_rx(pins.rx).with_tx(pins.tx).into_async();
-
-    // Run the main buffered TX/RX loop
-    uart_buf.run(uart).await;
 }
