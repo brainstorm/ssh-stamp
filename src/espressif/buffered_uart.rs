@@ -21,7 +21,7 @@ use portable_atomic::{AtomicUsize, Ordering};
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
 
-use log::debug;
+use log::{debug, warn};
 
 // Sizes of the software buffers. Inward is more
 // important as an overrun here drops bytes. A full outward
@@ -64,8 +64,12 @@ impl BufferedUart {
                 loop {
                     // Note: println! is intentionally avoided here as this runs in an
                     // InterruptExecutor at high priority. Blocking I/O would cause scheduler panics.
-                    let Ok(n) = uart_rx.read_async(&mut uart_rx_buf).await else {
-                        continue;
+                    let n = match uart_rx.read_async(&mut uart_rx_buf).await {
+                        Ok(n) => n,
+                        Err(e) => {
+                            warn!("Uart RxError: {e}");
+                            continue; // Re-read if read error has occured - Contents of the buffer have not been modified.
+                        }
                     };
 
                     let mut rx_slice = &uart_rx_buf[..n];
@@ -98,7 +102,13 @@ impl BufferedUart {
                 loop {
                     let n = self.outward.read(&mut uart_tx_buf).await;
                     // TODO: handle write errors
-                    let _ = uart_tx.write_async(&uart_tx_buf[..n]).await;
+                    let _n = match uart_tx.write_async(&uart_tx_buf[..n]).await {
+                        Ok(_n) => _n,
+                        Err(e) => {
+                            warn!("Uart TxError: {e}");
+                            continue; // Re-write if write error has occured - Contents of the buffer have not been modified.
+                        }
+                    };
                 }
             };
             select(rd_from, rd_to).await;
