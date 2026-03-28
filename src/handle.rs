@@ -11,8 +11,8 @@ use crate::store;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use esp_hal::system::software_reset;
+use hal_espressif::flash;
 use heapless::String;
-use storage::flash;
 
 use core::fmt::Debug;
 use core::option::Option::None;
@@ -396,8 +396,8 @@ pub async fn ssh_client<'a, 'b>(
         SessionType::Sftp(ch) => {
             debug!("Handling SFTP session");
             let stdio = ssh_server.stdio(ch).await?;
-            let ota_writer = storage::esp_ota::OtaWriter::new();
-            ota::run_ota_server::<storage::esp_ota::OtaWriter>(stdio, ota_writer).await?
+            let ota_writer = hal_espressif::EspOtaWriter::new();
+            ota::run_ota_server::<hal_espressif::EspOtaWriter>(stdio, ota_writer).await?
         }
     };
     Ok(())

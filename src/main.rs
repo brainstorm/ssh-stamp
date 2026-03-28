@@ -10,15 +10,15 @@ use ssh_stamp::{
     config::SSHStampConfig,
     espressif::{
         buffered_uart::{BufferedUart, UART_BUF, UartPins, uart_task},
-        net, rng,
+        net,
     },
     handle, serve,
     settings::UART_BUFFER_SIZE,
 };
 
+use hal_espressif::flash;
 #[cfg(feature = "sftp-ota")]
-use ota::otatraits::OtaActions;
-use storage::flash;
+use ota::traits::OtaActions;
 
 use sunset_async::{SSHServer, SunsetMutex};
 
@@ -80,14 +80,14 @@ async fn main(spawner: Spawner) -> ! {
     // System init
     let peripherals = esp_hal::init(esp_hal::Config::default());
     let rng = Rng::new();
-    rng::register_custom_rng(rng);
+    ssh_stamp::espressif::register_custom_rng(rng);
 
     debug!("Initialising flash ");
 
     flash::init(peripherals.FLASH);
     #[cfg(feature = "sftp-ota")]
     {
-        storage::esp_ota::OtaWriter::try_validating_current_ota_partition()
+        hal_espressif::EspOtaWriter::try_validating_current_ota_partition()
             .await
             .expect("Failed to validate the current ota partition");
     }
