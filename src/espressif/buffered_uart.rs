@@ -12,6 +12,7 @@ pub use hal_espressif::{BufferedUart, UART_BUF, UART_SIGNAL};
 use crate::config::SSHStampConfig;
 use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals::UART1;
+use esp_hal::system::software_reset;
 use esp_hal::uart::{Config, RxConfig, Uart};
 use hal_espressif::EspUartPins;
 use sunset_async::SunsetMutex;
@@ -55,8 +56,16 @@ pub async fn uart_task(
     );
 
     // Silent failure to avoid println! in interrupt context
-    let Ok(uart) = Uart::new(uart1, uart_config) else {
-        return;
+    match Uart::new(uart1, uart_config) {
+        Ok(uart) => {
+            let uart = uart.with_rx(pins.rx).with_tx(pins.tx).into_async();
+            // Run the main buffered TX/RX loop
+            uart_buf.run(uart).await;
+        }
+        Err(e) => {
+            error!("Uart config error {e}. Resetting.");
+            software_reset();
+        }
     };
     let hal_pins: EspUartPins = pins.into();
     let uart = uart.with_rx(hal_pins.rx).with_tx(hal_pins.tx).into_async();
