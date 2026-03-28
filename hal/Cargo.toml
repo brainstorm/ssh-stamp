@@ -1,0 +1,17 @@
+[package]
+name = "hal"
+version = "0.2.0"
+edition = "2021"
+authors = ["Roman Valls Guimera <brain@brainstorm.name>"]
+description = "Hardware Abstraction Layer traits for ssh-stamp"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/brainstorm/ssh-stamp"
+
+[dependencies]
+embassy-sync = { workspace = true }
+embassy-executor = { workspace = true }
+heapless = { workspace = true }
+
+[features]
+default = []
+sftp-ota = []
