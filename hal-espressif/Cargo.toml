@@ -16,7 +16,7 @@ embassy-futures = { workspace = true }
 embassy-net = { workspace = true }
 heapless = { workspace = true }
 esp-hal = { workspace = true }
-esp-storage = { version = "0.8.0" }
+esp-storage = { version = "0.8" }
 esp-bootloader-esp-idf = { version = "0.4.0" }
 esp-radio = { version = "0.17.0", features = ["wifi", "log-04"] }
 embedded-storage = { workspace = true }

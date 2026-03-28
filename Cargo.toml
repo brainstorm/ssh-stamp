@@ -54,7 +54,7 @@ digest = { version = "0.10", default-features = false, features = [
 # Storage
 embedded-storage = "0.3.1"
 embedded-storage-async = "0.4"
-esp-storage = { version = "0.8.0" }
+esp-storage = { version = "0.8" }
 esp-bootloader-esp-idf = { version = "0.4.0" }
 
 # Networking
@@ -99,9 +99,9 @@ smoltcp = { workspace = true }
 embassy-time = { workspace = true }
 embedded-io-async = { workspace = true }
 esp-alloc = { version = "0.9.0" }
-esp-backtrace = { version = "0.18.0", features = ["panic-handler", "println"] }
+esp-backtrace = { version = "0.18", features = ["panic-handler", "println"] }
 esp-hal = { workspace = true }
-hal-espressif = { path = "hal-espressif" }
+hal-espressif = { path = "hal-espressif", default-features = false }
 esp-rtos = { version = "0.2.0", features = ["embassy", "log-04", "esp-radio"] }
 esp-radio = { version = "0.17.0", features = ["wifi", "log-04"] }
 esp-println = { version = "0.16", features = ["log-04"] }
@@ -174,6 +174,7 @@ esp32 = [
     "esp-println/esp32",
     "esp-storage/esp32",
     "esp-bootloader-esp-idf/esp32",
+    "hal-espressif/esp32",
 ]
 esp32c2 = [
     "esp-hal/esp32c2",
@@ -184,6 +185,7 @@ esp32c2 = [
     "esp-println/esp32c2",
     "esp-storage/esp32c2",
     "esp-bootloader-esp-idf/esp32c2",
+    "hal-espressif/esp32c2",
 ]
 esp32c3 = [
     "esp-hal/esp32c3",
@@ -194,6 +196,7 @@ esp32c3 = [
     "esp-println/esp32c3",
     "esp-storage/esp32c3",
     "esp-bootloader-esp-idf/esp32c3",
+    "hal-espressif/esp32c3",
 ]
 esp32c6 = [
     "esp-hal/esp32c6",
@@ -204,6 +207,7 @@ esp32c6 = [
     "esp-println/esp32c6",
     "esp-storage/esp32c6",
     "esp-bootloader-esp-idf/esp32c6",
+    "hal-espressif/esp32c6",
 ]
 esp32s2 = [
     "esp-hal/esp32s2",
@@ -214,6 +218,7 @@ esp32s2 = [
     "esp-println/esp32s2",
     "esp-storage/esp32s2",
     "esp-bootloader-esp-idf/esp32s2",
+    "hal-espressif/esp32s2",
 ]
 esp32s3 = [
     "esp-hal/esp32s3",
@@ -224,4 +229,5 @@ esp32s3 = [
     "esp-println/esp32s3",
     "esp-storage/esp32s3",
     "esp-bootloader-esp-idf/esp32s3",
+    "hal-espressif/esp32s3",
 ]
