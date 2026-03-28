@@ -2,6 +2,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+//! Peripheral trait definitions.
+//!
+//! This module re-exports all HAL trait definitions. Each trait provides
+//! an abstract interface for a specific hardware peripheral.
+
 mod executor;
 mod flash;
 mod hash;

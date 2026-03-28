@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+//! Network peripheral traits.
+
 mod ethernet;
 mod wifi;
 
