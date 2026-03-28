@@ -10,15 +10,15 @@ use ssh_stamp::{
     config::SSHStampConfig,
     espressif::{
         buffered_uart::{BufferedUart, UART_BUF, UartPins, uart_task},
-        net, rng,
+        net,
     },
-    serve,
+    handle, serve,
     settings::UART_BUFFER_SIZE,
 };
 
+use hal_espressif::flash;
 #[cfg(feature = "sftp-ota")]
-use ota::otatraits::OtaActions;
-use storage::flash;
+use ota::traits::OtaActions;
 
 use sunset_async::{SSHServer, SunsetMutex};
 
@@ -80,14 +80,14 @@ async fn main(spawner: Spawner) -> ! {
     // System init
     let peripherals = esp_hal::init(esp_hal::Config::default());
     let rng = Rng::new();
-    rng::register_custom_rng(rng);
+    ssh_stamp::espressif::register_custom_rng(rng);
 
     debug!("Initialising flash ");
 
     flash::init(peripherals.FLASH);
     #[cfg(feature = "sftp-ota")]
     {
-        storage::esp_ota::OtaWriter::try_validating_current_ota_partition()
+        hal_espressif::EspOtaWriter::try_validating_current_ota_partition()
             .await
             .expect("Failed to validate the current ota partition");
     }
@@ -345,7 +345,7 @@ where
     pub ssh_server: &'b SSHServer<'a>,
     pub uart_buf: &'a BufferedUart,
     pub config: &'a SunsetMutex<SSHStampConfig>,
-    pub chan_pipe: &'b Channel<NoopRawMutex, serve::SessionType, 1>,
+    pub chan_pipe: &'b Channel<NoopRawMutex, handle::SessionType, 1>,
     pub connection_loop: CL,
 }
 
@@ -353,7 +353,7 @@ async fn ssh_enabled<'a>(s: SocketEnabled<'a>) -> Result<(), sunset::Error> {
     debug!("HSM: ssh_enabled");
     // loop {
     debug!("HSM: Starting channel pipe");
-    let chan_pipe = Channel::<NoopRawMutex, serve::SessionType, 1>::new();
+    let chan_pipe = Channel::<NoopRawMutex, handle::SessionType, 1>::new();
     debug!("HSM: Started channel pipe. Calling connection_loop from ssh_enabled");
     let connection = serve::connection_loop(&s.ssh_server, &chan_pipe, s.config);
     debug!("HSM: Started connection loop");
@@ -397,7 +397,7 @@ where
     debug!("HSM: client_connected");
 
     debug!("HSM: Setting up serial bridge");
-    let bridge = serve::handle_ssh_client(s.uart_buf, s.ssh_server, s.chan_pipe);
+    let bridge = handle::ssh_client(s.uart_buf, s.ssh_server, s.chan_pipe);
 
     let uart_enabled_struct = ClientConnected {
         ssh_server: s.ssh_server,
@@ -412,7 +412,7 @@ where
         }
     }
 
-    serve::bridge_disable().await;
+    handle::bridge_disable().await;
 
     Ok(())
 }

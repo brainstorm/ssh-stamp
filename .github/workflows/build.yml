@@ -54,7 +54,7 @@ jobs:
         run: |
           cargo +${{ matrix.device.toolchain }} clippy --release --features ${{ matrix.device.soc }} --target riscv32imac-unknown-none-elf -- -D warnings
           cargo +${{ matrix.device.toolchain }} fmt -- --check
-  ota-packer:
+  packer:
     name: OTA Packer
     runs-on: ubuntu-latest
     strategy:
@@ -68,4 +68,4 @@ jobs:
           target: riscv32imac-unknown-none-elf
           toolchain: stable
       - name: Build utility
-        run: cargo build-ota-packer
+        run: cargo build-packer

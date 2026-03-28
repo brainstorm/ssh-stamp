@@ -4,7 +4,7 @@
 
 use core::hash::Hasher;
 
-use crate::{handler::UpdateProcessor, otatraits::OtaActions};
+use crate::{handler::UpdateProcessor, traits::OtaActions};
 
 use sunset::sshwire::{BinString, WireError};
 use sunset_async::ChanInOut;

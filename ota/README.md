@@ -2,7 +2,7 @@
 
 Over The Air updates (OTA) is a convenient way to upload the firmware of your target device. In many devices out there you will find that the process is done using a side channel rather rather than the core functionality of the application. 
 
-In SSH-Stamp by definition there is a SSH server running so why not using this secure channel to perform the OTA updates? It only took us implementing a basic SFTP subsystem that uses a SSH tunnel and a helper terminal application, ota-packer, to add some metadata to the SSH-Stamp binary to pack it into an `ota` file.
+In SSH-Stamp by definition there is a SSH server running so why not using this secure channel to perform the OTA updates? It only took us implementing a basic SFTP subsystem that uses a SSH tunnel and a helper terminal application, packer, to add some metadata to the SSH-Stamp binary to pack it into an `ota` file.
 
 Using SFTP is good news since any user with access to a sftp client and the keys for the target ssh-stamp device can upload a packed binary to it.
 
@@ -28,7 +28,7 @@ espflash save-image --chip=esp32c6 target/riscv32imac-unknown-none-elf/release/s
 #### 2. Pack the application for ota:
 
 ```
-cargo ota-packer -- ssh-stamp.bin
+cargo packer -- ssh-stamp.bin
 ```
 
 

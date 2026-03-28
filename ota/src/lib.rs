@@ -14,22 +14,22 @@ pub use sftpserver::run_ota_server;
 /// It will be called from the sftpserver module to handle the OTA update process
 #[cfg(target_os = "none")]
 mod handler;
-/// Defining the target hardware abstraction for OTA updates
-///
-/// This module defines traits for platform specific implementations
-pub mod otatraits;
 /// Module implementing the OTA SFTP server
 #[cfg(target_os = "none")]
 mod sftpserver;
+/// Defining the target hardware abstraction for OTA updates
+///
+/// This module defines traits for platform specific implementations
+pub mod traits;
 
 /// Module defining TLV types and constants for OTA updates
 ///
-/// Re-exporting this module for easier access from outside the crate: ota-packer
+/// Re-exporting this module for easier access from outside the crate: packer
 pub mod tlv;
 
 /// OTA Header structure and deserialization logic
 ///
-/// Re-exporting Header for easier access from outside the crate: ota-packer
+/// Re-exporting Header for easier access from outside the crate: packer
 pub use tlv::OtaHeader;
 
 #[cfg(test)]

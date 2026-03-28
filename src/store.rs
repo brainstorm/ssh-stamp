@@ -11,7 +11,7 @@ use crate::errors::Error as SSHStampError;
 use sunset::error::Error as SunsetError;
 
 use crate::config::SSHStampConfig;
-use storage::flash::FlashBuffer;
+use hal_espressif::flash::FlashBuffer;
 
 use sunset::sshwire::{self, OwnOrBorrow};
 use sunset_sshwire_derive::*;

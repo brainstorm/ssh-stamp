@@ -69,7 +69,7 @@ pack_ota(){
     echo "saving app binary to app.bin"
     espflash save-image --chip esp32c6 $SSH_STAMP_ELF $OUTPUT_DIR/app.bin
     echo "saving app binary to app.ota"
-    cargo ota-packer -- $OUTPUT_DIR/app.bin
+    cargo packer -- $OUTPUT_DIR/app.bin
 }
 
 clean_flash(){
