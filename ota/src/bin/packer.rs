@@ -10,7 +10,7 @@ use std::{
 const OTA_PACKER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() {
-    let matches = Command::new("ota-packer")
+    let matches = Command::new("packer")
         .about(format!("SSH-Stamp utility {} to pack (unpack) OTA update files adding the required metadata.", OTA_PACKER_VERSION))
         .arg(clap::arg!(<FILE> "The file to process").required(true))
         .arg(
