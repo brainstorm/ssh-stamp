@@ -1340,7 +1340,7 @@ dependencies = [
  "embassy-futures",
  "embassy-net",
  "embassy-sync 0.7.2",
- "embassy-time 0.5.0",
+ "embassy-time 0.5.1",
  "embedded-storage",
  "embedded-storage-async",
  "esp-bootloader-esp-idf",
