@@ -1321,6 +1321,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "hal"
+version = "0.2.0"
+dependencies = [
+ "embassy-executor",
+ "embassy-sync 0.7.2",
+ "heapless 0.8.0",
+]
+
+[[package]]
+name = "hal-espressif"
+version = "0.2.0"
+dependencies = [
+ "edge-dhcp",
+ "edge-nal",
+ "edge-nal-embassy",
+ "embassy-executor",
+ "embassy-futures",
+ "embassy-net",
+ "embassy-sync 0.7.2",
+ "embassy-time 0.5.0",
+ "embedded-storage",
+ "embedded-storage-async",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "esp-radio",
+ "esp-storage",
+ "getrandom",
+ "hal",
+ "heapless 0.8.0",
+ "hmac",
+ "log",
+ "once_cell",
+ "portable-atomic",
+ "sha2",
+ "smoltcp",
+ "static_cell",
+ "sunset-async",
+]
+
+[[package]]
 name = "hash32"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1587,6 +1627,7 @@ name = "ota"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "hal",
  "log",
  "rustc-hash",
  "sha2",
@@ -2020,6 +2061,7 @@ dependencies = [
  "esp-rtos",
  "esp-storage",
  "getrandom",
+ "hal-espressif",
  "heapless 0.8.0",
  "hex",
  "hmac",
@@ -2034,7 +2076,6 @@ dependencies = [
  "snafu",
  "ssh-key",
  "static_cell",
- "storage",
  "subtle",
  "sunset",
  "sunset-async",
@@ -2055,20 +2096,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0530892bb4fa575ee0da4b86f86c667132a94b74bb72160f58ee5a4afec74c23"
 dependencies = [
  "portable-atomic",
-]
-
-[[package]]
-name = "storage"
-version = "0.1.0"
-dependencies = [
- "embedded-storage",
- "esp-bootloader-esp-idf",
- "esp-hal",
- "esp-storage",
- "log",
- "once_cell",
- "ota",
- "sunset-async",
 ]
 
 [[package]]
