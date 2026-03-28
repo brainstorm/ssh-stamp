@@ -186,9 +186,7 @@ pub async fn init_wifi_ap(
     controller: Controller<'static>,
     wifi: WIFI<'static>,
     rng: Rng,
-    ssid: String<32>,
-    password: String<63>,
-    mac: [u8; 6],
+    config: WifiApConfigStatic,
     gw_ip: Ipv4Addr,
 ) -> Result<Stack<'static>, HalError> {
     let wifi_init = &*mk_static!(Controller<'static>, controller);
@@ -197,13 +195,15 @@ pub async fn init_wifi_ap(
             .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
 
     // Set MAC address
-    Efuse::set_mac_address(mac).map_err(|_| HalError::Config)?;
+    Efuse::set_mac_address(config.mac).map_err(|_| HalError::Config)?;
 
     let ap_config = ModeConfig::AccessPoint(
         AccessPointConfig::default()
-            .with_ssid(AllocString::from(ssid.as_str()))
+            .with_ssid(AllocString::from(config.ssid.as_str()))
             .with_auth_method(AuthMethod::Wpa2Wpa3Personal)
-            .with_password(AllocString::from(password.as_str())),
+            .with_password(AllocString::from(
+                config.password.as_ref().unwrap_or(&String::new()).as_str(),
+            )),
     );
     let _res = wifi_controller.set_config(&ap_config);
 
@@ -224,8 +224,16 @@ pub async fn init_wifi_ap(
 
     // Convert ssid and password to static - caller must ensure they live long enough
     // For now we use leak to make them 'static
-    let ssid_static: &'static str = Box::leak(ssid.as_str().to_string().into_boxed_str());
-    let password_static: &'static str = Box::leak(password.as_str().to_string().into_boxed_str());
+    let ssid_static: &'static str = Box::leak(config.ssid.as_str().to_string().into_boxed_str());
+    let password_static: &'static str = Box::leak(
+        config
+            .password
+            .as_ref()
+            .unwrap_or(&String::new())
+            .as_str()
+            .to_string()
+            .into_boxed_str(),
+    );
 
     spawner
         .spawn(wifi_up(wifi_controller, ssid_static, password_static))

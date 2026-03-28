@@ -29,7 +29,9 @@ impl ExecutorHal for EspExecutor {
     }
 
     fn run<F: Future<Output = ()>>(&self, _main_future: F) -> ! {
-        loop {}
+        loop {
+            core::hint::black_box(&_main_future);
+        }
     }
 
     fn set_interrupt_priority(&self, _irq: usize, _priority: u8) {}
