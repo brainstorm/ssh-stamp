@@ -15,6 +15,7 @@ use esp_hal::peripherals::UART1;
 use esp_hal::system::software_reset;
 use esp_hal::uart::{Config, RxConfig, Uart};
 use hal_espressif::EspUartPins;
+use log::error;
 use sunset_async::SunsetMutex;
 
 /// UART pins wrapper for app compatibility
@@ -54,16 +55,18 @@ pub async fn uart_task(
     );
 
     // Silent failure to avoid println! in interrupt context
-    let Ok(uart) = Uart::new(uart1, uart_config) else {
-        error!("Uart config error. Resetting.");
-        software_reset();
-        return;
-    };
-    let hal_pins: EspUartPins = pins.into();
-    let uart = uart.with_rx(hal_pins.rx).with_tx(hal_pins.tx).into_async();
-
-    // Run the main buffered TX/RX loop
-    uart_buf.run(uart).await;
+    match Uart::new(uart1, uart_config) {
+        Ok(uart) => {
+            let hal_pins: EspUartPins = pins.into();
+            let uart = uart.with_rx(hal_pins.rx).with_tx(hal_pins.tx).into_async();
+            // Run the main buffered TX/RX loop
+            uart_buf.run(uart).await;
+        }
+        Err(e) => {
+            error!("Uart config error {e}. Resetting.");
+            software_reset();
+        }
+    }
 }
 
 /// Wait for UART buffer initialization
