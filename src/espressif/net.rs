@@ -31,8 +31,9 @@ use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_radio::Controller;
 use esp_radio::wifi::{
-    AccessPointConfig, AuthMethod, ModeConfig, WifiApState, WifiController, WifiEvent,
+    AccessPointConfig, AuthMethod, Config, ModeConfig, WifiApState, WifiController, WifiEvent,
 };
+use hal_espressif::flash;
 use heapless::String;
 use log::{debug, error, info, warn};
 use ssh_stamp_esp32::flash;
@@ -59,13 +60,7 @@ macro_rules! mk_static {
     }};
 }
 
-/// Brings up the `WiFi` interface.
-///
-/// # Errors
-/// Returns an error if the `WiFi` configuration or initialization fails.
-///
-/// # Panics
-/// Panics if flash storage is not initialized or if persisting the wifi password fails.
+/// Bring up WiFi interface with app-specific configuration
 pub async fn if_up(
     spawner: Spawner,
     controller: Controller<'static>,
@@ -208,9 +203,7 @@ fn print_hostkey_fingerprint(hostkey: &sunset::SignKey) {
     }
 }
 
-/// Manages the `WiFi` access point lifecycle.
-/// Starts the AP with the configured SSID and password from the config.
-/// Handles reconnection if the AP stops.
+/// WiFi task for Embassy executor
 #[embassy_executor::task]
 pub async fn wifi_up(
     mut wifi_controller: WifiController<'static>,
@@ -293,4 +286,3 @@ pub async fn dhcp_server(stack: Stack<'static>, ip: Ipv4Addr) {
     }
 }
 
-use esp_radio::wifi::Config;

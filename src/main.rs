@@ -22,6 +22,7 @@ use ssh_stamp::{
     settings::UART_BUFFER_SIZE,
 };
 
+use hal_espressif::flash;
 #[cfg(feature = "sftp-ota")]
 use ota::traits::OtaActions;
 use ssh_stamp_esp32::flash;
