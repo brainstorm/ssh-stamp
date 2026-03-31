@@ -21,6 +21,7 @@ use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 
 // Sunset
+use sunset::event::ServPubkeyAuth;
 use sunset::{ChanHandle, ServEvent, error};
 use sunset_async::SunsetMutex;
 use sunset_async::{ProgressHolder, SSHServer};
@@ -30,6 +31,10 @@ pub enum SessionType {
     Bridge(ChanHandle),
     #[cfg(feature = "sftp-ota")]
     Sftp(ChanHandle),
+}
+
+fn key_signature_ok(a: &ServPubkeyAuth<'_, '_>) -> bool {
+    a.real()
 }
 
 pub async fn connection_loop(
@@ -156,8 +161,15 @@ pub async fn connection_loop(
                             .any(|slot| slot.as_ref().is_some_and(|stored| *stored == presented));
 
                         if matched {
+                            // A client that sends only a pubkey query (no signature) gets the flag set.
+                            // Sunset's own ConnState gate prevents this from being exploited since channels
+                            // can't open until full auth completes, but the flag being set prematurely is
+                            // a latent bug. if that gate ever changes or a new code path reads auth_checked
+                            // in a pre-auth context, it could become a real bypass. If that is indeed an
+                            // issue then maybe stamps should check if a.real() before setting auth_checked = true.
+                            let sig_checked = key_signature_ok(&a);
+                            auth_checked = sig_checked;
                             a.allow()?;
-                            auth_checked = true;
                         } else {
                             debug!("No matching pubkey slot found");
                             a.reject()?;

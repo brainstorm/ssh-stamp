@@ -95,6 +95,9 @@ pub async fn create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, Sunse
 }
 
 pub async fn load(fl: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
+    // If at some point you target a 64bit arch these can truncate and cause
+    // corruption of the bootloader or the ota partition.
+
     fl.flash
         .read(CONFIG_OFFSET as u32, &mut fl.buf)
         .map_err(|e| {
