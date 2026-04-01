@@ -193,10 +193,6 @@ impl<W: OtaActions> UpdateProcessor<W> {
                             }
                         },
                         Err(WireError::UnknownPacket { number }) => {
-                            warn!(
-                                "UpdateProcessor: Unknown TLV type encountered: {}. Skipping it",
-                                number
-                            );
                             if self.header.ota_type.is_none() {
                                 error!(
                                     "UpdateProcessor: Received unknown TLV type before OTA Type TLV"
@@ -205,6 +201,11 @@ impl<W: OtaActions> UpdateProcessor<W> {
                                     UpdateProcessorState::Error(OtaError::IllegalOperation);
                                 return Err(OtaError::IllegalOperation);
                             }
+                            error!(
+                                "UpdateProcessor: Unknown TLV type encountered: {}",
+                                number
+                            );
+
                             // A crafted TLV with an arbitrary length could be used to confuse the UpdateProcessor
                             // leading to an unknown behaviour. To avoid this, unknown TLVs will thrown an error
                             return Err(OtaError::UnknownTlvType);

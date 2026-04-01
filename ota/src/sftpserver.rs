@@ -219,17 +219,39 @@ impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer
                 buf.len()
             );
 
-            self.processor
-                .process_data(offset, buf)
-                .await
-                .map_err(|e| {
-                    error!(
-                        "SftpServer Write operation failed during OTA processing: {:?}",
-                        e
-                    );
-                    sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE
-                })?;
-            return Ok(());
+            if let Err(e) = self.processor.process_data(offset, buf).await {
+                match e {
+                    crate::handler::OtaError::IllegalOperation => {
+                        error!(
+                            "SftpServer Write operation failed during OTA processing: Illegal Operation - {:?}",
+                            e
+                        );
+                        return Err(sunset_sftp::protocol::StatusCode::SSH_FX_PERMISSION_DENIED);
+                    }
+                    crate::handler::OtaError::UnknownTlvType => {
+                        error!(
+                            "SftpServer Write operation failed during OTA processing: Unknown TLV Type - {:?}",
+                            e
+                        );
+                        return Err(sunset_sftp::protocol::StatusCode::SSH_FX_OP_UNSUPPORTED);
+                    }
+                    _ => {
+                        error!(
+                            "SftpServer Write operation failed during OTA processing: {:?}",
+                            e
+                        );
+                        return Err(sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE);
+                    }
+                }
+            } else {
+                debug!(
+                    "SftpServer Write operation for OTA processed successfully: handle = {:?}, offset = {:?}, buf_len = {:?}",
+                    opaque_file_handle,
+                    offset,
+                    buf.len()
+                );
+                return Ok(());
+            }
         }
 
         warn!(
