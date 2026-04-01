@@ -20,6 +20,9 @@ use ssh_stamp::{
 use ota::otatraits::OtaActions;
 use storage::flash;
 
+extern crate alloc;
+use alloc::boxed::Box;
+
 use sunset_async::{SSHServer, SunsetMutex};
 
 use core::future::Future;
@@ -48,7 +51,8 @@ cfg_if::cfg_if! {
     }
 }
 
-pub async fn peripherals_disable() -> () {
+#[allow(clippy::unused_async)]
+pub async fn peripherals_disable() {
     // drop peripherals
     debug!("Disabling peripherals: WIP");
 }
@@ -180,7 +184,7 @@ async fn main(spawner: Spawner) -> ! {
         uart_buf,
     };
 
-    match peripherals_enabled(peripherals_enabled_struct).await {
+    match Box::pin(peripherals_enabled(peripherals_enabled_struct)).await {
         Ok(()) => (),
         Err(e) => {
             error!("Peripheral error: {e}");
@@ -214,7 +218,7 @@ async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Err
         uart_buf: s.uart_buf,
         spawner: s.spawner,
     };
-    match wifi_controller_enabled(peripherals_enabled_struct).await {
+    match Box::pin(wifi_controller_enabled(peripherals_enabled_struct)).await {
         Ok(()) => (),
         Err(e) => {
             error!("Wifi controller error: {e}");
@@ -232,6 +236,10 @@ pub struct WifiControllerEnabled<'a> {
     pub tcp_stack: Stack<'a>,
 }
 
+/// Enables `WiFi` controller and network stack.
+///
+/// # Errors
+/// Returns an error if `WiFi` initialization fails.
 pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(), sunset::Error> {
     debug!("HSM: wifi_controller_enabled");
     let tcp_stack = net::if_up(s.spawner, s.controller, s.wifi, s.rng, s.config).await?;
@@ -242,7 +250,7 @@ pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(
         uart_buf: s.uart_buf,
         tcp_stack,
     };
-    match tcp_enabled(wifi_controller_enabled_stack).await {
+    match Box::pin(tcp_enabled(wifi_controller_enabled_stack)).await {
         Ok(()) => (),
         Err(e) => {
             error!("AP Stack error: {e}");
@@ -259,7 +267,7 @@ pub struct TCPEnabled<'a> {
 }
 
 cfg_if::cfg_if!(if #[cfg(feature = "esp32")] {use embassy_net::IpListenEndpoint;});
-async fn tcp_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Error> {
+async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> {
     debug!("HSM: tcp_enabled");
 
     let mut rx_buffer = [0u8; 1536];
@@ -291,7 +299,7 @@ async fn tcp_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Err
             tcp_socket,
             uart_buf: s.uart_buf,
         };
-        match socket_enabled(tcp_enabled_struct).await {
+        match Box::pin(socket_enabled(tcp_enabled_struct)).await {
             Ok(()) => (),
             Err(e) => {
                 error!("TCP socket error: {e}");
@@ -309,7 +317,7 @@ pub struct SocketEnabled<'a> {
     pub uart_buf: &'a BufferedUart,
 }
 
-async fn socket_enabled<'a>(s: TCPEnabled<'a>) -> Result<(), sunset::Error> {
+async fn socket_enabled(s: TCPEnabled<'_>) -> Result<(), sunset::Error> {
     debug!("HSM: socket_enabled");
     // loop {
     // Spawn network tasks to handle incoming connections with demo_common::session()
@@ -349,7 +357,7 @@ where
     pub connection_loop: CL,
 }
 
-async fn ssh_enabled<'a>(s: SocketEnabled<'a>) -> Result<(), sunset::Error> {
+async fn ssh_enabled(s: SocketEnabled<'_>) -> Result<(), sunset::Error> {
     debug!("HSM: ssh_enabled");
     // loop {
     debug!("HSM: Starting channel pipe");
@@ -434,9 +442,7 @@ where
     let bridge = s.bridge;
     debug!("HSM: Main select() in bridge_connected()");
     match select3(server, connection_loop, bridge).await {
-        Either3::First(r) => r,
-        Either3::Second(r) => r,
-        Either3::Third(r) => r,
+        Either3::First(r) | Either3::Second(r) | Either3::Third(r) => r,
     }
 }
 

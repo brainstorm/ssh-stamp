@@ -22,6 +22,13 @@ pub fn register_custom_rng(rng: Rng) {
 
 // esp-hal specific variation of getrandom custom function as seen in:
 // https://github.com/rust-random/getrandom/issues/340
+/// Custom getrandom function for ESP-HAL.
+///
+/// # Errors
+/// Returns an error if the RNG mutex lock fails.
+///
+/// # Panics
+/// Panics if `register_custom_rng` was not called before this function.
 pub fn esp_getrandom_custom_func(buf: &mut [u8]) -> Result<(), getrandom::Error> {
     RNG_MUTEX.lock(|t| {
         let mut rng = t.borrow_mut();

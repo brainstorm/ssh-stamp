@@ -77,6 +77,8 @@ impl SSHStampConfig {
     }
 
     /// Get the MAC address to use (resolves random sentinel)
+    /// # Errors
+    /// Returns an error if the RNG fails
     pub fn resolve_mac(&self) -> Result<[u8; 6]> {
         if self.is_mac_random() {
             random_mac()
@@ -87,6 +89,7 @@ impl SSHStampConfig {
 
     /// Creates a new config with default parameters.
     ///
+    /// # Errors
     /// Will only fail on RNG failure.
     pub fn new() -> Result<Self> {
         let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
@@ -185,7 +188,7 @@ fn enc_signkey(k: &SignKey, s: &mut dyn SSHSink) -> WireResult<()> {
     // need to add a variant field if we support more key types.
     match k {
         SignKey::Ed25519(k) => k.to_bytes().enc(s),
-        _ => Err(WireError::UnknownVariant),
+        SignKey::AgentEd25519(_) => Err(WireError::UnknownVariant),
     }
 }
 
@@ -199,9 +202,12 @@ where
 }
 
 // encode Option<T> as a bool then maybe a value
-pub(crate) fn enc_option<T: SSHEncode>(v: &Option<T>, s: &mut dyn SSHSink) -> WireResult<()> {
+pub(crate) fn enc_option<T: SSHEncode>(v: Option<&T>, s: &mut dyn SSHSink) -> WireResult<()> {
     v.is_some().enc(s)?;
-    v.enc(s)
+    if let Some(v) = v {
+        v.enc(s)?;
+    }
+    Ok(())
 }
 
 pub(crate) fn dec_option<'de, S, T: SSHDecode<'de>>(s: &mut S) -> WireResult<Option<T>>
@@ -213,7 +219,7 @@ where
 
 // encode Option<heapless::String<N>> as a bool then the &str contents (heapless::String doesn't implement SSHEncode)
 pub(crate) fn enc_option_str<const N: usize>(
-    v: &Option<String<N>>,
+    v: Option<&String<N>>,
     s: &mut dyn SSHSink,
 ) -> WireResult<()> {
     v.is_some().enc(s)?;
@@ -223,27 +229,27 @@ pub(crate) fn enc_option_str<const N: usize>(
     Ok(())
 }
 
-fn enc_ipv4_config(v: &Option<StaticConfigV4>, s: &mut dyn SSHSink) -> WireResult<()> {
+fn enc_ipv4_config(v: Option<&StaticConfigV4>, s: &mut dyn SSHSink) -> WireResult<()> {
     v.is_some().enc(s)?;
     if let Some(v) = v {
         v.address.address().to_bits().enc(s)?;
         debug!("enc_ipv4_config: prefix = {}", &v.address.prefix_len());
         v.address.prefix_len().enc(s)?;
         // to u32
-        let gw = v.gateway.map(embassy_net::Ipv4Address::to_bits);
-        enc_option(&gw, s)?;
+        let gw = v.gateway.as_ref().map(|g| g.to_bits());
+        enc_option(gw.as_ref(), s)?;
     }
     Ok(())
 }
 
 #[cfg(feature = "ipv6")]
-fn enc_ipv6_config(v: &Option<StaticConfigV6>, s: &mut dyn SSHSink) -> WireResult<()> {
+fn enc_ipv6_config(v: Option<&StaticConfigV6>, s: &mut dyn SSHSink) -> WireResult<()> {
     v.is_some().enc(s)?;
     if let Some(v) = v {
         v.address.address().to_bits().enc(s)?;
         v.address.prefix_len().enc(s)?;
-        let gw = v.gateway.map(|a| a.to_bits());
-        enc_option(&gw, s)?;
+        let gw = v.gateway.as_ref().map(|g| g.to_bits());
+        enc_option(gw.as_ref(), s)?;
     }
     Ok(())
 }
@@ -266,6 +272,7 @@ where
         Ok(StaticConfigV4 {
             address: Ipv4Cidr::new(ad, prefix),
             gateway,
+            #[allow(clippy::default_trait_access)]
             dns_servers: Default::default(),
         })
     })
@@ -291,7 +298,7 @@ where
         Ok(StaticConfigV6 {
             address: Ipv6Cidr::new(ad, prefix),
             gateway,
-            dns_servers: Vec::new(),
+            dns_servers: Default::default(),
         })
     })
     .transpose()
@@ -302,16 +309,16 @@ impl SSHEncode for SSHStampConfig {
         enc_signkey(&self.hostkey, s)?;
 
         for k in &self.pubkeys {
-            enc_option(k, s)?;
+            enc_option(k.as_ref(), s)?;
         }
 
         self.wifi_ssid.as_str().enc(s)?;
-        enc_option_str::<63>(&self.wifi_pw, s)?;
+        enc_option_str::<63>(self.wifi_pw.as_ref(), s)?;
         self.mac.enc(s)?;
 
-        enc_ipv4_config(&self.ipv4_static, s)?;
+        enc_ipv4_config(self.ipv4_static.as_ref(), s)?;
         #[cfg(feature = "ipv6")]
-        enc_ipv6_config(&self.ipv6_static, s)?;
+        enc_ipv6_config(self.ipv6_static.as_ref(), s)?;
 
         // Encode UartPins
         self.uart_pins.rx.enc(s)?;

@@ -44,6 +44,13 @@ macro_rules! mk_static {
     }};
 }
 
+/// Brings up the `WiFi` interface.
+///
+/// # Errors
+/// Returns an error if the `WiFi` configuration or initialization fails.
+///
+/// # Panics
+/// Panics if flash storage is not initialized or if persisting the wifi password fails.
 pub async fn if_up(
     spawner: Spawner,
     controller: Controller<'static>,
@@ -53,7 +60,7 @@ pub async fn if_up(
 ) -> Result<Stack<'static>, sunset::Error> {
     let wifi_init = &*mk_static!(Controller<'static>, controller);
     let (mut wifi_controller, interfaces) =
-        esp_radio::wifi::new(wifi_init, wifi, Default::default())
+        esp_radio::wifi::new(wifi_init, wifi, Config::default())
             .map_err(|_| sunset::error::BadUsage.build())?;
 
     // Ensure WiFi PSK exists before applying AP config to avoid esp_wifi_set_config errors
@@ -108,6 +115,7 @@ pub async fn if_up(
     let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(gw_ip_addr_ipv4, 24),
         gateway: Some(gw_ip_addr_ipv4),
+        #[allow(clippy::default_trait_access)]
         dns_servers: Default::default(),
     });
 
@@ -138,13 +146,15 @@ pub async fn if_up(
     Ok(ap_stack)
 }
 
-pub async fn ap_stack_disable() -> () {
+#[allow(clippy::unused_async)]
+pub async fn ap_stack_disable() {
     // drop ap_stack
     debug!("AP Stack disabled: WIP");
     // TODO: Correctly disable/restart AP Stack and/or send messsage to user over SSH
 }
 
-pub async fn tcp_socket_disable() -> () {
+#[allow(clippy::unused_async)]
+pub async fn tcp_socket_disable() {
     // drop tcp stack
     debug!("TCP socket disabled: WIP");
     // TODO: Correctly disable/restart tcp socket and/or send messsage to user over SSH
@@ -191,7 +201,9 @@ pub async fn wifi_ssid(config: &'static SunsetMutex<SSHStampConfig>) -> String<6
 }
 
 /// Returns the `WiFi` password from the config.
-/// Panics if `wifi_pw` is not set in the config.
+///
+/// # Panics
+/// Panics if `wifi_pw` is not set in the config or exceeds 63 characters.
 pub async fn wifi_password(config: &'static SunsetMutex<SSHStampConfig>) -> String<63> {
     let guard = config.lock().await;
     match &guard.wifi_pw {
@@ -246,7 +258,8 @@ pub async fn wifi_up(
     }
 }
 
-pub async fn wifi_controller_disable() -> () {
+#[allow(clippy::unused_async)]
+pub async fn wifi_controller_disable() {
     // TODO: Correctly disable wifi controller
     // pub async fn wifi_disable(wifi_controller: EspWifiController<'_>) -> (){
     // drop wifi controller
@@ -256,7 +269,7 @@ pub async fn wifi_controller_disable() -> () {
     //software_reset();
 }
 
-use esp_radio::wifi::WifiDevice;
+use esp_radio::wifi::{Config, WifiDevice};
 #[embassy_executor::task]
 async fn net_up(mut runner: Runner<'static, WifiDevice<'static>>) {
     debug!("Bringing up network stack...\n");

@@ -74,6 +74,9 @@ fn config_hash(config: &SSHStampConfig) -> Result<[u8; 32], SunsetError> {
 }
 
 /// Loads a `SSHConfig` at startup. Good for persisting hostkeys.
+///
+/// # Errors
+/// Returns an error if flash read fails or config is invalid.
 pub async fn load_or_create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
     match load(flash).await {
         Ok(c) => {
@@ -86,6 +89,10 @@ pub async fn load_or_create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfi
     create(flash).await
 }
 
+/// Creates a new `SSHStampConfig` and saves it to flash.
+///
+/// # Errors
+/// Returns an error if config creation or flash write fails.
 pub async fn create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
     let c = SSHStampConfig::new()?;
     save(flash, &c).await?;
@@ -94,6 +101,12 @@ pub async fn create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, Sunse
     Ok(c)
 }
 
+/// Loads `SSHStampConfig` from flash.
+///
+/// # Errors
+/// Returns an error if flash read fails, config is invalid, or hash mismatch.
+#[allow(clippy::unused_async)]
+#[allow(clippy::cast_possible_truncation)]
 pub async fn load(fl: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
     // If at some point you target a 64bit arch these can truncate and cause
     // corruption of the bootloader or the ota partition.
@@ -128,6 +141,12 @@ pub async fn load(fl: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetErro
     Ok(config)
 }
 
+/// Saves `SSHStampConfig` to flash.
+///
+/// # Errors
+/// Returns an error if flash write fails or config serialization fails.
+#[allow(clippy::unused_async)]
+#[allow(clippy::cast_possible_truncation)]
 pub async fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(), SunsetError> {
     let sc = FlashConfig {
         version: SSHStampConfig::CURRENT_VERSION,

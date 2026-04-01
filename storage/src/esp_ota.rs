@@ -13,9 +13,10 @@ use ota::otatraits::{OtaActions, StorageError, StorageResult};
 pub struct OtaWriter {}
 
 impl OtaWriter {
-    /// Creates a new OtaWriter for the given target OTA slot.
+    /// Creates a new `OtaWriter` for the given target OTA slot.
     ///
-    /// To obtain a target OTA slot use [get_next_app_slot]
+    /// To obtain a target OTA slot use [`get_next_app_slot`]
+    #[must_use]
     pub fn new() -> Self {
         OtaWriter {}
     }
@@ -50,11 +51,11 @@ impl OtaActions for OtaWriter {
 
         let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
             .map_err(|e| {
-                error!("Could not create OtaUpdater: {:?}", e);
+                error!("Could not create OtaUpdater: {e:?}");
                 StorageError::InternalError
             })?;
         let current = ota.selected_partition().map_err(|e| {
-            error!("Could not get selected partition: {:?}", e);
+            error!("Could not get selected partition: {e:?}");
             StorageError::InternalError
         })?;
 
@@ -62,7 +63,7 @@ impl OtaActions for OtaWriter {
             "current image state {:?} (only relevant if the bootloader was built with auto-rollback support)",
             ota.current_ota_state()
         );
-        debug!("currently selected partition {:?}", current);
+        debug!("currently selected partition {current:?}");
 
         if let Ok(state) = ota.current_ota_state()
             && (state == esp_bootloader_esp_idf::ota::OtaImageState::New
@@ -70,7 +71,7 @@ impl OtaActions for OtaWriter {
         {
             ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::Valid)
                 .map_err(|e| {
-                    error!("Could not set OTA image state to Valid: {:?}", e);
+                    error!("Could not set OTA image state to Valid: {e:?}");
                     StorageError::WriteError
                 })?;
             debug!("Changed state to VALID");
@@ -118,11 +119,11 @@ async fn next_ota_size() -> StorageResult<usize> {
 
     let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
         .map_err(|e| {
-            error!("Could not create OtaUpdater: {:?}", e);
+            error!("Could not create OtaUpdater: {e:?}");
             StorageError::InternalError
         })?;
     let (target_partition, _) = ota.next_partition().map_err(|e| {
-        error!("Could not get next partition: {:?}", e);
+        error!("Could not get next partition: {e:?}");
         StorageError::InternalError
     })?;
 
@@ -148,23 +149,22 @@ async fn write_to_target(offset: u32, data: &[u8]) -> StorageResult<()> {
 
     let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
         .map_err(|e| {
-            error!("Could not create OtaUpdater: {:?}", e);
+            error!("Could not create OtaUpdater: {e:?}");
             StorageError::InternalError
         })?;
     let (mut target_partition, part_type) = ota.next_partition().map_err(|e| {
-        error!("Could not get next partition: {:?}", e);
+        error!("Could not get next partition: {e:?}");
         StorageError::InternalError
     })?;
 
-    debug!("Flashing image to {:?}", part_type);
+    debug!("Flashing image to {part_type:?}");
 
     debug!(
-        "Writing data to target_partition at offset {}, with len {}",
-        offset,
+        "Writing data to target_partition at offset {offset}, with len {}",
         data.len()
     );
     target_partition.write(offset, data).map_err(|e| {
-        error!("Failed to write data to target_partition: {}", e);
+        error!("Failed to write data to target_partition: {e}");
         StorageError::WriteError
     })?;
 
@@ -190,17 +190,17 @@ async fn activate_next_ota_slot() -> StorageResult<()> {
 
     let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
         .map_err(|e| {
-            error!("Could not create OtaUpdater: {:?}", e);
+            error!("Could not create OtaUpdater: {e:?}");
             StorageError::InternalError
         })?;
 
     ota.activate_next_partition().map_err(|e| {
-        error!("Could not activate next partition: {:?}", e);
+        error!("Could not activate next partition: {e:?}");
         StorageError::WriteError
     })?;
     ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::New)
         .map_err(|e| {
-            error!("Could not set OTA image state to New: {:?}", e);
+            error!("Could not set OTA image state to New: {e:?}");
             StorageError::WriteError
         })?;
 
@@ -214,6 +214,8 @@ async fn activate_next_ota_slot() -> StorageResult<()> {
 /// Mark the current OTA slot as VALID - this is only needed if the bootloader was built with auto-rollback support.
 /// The default pre-compiled bootloader in espflash is NOT.
 ///
+/// # Errors
+/// Returns a `StorageError` if flash storage is not initialized or if OTA operations fail
 pub async fn try_validating_current_ota_partition() -> StorageResult<()> {
     // Taken from [esp-hal ota_update example](https://github.com/esp-rs/esp-hal/examples/src/bin/ota_update.rs)
     let Some(fb) = flash::get_flash_n_buffer() else {
@@ -230,11 +232,11 @@ pub async fn try_validating_current_ota_partition() -> StorageResult<()> {
 
     let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
         .map_err(|e| {
-            error!("Could not create OtaUpdater: {:?}", e);
+            error!("Could not create OtaUpdater: {e:?}");
             StorageError::InternalError
         })?;
     let current = ota.selected_partition().map_err(|e| {
-        error!("Could not get selected partition: {:?}", e);
+        error!("Could not get selected partition: {e:?}");
         StorageError::InternalError
     })?;
 
@@ -242,7 +244,7 @@ pub async fn try_validating_current_ota_partition() -> StorageResult<()> {
         "current image state {:?} (only relevant if the bootloader was built with auto-rollback support)",
         ota.current_ota_state()
     );
-    debug!("currently selected partition {:?}", current);
+    debug!("currently selected partition {current:?}");
 
     if let Ok(state) = ota.current_ota_state()
         && (state == esp_bootloader_esp_idf::ota::OtaImageState::New
@@ -250,7 +252,7 @@ pub async fn try_validating_current_ota_partition() -> StorageResult<()> {
     {
         ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::Valid)
             .map_err(|e| {
-                error!("Could not set OTA image state to Valid: {:?}", e);
+                error!("Could not set OTA image state to Valid: {e:?}");
                 StorageError::WriteError
             })?;
         debug!("Changed state to VALID");

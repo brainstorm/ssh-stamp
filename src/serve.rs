@@ -37,6 +37,14 @@ fn key_signature_ok(a: &ServPubkeyAuth<'_, '_>) -> bool {
     a.real()
 }
 
+/// Handles the SSH connection loop, processing events from clients.
+///
+/// # Errors
+/// Returns an error if SSH protocol operations fail.
+///
+/// # Panics
+/// Panics if flash storage lock cannot be acquired when saving configuration.
+#[allow(clippy::too_many_lines)]
 pub async fn connection_loop(
     serv: &SSHServer<'_>,
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
@@ -164,9 +172,7 @@ pub async fn connection_loop(
                             // A client that sends only a pubkey query (no signature) gets the flag set.
                             // Sunset's own ConnState gate prevents this from being exploited since channels
                             // can't open until full auth completes, but the flag being set prematurely is
-                            // a latent bug. if that gate ever changes or a new code path reads auth_checked
-                            // in a pre-auth context, it could become a real bypass. If that is indeed an
-                            // issue then maybe stamps should check if a.real() before setting auth_checked = true.
+                            // a latent bug. if that is indeed an issue then maybe stamps should check if a.real() before setting auth_checked = true.
                             let sig_checked = key_signature_ok(&a);
                             auth_checked = sig_checked;
                             a.allow()?;
@@ -175,7 +181,7 @@ pub async fn connection_loop(
                             a.reject()?;
                         }
                     }
-                    _ => {
+                    sunset::packets::PubKey::Unknown(_) => {
                         // Only Ed25519 keys supported
                         a.reject()?;
                     }
@@ -351,11 +357,13 @@ pub async fn connection_loop(
     }
 }
 
-pub async fn connection_disable() -> () {
+#[allow(clippy::unused_async)]
+pub async fn connection_disable() {
     debug!("Connection loop disabled: WIP");
     // TODO: Correctly disable/restart Conection loop and/or send messsage to user over SSH
 }
 
+#[allow(clippy::unused_async)]
 pub async fn ssh_wait_for_initialisation<'server>(
     inbuf: &'server mut [u8; UART_BUFFER_SIZE],
     outbuf: &'server mut [u8; UART_BUFFER_SIZE],
@@ -363,7 +371,8 @@ pub async fn ssh_wait_for_initialisation<'server>(
     SSHServer::new(inbuf, outbuf)
 }
 
-pub async fn ssh_disable() -> () {
+#[allow(clippy::unused_async)]
+pub async fn ssh_disable() {
     debug!("SSH Server disabled: WIP");
     // TODO: Correctly disable/restart SSH Server and/or send messsage to user over SSH
 }
@@ -372,6 +381,10 @@ use crate::espressif::buffered_uart::BufferedUart;
 use crate::serial::serial_bridge;
 use sunset_async::ChanInOut;
 
+/// Handles an SSH client connection, bridging UART and SSH.
+///
+/// # Errors
+/// Returns an error if SSH protocol operations or I/O fail.
 pub async fn handle_ssh_client<'a, 'b>(
     uart_buff: &'a BufferedUart,
     ssh_server: &'b SSHServer<'a>,
@@ -383,26 +396,27 @@ pub async fn handle_ssh_client<'a, 'b>(
     match session_type {
         SessionType::Bridge(ch) => {
             info!("Handling bridge session");
-            let stdio: ChanInOut<'_> = ssh_server.stdio(ch).await?;
-            let (stdin, stdout) = stdio.split();
+            let chan_io: ChanInOut<'_> = ssh_server.stdio(ch).await?;
+            let (input, output) = chan_io.split();
             info!("Starting bridge");
-            serial_bridge(stdin, stdout, uart_buff).await?;
+            serial_bridge(input, output, uart_buff).await?;
         }
         #[cfg(feature = "sftp-ota")]
         SessionType::Sftp(ch) => {
             {
                 debug!("Handling SFTP session");
-                let stdio = ssh_server.stdio(ch).await?;
+                let sftp_io = ssh_server.stdio(ch).await?;
                 // TODO: Use a configuration flag to select the hardware specific OtaActions implementer
                 let ota_writer = storage::esp_ota::OtaWriter::new();
-                ota::run_ota_server::<storage::esp_ota::OtaWriter>(stdio, ota_writer).await?
+                ota::run_ota_server::<storage::esp_ota::OtaWriter>(sftp_io, ota_writer).await?
             }
         }
     }
     Ok(())
 }
 
-pub async fn bridge_disable() -> () {
+#[allow(clippy::unused_async)]
+pub async fn bridge_disable() {
     // disable bridge
     debug!("Bridge disabled: WIP");
     // TODO: Correctly disable/restart bridge and/or send message to user over SSH
