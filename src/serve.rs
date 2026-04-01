@@ -22,7 +22,7 @@ use embassy_sync::channel::Channel;
 
 // Sunset
 use sunset::event::ServPubkeyAuth;
-use sunset::{ChanHandle, ServEvent, error};
+use sunset::{ChanFail, ChanHandle, ServEvent, error};
 use sunset_async::SunsetMutex;
 use sunset_async::{ProgressHolder, SSHServer};
 
@@ -185,7 +185,8 @@ pub async fn connection_loop(
                 debug!("ServEvent::OpenSession");
                 match session {
                     Some(_) => {
-                        todo!("Can't have two sessions");
+                        warn!("Rejecting duplicate session channel");
+                        a.reject(ChanFail::SSH_OPEN_ADMINISTRATIVELY_PROHIBITED)?;
                     }
                     None => {
                         // Track the session
