@@ -272,8 +272,7 @@ where
         Ok(StaticConfigV4 {
             address: Ipv4Cidr::new(ad, prefix),
             gateway,
-            #[allow(clippy::default_trait_access)]
-            dns_servers: Default::default(),
+            dns_servers: heapless::Vec::new(),
         })
     })
     .transpose()

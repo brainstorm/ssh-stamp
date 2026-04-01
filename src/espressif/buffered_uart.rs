@@ -142,16 +142,14 @@ impl Default for BufferedUart {
     }
 }
 
-#[allow(clippy::unused_async)]
-pub async fn uart_buffer_disable() {
+pub fn uart_buffer_disable() {
     // disable uart buffer
     debug!("UART buffer disabled: WIP");
     // TODO: Correctly disable/restart UART buffer and/or send messsage to user over SSH
 }
 // use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 
-#[allow(clippy::unused_async)]
-pub async fn uart_disable() {
+pub fn uart_disable() {
     // disable uart
     debug!("UART disabled: WIP");
     // TODO: Correctly disable/restart UART and/or send messsage to user over SSH

@@ -109,7 +109,7 @@ pub async fn connection_loop(
                             panic!("Could not acquire flash storage lock");
                         };
                         let mut flash_storage = flash_storage_guard.lock().await;
-                        let _result = store::save(&mut flash_storage, &config_guard).await;
+                        let _result = store::save(&mut flash_storage, &config_guard);
                         drop(config_guard);
                         if needs_reset {
                             info!("Configuration saved. Rebooting to apply WiFi changes...");
@@ -357,22 +357,19 @@ pub async fn connection_loop(
     }
 }
 
-#[allow(clippy::unused_async)]
-pub async fn connection_disable() {
+pub fn connection_disable() {
     debug!("Connection loop disabled: WIP");
     // TODO: Correctly disable/restart Conection loop and/or send messsage to user over SSH
 }
 
-#[allow(clippy::unused_async)]
-pub async fn ssh_wait_for_initialisation<'server>(
+pub fn ssh_wait_for_initialisation<'server>(
     inbuf: &'server mut [u8; UART_BUFFER_SIZE],
     outbuf: &'server mut [u8; UART_BUFFER_SIZE],
 ) -> SSHServer<'server> {
     SSHServer::new(inbuf, outbuf)
 }
 
-#[allow(clippy::unused_async)]
-pub async fn ssh_disable() {
+pub fn ssh_disable() {
     debug!("SSH Server disabled: WIP");
     // TODO: Correctly disable/restart SSH Server and/or send messsage to user over SSH
 }
@@ -396,8 +393,8 @@ pub async fn handle_ssh_client<'a, 'b>(
     match session_type {
         SessionType::Bridge(ch) => {
             info!("Handling bridge session");
-            let chan_io: ChanInOut<'_> = ssh_server.stdio(ch).await?;
-            let (input, output) = chan_io.split();
+            let stdio: ChanInOut<'_> = ssh_server.stdio(ch).await?;
+            let (input, output) = stdio.split();
             info!("Starting bridge");
             serial_bridge(input, output, uart_buff).await?;
         }
@@ -405,18 +402,17 @@ pub async fn handle_ssh_client<'a, 'b>(
         SessionType::Sftp(ch) => {
             {
                 debug!("Handling SFTP session");
-                let sftp_io = ssh_server.stdio(ch).await?;
+                let stdio = ssh_server.stdio(ch).await?;
                 // TODO: Use a configuration flag to select the hardware specific OtaActions implementer
                 let ota_writer = storage::esp_ota::OtaWriter::new();
-                ota::run_ota_server::<storage::esp_ota::OtaWriter>(sftp_io, ota_writer).await?
+                ota::run_ota_server::<storage::esp_ota::OtaWriter>(stdio, ota_writer).await?
             }
         }
     }
     Ok(())
 }
 
-#[allow(clippy::unused_async)]
-pub async fn bridge_disable() {
+pub fn bridge_disable() {
     // disable bridge
     debug!("Bridge disabled: WIP");
     // TODO: Correctly disable/restart bridge and/or send message to user over SSH

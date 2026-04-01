@@ -19,11 +19,13 @@ pub type OtaTlvType = u8;
 pub type OtaTlvLen = u8;
 
 // TODO: We could provide a new type for better debugging information
-pub const OTA_TYPE_VALUE_SSH_STAMP: u32 = 0x7373_6873;
+pub const OTA_TYPE_VALUE_SSH_STAMP: u32 = 0x7373_6873; // 'sshs' big endian in ASCII
 
 pub const CHECKSUM_LEN: u32 = 32;
 /// Maximum size for LTV (Length-Type-Value) entries in OTA metadata. Used during the reading of OTA parameters.
-pub const MAX_TLV_SIZE: u32 = 257; // size_of::<OtaTlvType>() + size_of::<OtaTlvLen>() + u8::MAX = 1 + 1 + 255
+///
+/// Calculated as: `size_of::<OtaTlvType>() + size_of::<OtaTlvLen>() + u8::MAX = 1 + 1 + 255 = 257`
+pub const MAX_TLV_SIZE: u32 = 257;
 
 /// Encodes the length and value of a sized values
 fn enc_len_val<SE>(
@@ -66,7 +68,7 @@ pub const SHA256_CHECKSUM: OtaTlvType = 2;
 /// This TLV does not capture length as it will be captured during parsing
 /// Parsing will be done using sshwire types
 #[derive(Debug)]
-#[repr(u8)]
+#[repr(u8)] // Must match the type of OtaTlvType
 pub enum Tlv {
     /// Type of OTA update. This **MUST be the first Tlv**.
     /// For SSH Stamp, this must be `OTA_FIRMWARE_BLOB_TYPE`
@@ -131,7 +133,7 @@ impl<'de> SSHDecode<'de> for Tlv {
             _ => {
                 error!("Unknown TLV type encountered: {tlv_type}");
                 let len = OtaTlvLen::dec(s)?;
-                s.take(len as usize)?;
+                s.take(len as usize)?; // Skip unknown TLV value
                 Err(sunset::sshwire::WireError::UnknownPacket { number: tlv_type })
             }
         })

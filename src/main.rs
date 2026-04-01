@@ -51,8 +51,7 @@ cfg_if::cfg_if! {
     }
 }
 
-#[allow(clippy::unused_async)]
-pub async fn peripherals_disable() {
+pub fn peripherals_disable() {
     // drop peripherals
     debug!("Disabling peripherals: WIP");
 }
@@ -102,7 +101,7 @@ async fn main(spawner: Spawner) -> ! {
             panic!("Could not acquire flash storage lock");
         };
         let mut flash_storage = flash_storage_guard.lock().await;
-        ssh_stamp::store::load_or_create(&mut flash_storage).await
+        ssh_stamp::store::load_or_create(&mut flash_storage)
     }
     .expect("Could not load or create SSHStampConfig");
 
@@ -191,7 +190,7 @@ async fn main(spawner: Spawner) -> ! {
         }
     }
 
-    peripherals_disable().await;
+    peripherals_disable();
     // loop {}
     warn!("End of Main... Reset!!");
     software_reset();
@@ -225,7 +224,7 @@ async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Err
         }
     }
 
-    net::wifi_controller_disable().await;
+    net::wifi_controller_disable();
     Ok(()) // todo!() return relevant value
 }
 
@@ -256,7 +255,7 @@ pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(
             error!("AP Stack error: {e}");
         }
     }
-    net::ap_stack_disable().await;
+    net::ap_stack_disable();
     Ok(()) // todo!() return relevant value
 }
 
@@ -286,7 +285,7 @@ async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> 
                     .await
                 {
                     info!("connect error: {:?}", e);
-                    net::tcp_socket_disable().await;
+                    net::tcp_socket_disable();
                 }
                 info!("Connected, port 22");
             } else {
@@ -305,7 +304,7 @@ async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> 
                 error!("TCP socket error: {e}");
             }
         }
-        net::tcp_socket_disable().await;
+        net::tcp_socket_disable();
     }
     // Ok(()) // todo!() return relevant value
 }
@@ -324,7 +323,7 @@ async fn socket_enabled(s: TCPEnabled<'_>) -> Result<(), sunset::Error> {
     let mut inbuf = [0u8; UART_BUFFER_SIZE];
     let mut outbuf = [0u8; UART_BUFFER_SIZE];
     debug!("HSM: Starting ssh_server");
-    let ssh_server = serve::ssh_wait_for_initialisation(&mut inbuf, &mut outbuf).await;
+    let ssh_server = serve::ssh_wait_for_initialisation(&mut inbuf, &mut outbuf);
     debug!("HSM: Started ssh_server");
 
     let socket_enabled_struct = SocketEnabled {
@@ -340,7 +339,7 @@ async fn socket_enabled(s: TCPEnabled<'_>) -> Result<(), sunset::Error> {
         }
     }
 
-    serve::ssh_disable().await;
+    serve::ssh_disable();
     // }
     Ok(()) // todo!() return relevant value
 }
@@ -381,7 +380,7 @@ async fn ssh_enabled(s: SocketEnabled<'_>) -> Result<(), sunset::Error> {
         }
     }
 
-    serve::connection_disable().await;
+    serve::connection_disable();
     // }
     Ok(()) // todo!() return relevant value
 }
@@ -420,7 +419,7 @@ where
         }
     }
 
-    serve::bridge_disable().await;
+    serve::bridge_disable();
 
     Ok(())
 }

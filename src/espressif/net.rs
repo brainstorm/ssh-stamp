@@ -84,7 +84,7 @@ pub async fn if_up(
                 panic!("Flash storage not initialized; cannot persist wifi password");
             };
             let mut flash_storage = flash_storage_guard.lock().await;
-            if let Err(e) = store::save(&mut flash_storage, &guard).await {
+            if let Err(e) = store::save(&mut flash_storage, &guard) {
                 panic!("Failed to persist generated wifi password: {:?}", e);
             }
         }
@@ -115,8 +115,7 @@ pub async fn if_up(
     let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(gw_ip_addr_ipv4, 24),
         gateway: Some(gw_ip_addr_ipv4),
-        #[allow(clippy::default_trait_access)]
-        dns_servers: Default::default(),
+        dns_servers: heapless::Vec::new(),
     });
 
     let seed = u64::from(rng.random()) << 32 | u64::from(rng.random());
@@ -146,15 +145,13 @@ pub async fn if_up(
     Ok(ap_stack)
 }
 
-#[allow(clippy::unused_async)]
-pub async fn ap_stack_disable() {
+pub fn ap_stack_disable() {
     // drop ap_stack
     debug!("AP Stack disabled: WIP");
     // TODO: Correctly disable/restart AP Stack and/or send messsage to user over SSH
 }
 
-#[allow(clippy::unused_async)]
-pub async fn tcp_socket_disable() {
+pub fn tcp_socket_disable() {
     // drop tcp stack
     debug!("TCP socket disabled: WIP");
     // TODO: Correctly disable/restart tcp socket and/or send messsage to user over SSH
@@ -177,7 +174,7 @@ pub async fn accept_requests<'a>(
     {
         error!("connect error: {e:?}");
         // continue;
-        tcp_socket_disable().await;
+        tcp_socket_disable();
     }
     debug!("Connected, port 22");
 
@@ -258,8 +255,7 @@ pub async fn wifi_up(
     }
 }
 
-#[allow(clippy::unused_async)]
-pub async fn wifi_controller_disable() {
+pub fn wifi_controller_disable() {
     // TODO: Correctly disable wifi controller
     // pub async fn wifi_disable(wifi_controller: EspWifiController<'_>) -> (){
     // drop wifi controller
