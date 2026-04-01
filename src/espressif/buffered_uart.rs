@@ -171,8 +171,7 @@ pub struct UartPins<'a> {
 pub static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();
 pub static UART_SIGNAL: Signal<CriticalSectionRawMutex, u8> = Signal::new();
 
-#[allow(clippy::unused_async)]
-pub async fn uart_buffer_wait_for_initialisation() -> &'static BufferedUart {
+pub fn uart_buffer_wait_for_initialisation() -> &'static BufferedUart {
     UART_BUF.init_with(BufferedUart::new)
 }
 

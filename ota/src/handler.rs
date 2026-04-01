@@ -169,13 +169,13 @@ impl<W: OtaActions> UpdateProcessor<W> {
                     self.state = UpdateProcessorState::Error(OtaError::IllegalOperation);
                     return Err(OtaError::IllegalOperation);
                 }
-                info!("Received Ota type: {ota_type:?}");
+                debug!("Received Ota type: {ota_type:?}");
                 self.header.ota_type = Some(ota_type);
                 self.tlv_holder.fill(0);
                 self.current_len = 0;
             }
             tlv::Tlv::Sha256Checksum { checksum } => {
-                info!("Received Checksum: {checksum:?}");
+                debug!("Received Checksum: {checksum:?}");
                 if self.header.ota_type.is_none() {
                     error!("UpdateProcessor: Received SHA256 Checksum TLV before OTA Type TLV");
                     self.state = UpdateProcessorState::Error(OtaError::IllegalOperation);
@@ -193,7 +193,7 @@ impl<W: OtaActions> UpdateProcessor<W> {
     }
 
     async fn handle_firmware_blob(&mut self, size: u32) -> Result<(), OtaError> {
-        info!("Received FirmwareBlob size: {size:?}");
+        debug!("Received FirmwareBlob size: {size:?}");
         if self.header.ota_type.is_none() {
             error!("UpdateProcessor: Received FirmwareBlob TLV before OTA Type TLV");
             self.state = UpdateProcessorState::Error(OtaError::IllegalOperation);
@@ -217,11 +217,11 @@ impl<W: OtaActions> UpdateProcessor<W> {
         }
         self.header.firmware_blob_size = Some(size);
 
-        info!("Starting OTA update");
+        debug!("Starting OTA update");
         self.state = UpdateProcessorState::Downloading {
             total_received_size: 0,
         };
-        info!("Transitioning to Downloading state");
+        debug!("Transitioning to Downloading state");
         Ok(())
     }
 
@@ -277,7 +277,7 @@ impl<W: OtaActions> UpdateProcessor<W> {
 
         if *total_received_size >= total_blob_size {
             self.verify_checksum()?;
-            info!("All firmware data received, transitioning to Finished state");
+            debug!("All firmware data received, transitioning to Finished state");
             self.state = UpdateProcessorState::Finished {};
         } else {
             self.state = UpdateProcessorState::Downloading {
@@ -295,7 +295,7 @@ impl<W: OtaActions> UpdateProcessor<W> {
 
         let computed = self.hasher.clone().finalize();
         if original_hash.as_slice() == computed.as_slice() {
-            info!("UpdateProcessor: Checksum verified successfully");
+            debug!("UpdateProcessor: Checksum verified successfully");
         } else {
             error!(
                 "UpdateProcessor: Checksum mismatch after download! Expected: {original_hash:x?}`"

@@ -8,7 +8,7 @@
 ///
 /// If you are looking into improving this, consider looking into [proto.rs](https://github.com/mkj/sunset/blob/8e5d20916cf7b29111b90e4d3b7bb7827c9be8e5/sftp/src/proto.rs)
 /// for an example on how to automate the generation of protocols with macros
-use log::{debug, error, info, warn};
+use log::{debug, error, warn};
 use sunset::sshwire::{SSHDecode, SSHEncode, SSHSource, WireError};
 
 use crate::tlv;
@@ -187,7 +187,7 @@ impl<'a> TlvsSource<'a> {
             tlv_holder[*current_len..*current_len + to_read].copy_from_slice(type_len_bytes);
             *current_len += to_read;
             if needed < to_read {
-                info!("Will get more data to complete TLV type/length");
+                debug!("Will get more data to complete TLV type/length");
                 return Err(WireError::RanOut);
             }
         }
@@ -211,7 +211,7 @@ impl<'a> TlvsSource<'a> {
             tlv_holder[*current_len..*current_len + to_read].copy_from_slice(needed_type_len_bytes);
             *current_len += to_read;
             if needed < to_read {
-                info!("Will get more data to complete TLV type/length");
+                debug!("Will get more data to complete TLV type/length");
                 return Err(WireError::RanOut);
             }
         }

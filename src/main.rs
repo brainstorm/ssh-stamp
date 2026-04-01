@@ -284,10 +284,10 @@ async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> 
                     })
                     .await
                 {
-                    info!("connect error: {:?}", e);
+                    error!("connect error: {:?}", e);
                     net::tcp_socket_disable();
                 }
-                info!("Connected, port 22");
+                debug!("Connected, port 22");
             } else {
                 let tcp_socket = net::accept_requests(s.tcp_stack, &mut rx_buffer, &mut tx_buffer).await;
             }
