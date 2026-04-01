@@ -127,7 +127,7 @@ impl<'de> SSHDecode<'de> for Tlv {
             // To handle unknown TLVs, it consumes the announced len
             // and returns an UnknownVariant error
             _ => {
-                warn!("Unknown TLV type encountered: {}. Skipping it", tlv_type);
+                error!("Unknown TLV type encountered: {}", tlv_type);
                 let len = OtaTlvLen::dec(s)?;
                 s.take(len as usize)?; // Skip unknown TLV value
                 Err(sunset::sshwire::WireError::UnknownPacket { number: tlv_type })

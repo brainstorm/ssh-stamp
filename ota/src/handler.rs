@@ -205,13 +205,10 @@ impl<W: OtaActions> UpdateProcessor<W> {
                                     UpdateProcessorState::Error(OtaError::IllegalOperation);
                                 return Err(OtaError::IllegalOperation);
                             }
-                            // Skip this TLV and continue
-                                                            self.tlv_holder.fill(0);
-                                self.current_len = 0;
-                            // self.state = UpdateProcessorState::ReadingParameters {
-                            //     tlv_holder: [0; tlv::MAX_TLV_SIZE as usize],
-                            //     current_len: 0,
-                            // }
+                            // A crafted TLV with an arbitrary length could be used to confuse the UpdateProcessor
+                            // leading to an unknown behaviour. To avoid this, unknown TLVs will thrown an error
+                            return Err(OtaError::UnknownTlvType);
+
                         }
                         Err(WireError::RanOut) => {
                             // Keep current data and wait for more
@@ -390,4 +387,6 @@ pub(crate) enum OtaError {
     WriteError,
     /// Verification of the downloaded firmware failed
     VerificationFailed,
+    /// Unknown TLV Type encountered during processing
+    UnknownTlvType,
 }
