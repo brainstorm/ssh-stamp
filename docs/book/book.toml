@@ -1,0 +1,5 @@
+[book]
+authors = ["Roman Valls Guimera"]
+language = "en"
+src = "src"
+title = "The making of SSH Stamp"
