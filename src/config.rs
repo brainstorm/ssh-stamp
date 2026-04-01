@@ -18,9 +18,7 @@ use sunset::{
 };
 
 use crate::errors::Error;
-use crate::settings::{
-    DEFAULT_SSID, DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS, WIFI_PASSWORD_CHARS,
-};
+use crate::settings::{DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS, WIFI_PASSWORD_CHARS};
 
 #[derive(Debug, PartialEq)]
 pub struct SSHStampConfig {
@@ -90,7 +88,7 @@ impl SSHStampConfig {
     pub fn new() -> Result<Self> {
         let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
 
-        let wifi_ssid = Self::default_ssid();
+        let wifi_ssid = Self::generate_wifi_ssid()?;
         let mac = Efuse::mac_address();
         let wifi_pw = Some(Self::generate_wifi_password()?);
 
@@ -114,6 +112,16 @@ impl SSHStampConfig {
         })
     }
 
+    fn generate_wifi_ssid() -> Result<String<32>> {
+        let mut rnd = [0u8; 16];
+        sunset::random::fill_random(&mut rnd)?;
+        let mut ssid = String::<32>::new();
+        for &byte in rnd.iter() {
+            let _ = ssid.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
+        }
+        Ok(ssid)
+    }
+
     fn generate_wifi_password() -> Result<String<63>> {
         let mut rnd = [0u8; 24];
         sunset::random::fill_random(&mut rnd)?;
@@ -125,12 +133,6 @@ impl SSHStampConfig {
     }
 
     // Password functions removed; pubkey-only auth supported.
-
-    pub(crate) fn default_ssid() -> String<32> {
-        let mut s = String::<32>::new();
-        s.push_str(DEFAULT_SSID).unwrap();
-        s
-    }
 
     pub(crate) fn add_pubkey(&mut self, key_str: &str) -> Result<(), Error> {
         // Accept OpenSSH public key format (e.g. "ssh-ed25519 AAAA...") and

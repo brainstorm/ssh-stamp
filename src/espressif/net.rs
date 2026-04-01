@@ -5,7 +5,7 @@
 use log::{debug, error, info, warn};
 
 use crate::config::SSHStampConfig;
-use crate::settings::{DEFAULT_IP, DEFAULT_SSID, WIFI_PASSWORD_CHARS};
+use crate::settings::{DEFAULT_IP, WIFI_PASSWORD_CHARS};
 use core::net::Ipv4Addr;
 use core::net::SocketAddrV4;
 use edge_dhcp;
@@ -177,20 +177,10 @@ pub async fn accept_requests<'a>(
     tcp_socket
 }
 
-/// Returns the configured WiFi SSID from the config, or the default SSID if not set.
+/// Returns the configured WiFi SSID from the config.
 pub async fn wifi_ssid(config: &'static SunsetMutex<SSHStampConfig>) -> String<63> {
     let guard = config.lock().await;
-    let ssid_src = if !guard.wifi_ssid.is_empty() {
-        guard.wifi_ssid.as_str()
-    } else {
-        DEFAULT_SSID
-    };
-
-    String::<63>::try_from(ssid_src).unwrap_or_else(|_| {
-        let mut fallback = String::<63>::new();
-        fallback.push_str(DEFAULT_SSID).ok();
-        fallback
-    })
+    String::<63>::try_from(guard.wifi_ssid.as_str()).expect("SSID should always be set")
 }
 
 /// Returns the WiFi password from the config.
