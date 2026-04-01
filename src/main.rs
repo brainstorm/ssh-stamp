@@ -31,8 +31,9 @@ use embassy_futures::select::{Either3, select3};
 use embassy_net::{Stack, tcp::TcpSocket};
 use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
 use esp_hal::interrupt::{Priority, software::SoftwareInterruptControl};
+use esp_hal::peripherals::WIFI;
+use esp_hal::rng::{Rng, TrngSource};
 use esp_hal::system::software_reset;
-use esp_hal::{peripherals::WIFI, rng::Rng};
 
 use esp_println::logger;
 
@@ -79,8 +80,14 @@ async fn main(spawner: Spawner) -> ! {
 
     // System init
     let peripherals = esp_hal::init(esp_hal::Config::default());
-    let rng = Rng::new();
-    rng::register_custom_rng(rng);
+
+    // Enable true random number generation using ADC entropy source before config creation.
+    // The ESP32 hardware RNG only produces true random numbers when RF subsystem is enabled
+    // OR ADC entropy source is active. This ensures WiFi password and SSH hostkey use
+    // cryptographically secure random values.
+    // See: https://github.com/brainstorm/ssh-stamp/issues/10
+    // See: https://github.com/esp-rs/esp-hal/pull/3829
+    let trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
 
     debug!("Initialising flash ");
 
@@ -92,6 +99,7 @@ async fn main(spawner: Spawner) -> ! {
             .expect("Failed to validate the current ota partition");
     }
     // Read SSH configuration from Flash (if it exists)
+    // Config creation now uses true random numbers from ADC entropy source
     debug!("Loading config ");
     let flash_config = {
         let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
@@ -101,6 +109,15 @@ async fn main(spawner: Spawner) -> ! {
         ssh_stamp::store::load_or_create(&mut flash_storage).await
     }
     .expect("Could not load or create SSHStampConfig");
+
+    // Drop the entropy source to free ADC1 for potential other uses
+    // After this, RNG reads will be pseudo-random until WiFi is initialized (RF enabled)
+    drop(trng_source);
+
+    // Switch to regular Rng for WiFi operations
+    // The RF subsystem will be enabled by esp_radio::init later, providing entropy
+    let rng = Rng::new();
+    rng::register_custom_rng(rng);
 
     debug!("Initialising config ");
     static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
