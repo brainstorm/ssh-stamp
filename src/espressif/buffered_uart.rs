@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /// Wrapper around bidirectional embassy-sync Pipes, in order to handle UART
-/// RX/RX happening in an InterruptExecutor at higher priority.
+/// RX/RX happening in an `InterruptExecutor` at higher priority.
 ///
-/// Doesn't implement the InterruptExecutor, in the task in the app should await
+/// Doesn't implement the `InterruptExecutor`, in the task in the app should await
 /// the 'run' async function.
 ///
 use crate::config::SSHStampConfig;
@@ -43,6 +43,7 @@ pub struct BufferedUart {
 pub struct UartConfig {}
 
 impl BufferedUart {
+    #[must_use]
     pub fn new() -> Self {
         BufferedUart {
             outward: Pipe::new(),
@@ -54,7 +55,7 @@ impl BufferedUart {
     /// Transfer data between the UART and the buffer struct.
     ///
     /// This should be awaited from an Embassy task that's run
-    /// in an InterruptExecutor for lower latency.
+    /// in an `InterruptExecutor` for lower latency.
     pub async fn run(&self, uart: Uart<'_, Async>) {
         let (mut uart_rx, mut uart_tx) = uart.split();
         let mut uart_rx_buf = [0u8; UART_BUF_SZ];
@@ -204,5 +205,5 @@ pub async fn uart_task(
             error!("Uart config error {e}. Resetting.");
             software_reset();
         }
-    };
+    }
 }

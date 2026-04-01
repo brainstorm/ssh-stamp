@@ -66,7 +66,7 @@ pub async fn if_up(
             }
 
             let mut pw = String::<63>::new();
-            for &byte in rnd.iter() {
+            for &byte in &rnd {
                 let _ = pw.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
             }
 
@@ -101,7 +101,7 @@ pub async fn if_up(
             .with_password(AllocString::from(wifi_password(config).await.as_str())),
     );
     let res = wifi_controller.set_config(&ap_config);
-    debug!("wifi_set_configuration returned {:?}", res);
+    debug!("wifi_set_configuration returned {res:?}");
 
     let gw_ip_addr_ipv4 = *DEFAULT_IP;
 
@@ -111,7 +111,7 @@ pub async fn if_up(
         dns_servers: Default::default(),
     });
 
-    let seed = (rng.random() as u64) << 32 | rng.random() as u64;
+    let seed = u64::from(rng.random()) << 32 | u64::from(rng.random());
 
     // Init network stack
     let (ap_stack, runner) = embassy_net::new(
@@ -133,10 +133,7 @@ pub async fn if_up(
         Timer::after(Duration::from_millis(500)).await;
     }
 
-    info!(
-        "Connect to the AP `ssh-stamp` as a DHCP client with IP: {}",
-        gw_ip_addr_ipv4
-    );
+    info!("Connect to the AP `ssh-stamp` as a DHCP client with IP: {gw_ip_addr_ipv4}");
 
     Ok(ap_stack)
 }
@@ -168,7 +165,7 @@ pub async fn accept_requests<'a>(
         })
         .await
     {
-        error!("connect error: {:?}", e);
+        error!("connect error: {e:?}");
         // continue;
         tcp_socket_disable().await;
     }
@@ -177,35 +174,35 @@ pub async fn accept_requests<'a>(
     tcp_socket
 }
 
-/// Returns the configured WiFi SSID from the config, or the default SSID if not set.
+/// Returns the configured `WiFi` SSID from the config, or the default SSID if not set.
 pub async fn wifi_ssid(config: &'static SunsetMutex<SSHStampConfig>) -> String<63> {
     let guard = config.lock().await;
-    let ssid_src = if !guard.wifi_ssid.is_empty() {
-        guard.wifi_ssid.as_str()
-    } else {
+    let ssid_src = if guard.wifi_ssid.is_empty() {
         DEFAULT_SSID
+    } else {
+        guard.wifi_ssid.as_str()
     };
 
-    String::<63>::try_from(ssid_src).unwrap_or_else(|_| {
+    String::<63>::try_from(ssid_src).unwrap_or_else(|()| {
         let mut fallback = String::<63>::new();
         fallback.push_str(DEFAULT_SSID).ok();
         fallback
     })
 }
 
-/// Returns the WiFi password from the config.
-/// Panics if wifi_pw is not set in the config.
+/// Returns the `WiFi` password from the config.
+/// Panics if `wifi_pw` is not set in the config.
 pub async fn wifi_password(config: &'static SunsetMutex<SSHStampConfig>) -> String<63> {
     let guard = config.lock().await;
     match &guard.wifi_pw {
-        Some(pw) => String::<63>::try_from(pw.as_str()).unwrap_or_else(|_| {
+        Some(pw) => String::<63>::try_from(pw.as_str()).unwrap_or_else(|()| {
             panic!("wifi_pw stored value exceeds 63 characters");
         }),
         None => panic!("wifi_pw must be set before calling wifi_password()"),
     }
 }
 
-/// Manages the WiFi access point lifecycle.
+/// Manages the `WiFi` access point lifecycle.
 /// Starts the AP with the configured SSID and password from the config.
 /// Handles reconnection if the AP stops.
 #[embassy_executor::task]
@@ -229,17 +226,17 @@ pub async fn wifi_up(
 
         if esp_radio::wifi::ap_state() == WifiApState::Started {
             wifi_controller.wait_for_event(WifiEvent::ApStop).await;
-            Timer::after(Duration::from_millis(5000)).await
+            Timer::after(Duration::from_millis(5000)).await;
         }
         if !matches!(wifi_controller.is_started(), Ok(true)) {
             if let Err(e) = wifi_controller.set_config(&client_config) {
-                debug!("Failed to set wifi config: {:?}", e);
+                debug!("Failed to set wifi config: {e:?}");
                 Timer::after(Duration::from_millis(1000)).await;
                 continue;
             }
             debug!("Starting wifi");
             if let Err(e) = wifi_controller.start_async().await {
-                debug!("Failed to start wifi: {:?}", e);
+                debug!("Failed to start wifi: {e:?}");
                 Timer::after(Duration::from_millis(1000)).await;
                 continue;
             }
@@ -263,7 +260,7 @@ use esp_radio::wifi::WifiDevice;
 #[embassy_executor::task]
 async fn net_up(mut runner: Runner<'static, WifiDevice<'static>>) {
     debug!("Bringing up network stack...\n");
-    runner.run().await
+    runner.run().await;
 }
 
 #[embassy_executor::task]

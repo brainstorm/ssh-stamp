@@ -181,9 +181,9 @@ async fn main(spawner: Spawner) -> ! {
     };
 
     match peripherals_enabled(peripherals_enabled_struct).await {
-        Ok(_) => (),
+        Ok(()) => (),
         Err(e) => {
-            error!("Peripheral error: {}", e);
+            error!("Peripheral error: {e}");
         }
     }
 
@@ -215,9 +215,9 @@ async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Err
         spawner: s.spawner,
     };
     match wifi_controller_enabled(peripherals_enabled_struct).await {
-        Ok(_) => (),
+        Ok(()) => (),
         Err(e) => {
-            error!("Wifi controller error: {}", e);
+            error!("Wifi controller error: {e}");
         }
     }
 
@@ -243,9 +243,9 @@ pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(
         tcp_stack,
     };
     match tcp_enabled(wifi_controller_enabled_stack).await {
-        Ok(_) => (),
+        Ok(()) => (),
         Err(e) => {
-            error!("AP Stack error: {}", e);
+            error!("AP Stack error: {e}");
         }
     }
     net::ap_stack_disable().await;
@@ -292,9 +292,9 @@ async fn tcp_enabled<'a>(s: WifiControllerEnabled<'a>) -> Result<(), sunset::Err
             uart_buf: s.uart_buf,
         };
         match socket_enabled(tcp_enabled_struct).await {
-            Ok(_) => (),
+            Ok(()) => (),
             Err(e) => {
-                error!("TCP socket error: {}", e);
+                error!("TCP socket error: {e}");
             }
         }
         net::tcp_socket_disable().await;
@@ -326,9 +326,9 @@ async fn socket_enabled<'a>(s: TCPEnabled<'a>) -> Result<(), sunset::Error> {
         uart_buf: s.uart_buf,
     };
     match ssh_enabled(socket_enabled_struct).await {
-        Ok(_) => (),
+        Ok(()) => (),
         Err(e) => {
-            error!("SSH server error: {}", e);
+            error!("SSH server error: {e}");
         }
     }
 
@@ -367,9 +367,9 @@ async fn ssh_enabled<'a>(s: SocketEnabled<'a>) -> Result<(), sunset::Error> {
         connection_loop: connection,
     };
     match client_connected(ssh_enabled_struct).await {
-        Ok(_) => (),
+        Ok(()) => (),
         Err(e) => {
-            error!("Client connection error: {}", e);
+            error!("Client connection error: {e}");
         }
     }
 
@@ -406,9 +406,9 @@ where
         tcp_socket: s.tcp_socket,
     };
     match bridge_connected(uart_enabled_struct).await {
-        Ok(_) => (),
+        Ok(()) => (),
         Err(e) => {
-            debug!("Bridge error: {}", e);
+            debug!("Bridge error: {e}");
         }
     }
 

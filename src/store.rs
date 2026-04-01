@@ -14,7 +14,7 @@ use crate::config::SSHStampConfig;
 use storage::flash::FlashBuffer;
 
 use sunset::sshwire::{self, OwnOrBorrow};
-use sunset_sshwire_derive::*;
+use sunset_sshwire_derive::{SSHDecode, SSHEncode};
 
 // TODO: [Nice to have] Read the right partition and write there instead of hardcoding offset and size.
 pub const CONFIG_VERSION_SIZE: usize = 4;
@@ -44,7 +44,7 @@ impl FlashConfig<'_> {
             &mut fb.buf[..esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN],
         )
         .map_err(|e| {
-            error!("Failed to read partition table: {:?}", e);
+            error!("Failed to read partition table: {e:?}");
             SSHStampError::FlashStorageError
         })?;
 
@@ -73,7 +73,7 @@ fn config_hash(config: &SSHStampConfig) -> Result<[u8; 32], SunsetError> {
     Ok(h.finalize().into())
 }
 
-/// Loads a SSHConfig at startup. Good for persisting hostkeys.
+/// Loads a `SSHConfig` at startup. Good for persisting hostkeys.
 pub async fn load_or_create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
     match load(flash).await {
         Ok(c) => {
@@ -162,12 +162,12 @@ pub async fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(
             (CONFIG_OFFSET + CONFIG_AREA_SIZE) as u32,
         )
         .map_err(|e| {
-            error!("flash erase error: {:?}", e);
+            error!("flash erase error: {e:?}");
             SunsetError::msg("flash erase error")
         })?;
 
     fl.flash.write(CONFIG_OFFSET as u32, &fl.buf).map_err(|e| {
-        error!("flash write error: {:?}", e);
+        error!("flash write error: {e:?}");
         SunsetError::msg("flash write error")
     })?;
 

@@ -114,9 +114,9 @@ pub async fn connection_loop(
                     UART_SIGNAL.signal(1);
                     debug!("Connection loop: UART_SIGNAL sent");
                     match chan_pipe.try_send(SessionType::Bridge(ch)) {
-                        Ok(_) => auth_checked = false,
-                        Err(e) => log::error!("Could not send the channel: {:?}", e),
-                    };
+                        Ok(()) => auth_checked = false,
+                        Err(e) => log::error!("Could not send the channel: {e:?}"),
+                    }
                 } else {
                     a.fail()?;
                 }
@@ -223,12 +223,7 @@ pub async fn connection_loop(
                     }
                     "SSH_STAMP_WIFI_SSID" => {
                         let mut config_guard = config.lock().await;
-                        if !(auth_checked || config_guard.first_login) {
-                            warn!(
-                                "SSH_STAMP_WIFI_SSID env received but not authenticated; rejecting"
-                            );
-                            a.fail()?;
-                        } else {
+                        if auth_checked || config_guard.first_login {
                             let mut s = String::<32>::new();
                             if s.push_str(a.value()?).is_ok() {
                                 config_guard.wifi_ssid = s;
@@ -240,16 +235,16 @@ pub async fn connection_loop(
                                 warn!("SSH_STAMP_WIFI_SSID too long");
                                 a.fail()?;
                             }
+                        } else {
+                            warn!(
+                                "SSH_STAMP_WIFI_SSID env received but not authenticated; rejecting"
+                            );
+                            a.fail()?;
                         }
                     }
                     "SSH_STAMP_WIFI_PSK" => {
                         let mut config_guard = config.lock().await;
-                        if !(auth_checked || config_guard.first_login) {
-                            warn!(
-                                "SSH_STAMP_WIFI_PSK env received but not authenticated; rejecting"
-                            );
-                            a.fail()?;
-                        } else {
+                        if auth_checked || config_guard.first_login {
                             let value = a.value()?;
                             if value.len() < 8 {
                                 warn!("SSH_STAMP_WIFI_PSK too short (min 8 characters)");
@@ -270,23 +265,18 @@ pub async fn connection_loop(
                                     a.fail()?;
                                 }
                             }
+                        } else {
+                            warn!(
+                                "SSH_STAMP_WIFI_PSK env received but not authenticated; rejecting"
+                            );
+                            a.fail()?;
                         }
                     }
                     "SSH_STAMP_WIFI_MAC_ADDRESS" => {
                         let mut config_guard = config.lock().await;
-                        if !(auth_checked || config_guard.first_login) {
-                            warn!(
-                                "SSH_STAMP_WIFI_MAC_ADDRESS env received but not authenticated; rejecting"
-                            );
-                            a.fail()?;
-                        } else {
+                        if auth_checked || config_guard.first_login {
                             let value = a.value()?;
-                            if value.len() != 17 {
-                                warn!(
-                                    "SSH_STAMP_WIFI_MAC_ADDRESS must be XX:XX:XX:XX:XX:XX format"
-                                );
-                                a.fail()?;
-                            } else {
+                            if value.len() == 17 {
                                 let parts: heapless::Vec<u8, 6> = value
                                     .split(':')
                                     .filter_map(|p| u8::from_str_radix(p, 16).ok())
@@ -296,7 +286,7 @@ pub async fn connection_loop(
                                         parts[0], parts[1], parts[2], parts[3], parts[4], parts[5],
                                     ];
                                     config_guard.mac = mac;
-                                    debug!("Set MAC address from ENV: {:02X?}", mac);
+                                    debug!("Set MAC address from ENV: {mac:02X?}");
                                     a.succeed()?;
                                     config_changed = true;
                                     needs_reset = true;
@@ -304,22 +294,32 @@ pub async fn connection_loop(
                                     warn!("SSH_STAMP_WIFI_MAC_ADDRESS invalid format");
                                     a.fail()?;
                                 }
+                            } else {
+                                warn!(
+                                    "SSH_STAMP_WIFI_MAC_ADDRESS must be XX:XX:XX:XX:XX:XX format"
+                                );
+                                a.fail()?;
                             }
+                        } else {
+                            warn!(
+                                "SSH_STAMP_WIFI_MAC_ADDRESS env received but not authenticated; rejecting"
+                            );
+                            a.fail()?;
                         }
                     }
                     "SSH_STAMP_WIFI_MAC_RANDOM" => {
                         let mut config_guard = config.lock().await;
-                        if !(auth_checked || config_guard.first_login) {
-                            warn!(
-                                "SSH_STAMP_WIFI_MAC_RANDOM env received but not authenticated; rejecting"
-                            );
-                            a.fail()?;
-                        } else {
+                        if auth_checked || config_guard.first_login {
                             config_guard.mac = [0xFF; 6];
                             debug!("Set MAC address to random mode");
                             a.succeed()?;
                             config_changed = true;
                             needs_reset = true;
+                        } else {
+                            warn!(
+                                "SSH_STAMP_WIFI_MAC_RANDOM env received but not authenticated; rejecting"
+                            );
+                            a.fail()?;
                         }
                     }
                     _ => {
@@ -344,7 +344,7 @@ pub async fn connection_loop(
             }
             ServEvent::Defunct => {
                 debug!("Expected caller to handle event");
-                error::BadUsage.fail()?
+                error::BadUsage.fail()?;
             }
             ServEvent::PollAgain => {}
         }
@@ -386,7 +386,7 @@ pub async fn handle_ssh_client<'a, 'b>(
             let stdio: ChanInOut<'_> = ssh_server.stdio(ch).await?;
             let (stdin, stdout) = stdio.split();
             info!("Starting bridge");
-            serial_bridge(stdin, stdout, uart_buff).await?
+            serial_bridge(stdin, stdout, uart_buff).await?;
         }
         #[cfg(feature = "sftp-ota")]
         SessionType::Sftp(ch) => {
@@ -398,7 +398,7 @@ pub async fn handle_ssh_client<'a, 'b>(
                 ota::run_ota_server::<storage::esp_ota::OtaWriter>(stdio, ota_writer).await?
             }
         }
-    };
+    }
     Ok(())
 }
 

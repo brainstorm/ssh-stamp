@@ -29,7 +29,7 @@ pub struct SSHStampConfig {
     /// Authentication: only pubkey-based auth supported
     pub pubkeys: [Option<Ed25519PubKey>; KEY_SLOTS],
 
-    /// WiFi
+    /// `WiFi`
     pub wifi_ssid: String<32>,
     pub wifi_pw: Option<String<63>>, // Max 64 characters including null-terminator?
 
@@ -71,6 +71,7 @@ impl SSHStampConfig {
     pub const CURRENT_VERSION: u8 = 9;
 
     /// Check if configured for random MAC on each boot
+    #[must_use]
     pub fn is_mac_random(&self) -> bool {
         self.mac == MAC_RANDOM_SENTINEL
     }
@@ -118,7 +119,7 @@ impl SSHStampConfig {
         let mut rnd = [0u8; 24];
         sunset::random::fill_random(&mut rnd)?;
         let mut pw = String::<63>::new();
-        for &byte in rnd.iter() {
+        for &byte in &rnd {
             let _ = pw.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
         }
         Ok(pw)
@@ -154,7 +155,7 @@ impl SSHStampConfig {
                 };
 
                 debug!("Parsed Ed25519 public key, adding to config");
-                for slot in self.pubkeys.iter_mut() {
+                for slot in &mut self.pubkeys {
                     if slot.is_none() {
                         *slot = Some(newk);
                         return Ok(());
@@ -229,7 +230,7 @@ fn enc_ipv4_config(v: &Option<StaticConfigV4>, s: &mut dyn SSHSink) -> WireResul
         debug!("enc_ipv4_config: prefix = {}", &v.address.prefix_len());
         v.address.prefix_len().enc(s)?;
         // to u32
-        let gw = v.gateway.map(|a| a.to_bits());
+        let gw = v.gateway.map(embassy_net::Ipv4Address::to_bits);
         enc_option(&gw, s)?;
     }
     Ok(())
@@ -300,7 +301,7 @@ impl SSHEncode for SSHStampConfig {
     fn enc(&self, s: &mut dyn SSHSink) -> WireResult<()> {
         enc_signkey(&self.hostkey, s)?;
 
-        for k in self.pubkeys.iter() {
+        for k in &self.pubkeys {
             enc_option(k, s)?;
         }
 
@@ -331,7 +332,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         let hostkey = dec_signkey(s)?;
 
         let mut pubkeys = [None; KEY_SLOTS];
-        for k in pubkeys.iter_mut() {
+        for k in &mut pubkeys {
             *k = dec_option(s)?;
         }
 
