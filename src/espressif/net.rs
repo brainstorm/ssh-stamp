@@ -5,7 +5,7 @@
 use log::{debug, error, info, warn};
 
 use crate::config::SSHStampConfig;
-use crate::settings::{DEFAULT_IP, DEFAULT_SSID, WIFI_PASSWORD_CHARS};
+use crate::settings::{DEFAULT_IP, WIFI_PASSWORD_CHARS};
 use core::net::Ipv4Addr;
 use core::net::SocketAddrV4;
 use edge_dhcp;
@@ -101,9 +101,11 @@ pub async fn if_up(
         Efuse::set_mac_address(mac).map_err(|_| sunset::error::BadUsage.build())?;
     }
 
+    let ssid_name = wifi_ssid(config).await;
+
     let ap_config = ModeConfig::AccessPoint(
         AccessPointConfig::default()
-            .with_ssid(AllocString::from(wifi_ssid(config).await.as_str()))
+            .with_ssid(AllocString::from(ssid_name.as_str()))
             .with_auth_method(Wpa2Wpa3Personal)
             .with_password(AllocString::from(wifi_password(config).await.as_str())),
     );
@@ -140,7 +142,10 @@ pub async fn if_up(
         Timer::after(Duration::from_millis(500)).await;
     }
 
-    info!("Connect to the AP `ssh-stamp` as a DHCP client with IP: {gw_ip_addr_ipv4}");
+    info!(
+        "Connect to the AP `{}` as a DHCP client with IP: {}",
+        ssid_name, gw_ip_addr_ipv4
+    );
 
     Ok(ap_stack)
 }
@@ -181,20 +186,10 @@ pub async fn accept_requests<'a>(
     tcp_socket
 }
 
-/// Returns the configured `WiFi` SSID from the config, or the default SSID if not set.
+/// Returns the configured WiFi SSID from the config.
 pub async fn wifi_ssid(config: &'static SunsetMutex<SSHStampConfig>) -> String<63> {
     let guard = config.lock().await;
-    let ssid_src = if guard.wifi_ssid.is_empty() {
-        DEFAULT_SSID
-    } else {
-        guard.wifi_ssid.as_str()
-    };
-
-    String::<63>::try_from(ssid_src).unwrap_or_else(|()| {
-        let mut fallback = String::<63>::new();
-        fallback.push_str(DEFAULT_SSID).ok();
-        fallback
-    })
+    String::<63>::try_from(guard.wifi_ssid.as_str()).expect("SSID should always be set")
 }
 
 /// Returns the `WiFi` password from the config.

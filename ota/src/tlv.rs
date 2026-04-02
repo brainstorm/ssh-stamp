@@ -120,8 +120,8 @@ impl<'de> SSHDecode<'de> for Tlv {
                     return Err(sunset::sshwire::WireError::PacketWrong);
                 }
                 let mut checksum = [0u8; tlv::CHECKSUM_LEN as usize];
-                for element in &mut checksum {
-                    *element = u8::dec(s).unwrap_or(0);
+                for element in checksum.iter_mut() {
+                    *element = u8::dec(s)?;
                 }
                 Ok(Tlv::Sha256Checksum { checksum })
             }
@@ -186,8 +186,8 @@ impl<'a> TlvsSource<'a> {
             let type_len_bytes = self.take(to_read)?;
             tlv_holder[*current_len..*current_len + to_read].copy_from_slice(type_len_bytes);
             *current_len += to_read;
-            if needed < to_read {
-                debug!("Will get more data to complete TLV type/length");
+            if to_read < needed {
+                info!("Will get more data to complete TLV type/length");
                 return Err(WireError::RanOut);
             }
         }
@@ -210,8 +210,8 @@ impl<'a> TlvsSource<'a> {
             let needed_type_len_bytes = self.take(to_read)?;
             tlv_holder[*current_len..*current_len + to_read].copy_from_slice(needed_type_len_bytes);
             *current_len += to_read;
-            if needed < to_read {
-                debug!("Will get more data to complete TLV type/length");
+            if to_read < needed {
+                info!("Will get more data to complete TLV value");
                 return Err(WireError::RanOut);
             }
         }

@@ -14,10 +14,11 @@ static RNG: StaticCell<Rng> = StaticCell::new();
 static RNG_MUTEX: Mutex<CriticalSectionRawMutex, RefCell<Option<&'static mut Rng>>> =
     Mutex::new(RefCell::new(None));
 
+register_custom_getrandom!(esp_getrandom_custom_func);
+
 pub fn register_custom_rng(rng: Rng) {
     let rng = RNG.init(rng);
     RNG_MUTEX.lock(|t| t.borrow_mut().replace(rng));
-    register_custom_getrandom!(esp_getrandom_custom_func);
 }
 
 // esp-hal specific variation of getrandom custom function as seen in:
