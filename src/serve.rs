@@ -37,6 +37,10 @@ fn key_signature_ok(a: &ServPubkeyAuth<'_, '_>) -> bool {
     a.real()
 }
 
+fn is_valid_wifi_credential(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b.is_ascii_graphic())
+}
+
 pub async fn connection_loop(
     serv: &SSHServer<'_>,
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
@@ -230,16 +234,24 @@ pub async fn connection_loop(
                             );
                             a.fail()?;
                         } else {
-                            let mut s = String::<32>::new();
-                            if s.push_str(a.value()?).is_ok() {
-                                config_guard.wifi_ssid = s;
-                                debug!("Set wifi SSID from ENV");
-                                a.succeed()?;
-                                config_changed = true;
-                                needs_reset = true;
-                            } else {
-                                warn!("SSH_STAMP_WIFI_SSID too long");
+                            let value = a.value()?;
+                            if !is_valid_wifi_credential(value) {
+                                warn!(
+                                    "SSH_STAMP_WIFI_SSID contains invalid characters (null bytes or non-printable ASCII)"
+                                );
                                 a.fail()?;
+                            } else {
+                                let mut s = String::<32>::new();
+                                if s.push_str(value).is_ok() {
+                                    config_guard.wifi_ssid = s;
+                                    debug!("Set wifi SSID from ENV");
+                                    a.succeed()?;
+                                    config_changed = true;
+                                    needs_reset = true;
+                                } else {
+                                    warn!("SSH_STAMP_WIFI_SSID too long");
+                                    a.fail()?;
+                                }
                             }
                         }
                     }
@@ -252,7 +264,12 @@ pub async fn connection_loop(
                             a.fail()?;
                         } else {
                             let value = a.value()?;
-                            if value.len() < 8 {
+                            if !is_valid_wifi_credential(value) {
+                                warn!(
+                                    "SSH_STAMP_WIFI_PSK contains invalid characters (null bytes or non-printable ASCII)"
+                                );
+                                a.fail()?;
+                            } else if value.len() < 8 {
                                 warn!("SSH_STAMP_WIFI_PSK too short (min 8 characters)");
                                 a.fail()?;
                             } else if value.len() > 63 {
