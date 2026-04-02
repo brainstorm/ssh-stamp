@@ -94,9 +94,11 @@ pub async fn if_up(
         Efuse::set_mac_address(mac).map_err(|_| sunset::error::BadUsage.build())?;
     }
 
+    let ssid_name = wifi_ssid(config).await;
+
     let ap_config = ModeConfig::AccessPoint(
         AccessPointConfig::default()
-            .with_ssid(AllocString::from(wifi_ssid(config).await.as_str()))
+            .with_ssid(AllocString::from(ssid_name.as_str()))
             .with_auth_method(Wpa2Wpa3Personal)
             .with_password(AllocString::from(wifi_password(config).await.as_str())),
     );
@@ -134,7 +136,8 @@ pub async fn if_up(
     }
 
     info!(
-        "Connect to the AP `ssh-stamp` as a DHCP client with IP: {}",
+        "Connect to the AP `{}` as a DHCP client with IP: {}",
+        ssid_name,
         gw_ip_addr_ipv4
     );
 
