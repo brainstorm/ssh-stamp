@@ -8,7 +8,7 @@
 ///
 /// If you are looking into improving this, consider looking into [proto.rs](https://github.com/mkj/sunset/blob/8e5d20916cf7b29111b90e4d3b7bb7827c9be8e5/sftp/src/proto.rs)
 /// for an example on how to automate the generation of protocols with macros
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use sunset::sshwire::{SSHDecode, SSHEncode, SSHSource, WireError};
 
 use crate::tlv;
@@ -120,7 +120,7 @@ impl<'de> SSHDecode<'de> for Tlv {
                     return Err(sunset::sshwire::WireError::PacketWrong);
                 }
                 let mut checksum = [0u8; tlv::CHECKSUM_LEN as usize];
-                for element in checksum.iter_mut() {
+                for element in &mut checksum {
                     *element = u8::dec(s)?;
                 }
                 Ok(Tlv::Sha256Checksum { checksum })

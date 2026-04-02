@@ -20,7 +20,6 @@ use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 
 // Sunset
-use sunset::event::ServPubkeyAuth;
 use sunset::{ChanFail, ChanHandle, ServEvent, error};
 use sunset_async::SunsetMutex;
 use sunset_async::{ProgressHolder, SSHServer};
@@ -126,17 +125,8 @@ pub async fn connection_loop(
                 )
                 .await;
             }
-            ServEvent::FirstAuth(mut a) => {
-                debug!("ServEvent::FirstAuth");
-                let config_guard = config.lock().await;
-                a.enable_password_auth(false)?;
-                a.enable_pubkey_auth(true)?;
-                if config_guard.first_login {
-                    a.allow()?;
-                } else {
-                    debug!("FirstAuth received but not first-login, rejecting");
-                    a.reject()?;
-                }
+            ServEvent::FirstAuth(a) => {
+                handle_first_auth(a, config).await?;
             }
             ServEvent::Hostkeys(h) => {
                 debug!("ServEvent::Hostkeys");
@@ -146,6 +136,9 @@ pub async fn connection_loop(
             ServEvent::PasswordAuth(a) => {
                 warn!("Password auth not supported, use public key auth");
                 a.reject()?;
+            }
+            ServEvent::SessionPty(a) => {
+                handle_session_pty(a, config, auth_checked).await?;
             }
             ServEvent::PubkeyAuth(a) => {
                 debug!("ServEvent::PubkeyAuth");
@@ -178,7 +171,6 @@ pub async fn connection_loop(
                         a.reject(ChanFail::SSH_OPEN_ADMINISTRATIVELY_PROHIBITED)?;
                     }
                     None => {
-                        // Track the session
                         session = Some(a.accept()?);
                     }
                 }
@@ -193,16 +185,6 @@ pub async fn connection_loop(
                 )
                 .await?;
             }
-            ServEvent::SessionPty(a) => {
-                let first_login = { config.lock().await.first_login };
-                if auth_checked || first_login {
-                    debug!("ServEvent::SessionPty: Session granted");
-                    a.succeed()?;
-                } else {
-                    debug!("ServEvent::SessionPty: No auth not session");
-                    a.fail()?;
-                }
-            }
             ServEvent::SessionExec(a) => {
                 a.fail()?;
             }
@@ -213,6 +195,39 @@ pub async fn connection_loop(
             ServEvent::PollAgain => {}
         }
     }
+}
+
+async fn handle_first_auth(
+    mut a: sunset::event::ServFirstAuth<'_, '_>,
+    config: &SunsetMutex<SSHStampConfig>,
+) -> Result<(), sunset::Error> {
+    debug!("ServEvent::FirstAuth");
+    let config_guard = config.lock().await;
+    a.enable_password_auth(false)?;
+    a.enable_pubkey_auth(true)?;
+    if config_guard.first_login {
+        a.allow()?;
+    } else {
+        debug!("FirstAuth received but not first-login, rejecting");
+        a.reject()?;
+    }
+    Ok(())
+}
+
+async fn handle_session_pty(
+    a: sunset::event::ServPtyRequest<'_, '_>,
+    config: &SunsetMutex<SSHStampConfig>,
+    auth_checked: bool,
+) -> Result<(), sunset::Error> {
+    let first_login = { config.lock().await.first_login };
+    if auth_checked || first_login {
+        debug!("ServEvent::SessionPty: Session granted");
+        a.succeed()?;
+    } else {
+        debug!("ServEvent::SessionPty: No auth not session");
+        a.fail()?;
+    }
+    Ok(())
 }
 
 #[cfg(feature = "sftp-ota")]

@@ -120,7 +120,7 @@ impl SSHStampConfig {
         let mut rnd = [0u8; 16];
         sunset::random::fill_random(&mut rnd)?;
         let mut ssid = String::<32>::new();
-        for &byte in rnd.iter() {
+        for &byte in &rnd {
             let _ = ssid.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
         }
         Ok(ssid)

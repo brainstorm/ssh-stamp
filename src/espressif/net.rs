@@ -142,10 +142,7 @@ pub async fn if_up(
         Timer::after(Duration::from_millis(500)).await;
     }
 
-    info!(
-        "Connect to the AP `{}` as a DHCP client with IP: {}",
-        ssid_name, gw_ip_addr_ipv4
-    );
+    info!("Connect to the AP `{ssid_name}` as a DHCP client with IP: {gw_ip_addr_ipv4}");
 
     Ok(ap_stack)
 }
@@ -186,7 +183,10 @@ pub async fn accept_requests<'a>(
     tcp_socket
 }
 
-/// Returns the configured WiFi SSID from the config.
+/// Returns the configured `WiFi` SSID from the config.
+///
+/// # Panics
+/// Panics if `wifi_ssid` is not set in the config or exceeds 63 characters.
 pub async fn wifi_ssid(config: &'static SunsetMutex<SSHStampConfig>) -> String<63> {
     let guard = config.lock().await;
     String::<63>::try_from(guard.wifi_ssid.as_str()).expect("SSID should always be set")
