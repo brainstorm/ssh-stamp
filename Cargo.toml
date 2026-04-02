@@ -101,7 +101,7 @@ embedded-storage-async = "0.4"
 portable-atomic = "1"
 esp-bootloader-esp-idf = { workspace = true }
 snafu = { version = "0.8", default-features = false }
-paste = "1"
+pastey = "0.2"
 pretty-hex = { version = "0.4", default-features = false }
 
 [profile.dev]
