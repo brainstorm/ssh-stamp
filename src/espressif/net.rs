@@ -137,8 +137,7 @@ pub async fn if_up(
 
     info!(
         "Connect to the AP `{}` as a DHCP client with IP: {}",
-        ssid_name,
-        gw_ip_addr_ipv4
+        ssid_name, gw_ip_addr_ipv4
     );
 
     Ok(ap_stack)
