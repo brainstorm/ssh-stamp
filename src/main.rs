@@ -89,6 +89,15 @@ async fn main(spawner: Spawner) -> ! {
     // See: https://github.com/esp-rs/esp-hal/pull/3829
     let trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
 
+    // Drop the entropy source to free ADC1 for potential other uses
+    // After this, RNG reads will be pseudo-random until WiFi is initialized (RF enabled)
+    drop(trng_source);
+
+    // Switch to regular Rng for WiFi operations
+    // The RF subsystem will be enabled by esp_radio::init later, providing entropy
+    let rng = Rng::new();
+    rng::register_custom_rng(rng);
+
     debug!("Initialising flash ");
 
     flash::init(peripherals.FLASH);
@@ -109,15 +118,6 @@ async fn main(spawner: Spawner) -> ! {
         ssh_stamp::store::load_or_create(&mut flash_storage).await
     }
     .expect("Could not load or create SSHStampConfig");
-
-    // Drop the entropy source to free ADC1 for potential other uses
-    // After this, RNG reads will be pseudo-random until WiFi is initialized (RF enabled)
-    drop(trng_source);
-
-    // Switch to regular Rng for WiFi operations
-    // The RF subsystem will be enabled by esp_radio::init later, providing entropy
-    let rng = Rng::new();
-    rng::register_custom_rng(rng);
 
     debug!("Initialising config ");
     static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
