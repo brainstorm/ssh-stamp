@@ -177,6 +177,16 @@ esp32c3 = [
 #    "esp-storage/esp32c5",
 #    "esp-bootloader-esp-idf/esp32c5",
 #]
+#esp32c61 = [
+#    "esp-hal/esp32c61",
+#    "esp-alloc/esp32c61",
+#    "esp-backtrace/esp32c61",
+#    "esp-radio/esp32c61",
+#    "esp-rtos/esp32c61",
+#    "esp-println/esp32c61",
+#    "esp-storage/esp32c61",
+#    "esp-bootloader-esp-idf/esp32c61",
+#]
 esp32c6 = [
     "esp-hal/esp32c6",
     "esp-alloc/esp32c6",
