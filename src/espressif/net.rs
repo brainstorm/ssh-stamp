@@ -99,6 +99,8 @@ pub async fn if_up(
             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
         );
         Efuse::set_mac_address(mac).map_err(|_| sunset::error::BadUsage.build())?;
+
+        print_hostkey_fingerprint(&guard.hostkey);
     }
 
     let ssid_name = wifi_ssid(config).await;
@@ -206,7 +208,22 @@ pub async fn wifi_password(config: &'static SunsetMutex<SSHStampConfig>) -> Stri
     }
 }
 
-/// Manages the `WiFi` access point lifecycle.
+fn print_hostkey_fingerprint(hostkey: &sunset::SignKey) {
+    match hostkey {
+        sunset::SignKey::Ed25519(_) => {
+            let pubkey = hostkey.pubkey();
+            match pubkey.fingerprint(ssh_key::HashAlg::Sha256) {
+                Ok(fp) => info!("SSH hostkey fingerprint: {}", fp),
+                Err(e) => warn!("Failed to compute fingerprint: {:?}", e),
+            }
+        }
+        _ => {
+            warn!("Unsupported key type for fingerprint");
+        }
+    }
+}
+
+/// Manages the WiFi access point lifecycle.
 /// Starts the AP with the configured SSID and password from the config.
 /// Handles reconnection if the AP stops.
 #[embassy_executor::task]

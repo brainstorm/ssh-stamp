@@ -87,6 +87,10 @@ async fn save_config_and_reboot(
     }
 }
 
+fn is_valid_wifi_credential(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b.is_ascii_graphic())
+}
+
 /// Handles the SSH connection loop, processing events from clients.
 ///
 /// # Errors
