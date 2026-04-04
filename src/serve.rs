@@ -6,10 +6,10 @@ use log::{debug, info, trace, warn};
 
 use crate::config::SSHStampConfig;
 use crate::espressif::buffered_uart::UART_SIGNAL;
+use crate::handle;
 use crate::settings::UART_BUFFER_SIZE;
 use crate::store;
 use esp_hal::system::software_reset;
-use heapless::String;
 use storage::flash;
 
 use core::fmt::Debug;
@@ -21,7 +21,6 @@ use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 
 // Sunset
-use sunset::event::ServPubkeyAuth;
 use sunset::{ChanFail, ChanHandle, ServEvent, error};
 use sunset_async::SunsetMutex;
 use sunset_async::{ProgressHolder, SSHServer};
@@ -33,26 +32,44 @@ pub enum SessionType {
     Sftp(ChanHandle),
 }
 
-fn key_signature_ok(a: &ServPubkeyAuth<'_, '_>) -> bool {
-    a.real()
+async fn save_config_and_reboot(
+    config: &SunsetMutex<SSHStampConfig>,
+    config_changed: bool,
+    needs_reset: bool,
+) {
+    if !config_changed {
+        return;
+    }
+
+    let config_guard = config.lock().await;
+    let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
+        panic!("Could not acquire flash storage lock");
+    };
+    let mut flash_storage = flash_storage_guard.lock().await;
+    let _result = store::save(&mut flash_storage, &config_guard);
+    drop(config_guard);
+
+    if needs_reset {
+        info!("Configuration saved. Rebooting to apply WiFi changes...");
+        software_reset();
+    }
 }
 
-fn is_valid_wifi_credential(s: &str) -> bool {
-    !s.is_empty() && s.bytes().all(|b| b.is_ascii_graphic())
-}
-
+/// Handles the SSH connection loop, processing events from clients.
+///
+/// # Errors
+/// Returns an error if SSH protocol operations fail.
+///
+/// # Panics
+/// Panics if flash storage lock cannot be acquired when saving configuration.
 pub async fn connection_loop(
     serv: &SSHServer<'_>,
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
     config: &SunsetMutex<SSHStampConfig>,
 ) -> Result<(), sunset::Error> {
     let mut session: Option<ChanHandle> = None;
-
-    debug!("Entering connection_loop and prog_loop is next...");
-    let mut config_changed: bool = false;
-    let mut needs_reset: bool = false;
-
-    // Will be set in `ev` PubkeyAuth is accepted and cleared once the channel is sent down chan_pipe
+    let mut config_changed = false;
+    let mut needs_reset = false;
     let mut auth_checked = false;
 
     loop {
@@ -62,125 +79,54 @@ pub async fn connection_loop(
         trace!("{:?}", &ev);
         match ev {
             ServEvent::SessionSubsystem(a) => {
-                debug!("ServEvent::SessionSubsystem");
-
-                if !auth_checked {
-                    warn!("Unauthenticated SessionSubsystem rejected");
-                    a.fail()?;
-                    // TODO: Provide a message back to the client and the close the session?
-                } else if a.command()?.to_lowercase().as_str() == "sftp" {
-                    if let Some(ch) = session.take() {
-                        debug_assert!(ch.num() == a.channel());
-                        #[cfg(feature = "sftp-ota")]
-                        {
-                            a.succeed()?;
-                            debug!("We got SFTP subsystem");
-                            match chan_pipe.try_send(SessionType::Sftp(ch)) {
-                                Ok(_) => auth_checked = false,
-                                Err(e) => log::error!("Could not send the channel: {:?}", e),
-                            };
-                        }
-                        #[cfg(not(feature = "sftp-ota"))]
-                        {
-                            warn!("SFTP subsystem requested but not supported in this build");
-                            a.fail()?;
-                        }
-                    } else {
-                        a.fail()?;
-                    }
-                }
+                handle_session_subsystem(a, &mut session, &mut auth_checked, chan_pipe)?;
             }
             ServEvent::SessionShell(a) => {
-                debug!("ServEvent::SessionShell");
-
-                if !auth_checked {
-                    warn!("Unauthenticated SessionShell rejected");
-                    a.fail()?;
-                } else if let Some(ch) = session.take() {
-                    // Save config after connection successful (SessionEnv completed)
-                    if config_changed {
-                        config_changed = false;
-                        let config_guard = config.lock().await;
-                        let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
-                            panic!("Could not acquire flash storage lock");
-                        };
-                        let mut flash_storage = flash_storage_guard.lock().await;
-                        let _result = store::save(&mut flash_storage, &config_guard).await;
-                        drop(config_guard);
-                        if needs_reset {
-                            info!("Configuration saved. Rebooting to apply WiFi changes...");
-                            software_reset();
-                        }
-                    }
-                    debug_assert!(ch.num() == a.channel());
-                    a.succeed()?;
-                    debug!("We got shell");
-                    UART_SIGNAL.signal(1);
-                    debug!("Connection loop: UART_SIGNAL sent");
-                    match chan_pipe.try_send(SessionType::Bridge(ch)) {
-                        Ok(_) => auth_checked = false,
-                        Err(e) => log::error!("Could not send the channel: {:?}", e),
-                    };
-                } else {
-                    a.fail()?;
-                }
+                handle_session_shell(
+                    a,
+                    &mut session,
+                    &mut config_changed,
+                    needs_reset,
+                    config,
+                    chan_pipe,
+                    &mut auth_checked,
+                )
+                .await;
             }
-            ServEvent::FirstAuth(mut a) => {
-                debug!("ServEvent::FirstAuth");
-                let config_guard = config.lock().await;
-
-                a.enable_password_auth(false)?;
-
-                a.enable_pubkey_auth(true)?;
-                if config_guard.first_login {
-                    a.allow()?;
-                } else {
-                    debug!(
-                        "FirstAuth received but not first-login, allowing pubkey auth but rejecting 
-                        additions of new public keys on already provisioned device"
-                    );
-                    a.reject()?;
-                }
+            ServEvent::FirstAuth(a) => {
+                handle_first_auth(a, config).await?;
             }
             ServEvent::Hostkeys(h) => {
                 debug!("ServEvent::Hostkeys");
                 let config_guard = config.lock().await;
-                // Just take it from config as private hostkey is generated on first boot.
                 h.hostkeys(&[&config_guard.hostkey])?;
             }
             ServEvent::PasswordAuth(a) => {
-                warn!("Password auth is not supported, use public key auth instead.");
+                warn!("Password auth not supported, use public key auth");
                 a.reject()?;
+            }
+            ServEvent::SessionPty(a) => {
+                handle_session_pty(a, config, auth_checked).await?;
             }
             ServEvent::PubkeyAuth(a) => {
                 debug!("ServEvent::PubkeyAuth");
                 let config_guard = config.lock().await;
                 let client_pubkey = a.pubkey()?;
-
                 match client_pubkey {
                     sunset::packets::PubKey::Ed25519(presented) => {
                         let matched = config_guard
                             .pubkeys
                             .iter()
                             .any(|slot| slot.as_ref().is_some_and(|stored| *stored == presented));
-
                         if matched {
-                            // A client that sends only a pubkey query (no signature) gets the flag set.
-                            // Sunset's own ConnState gate prevents this from being exploited since channels
-                            // can't open until full auth completes, but the flag being set prematurely is
-                            // a latent bug. if that gate ever changes or a new code path reads auth_checked
-                            // in a pre-auth context, it could become a real bypass. If that is indeed an
-                            // issue then maybe stamps should check if a.real() before setting auth_checked = true.
-                            let sig_checked = key_signature_ok(&a);
-                            auth_checked = sig_checked;
+                            auth_checked = true;
                             a.allow()?;
                         } else {
                             debug!("No matching pubkey slot found");
                             a.reject()?;
                         }
                     }
-                    _ => {
-                        // Only Ed25519 keys supported
+                    sunset::packets::PubKey::Unknown(_) => {
                         a.reject()?;
                     }
                 }
@@ -193,195 +139,209 @@ pub async fn connection_loop(
                         a.reject(ChanFail::SSH_OPEN_ADMINISTRATIVELY_PROHIBITED)?;
                     }
                     None => {
-                        // Track the session
                         session = Some(a.accept()?);
                     }
                 }
             }
             ServEvent::SessionEnv(a) => {
-                debug!("Got ENV request");
-                debug!("ENV name: {}", a.name()?);
-                debug!("ENV value: {}", a.value()?);
-
-                match a.name()? {
-                    "LANG" => {
-                        // Ignore, but succeed to avoid client-side warnings
-                        // This env variable will always be sent by OpenSSH client.
-                        a.succeed()?;
-                    }
-                    "SSH_STAMP_PUBKEY" => {
-                        let mut config_guard = config.lock().await;
-
-                        if !config_guard.first_login {
-                            warn!("SSH_STAMP_PUBKEY env received but not first-login; rejecting");
-                            a.fail()?;
-                        } else if config_guard.add_pubkey(a.value()?).is_ok() {
-                            debug!("Added new pubkey from ENV");
-                            a.succeed()?;
-                            config_guard.first_login = false;
-                            config_changed = true;
-                            auth_checked = true;
-                        } else {
-                            warn!("Failed to add new pubkey from ENV");
-                            a.fail()?;
-                        }
-                    }
-                    "SSH_STAMP_WIFI_SSID" => {
-                        let mut config_guard = config.lock().await;
-                        if !(auth_checked || config_guard.first_login) {
-                            warn!(
-                                "SSH_STAMP_WIFI_SSID env received but not authenticated; rejecting"
-                            );
-                            a.fail()?;
-                        } else {
-                            let value = a.value()?;
-                            if !is_valid_wifi_credential(value) {
-                                warn!(
-                                    "SSH_STAMP_WIFI_SSID contains invalid characters (null bytes or non-printable ASCII)"
-                                );
-                                a.fail()?;
-                            } else {
-                                let mut s = String::<32>::new();
-                                if s.push_str(value).is_ok() {
-                                    config_guard.wifi_ssid = s;
-                                    debug!("Set wifi SSID from ENV");
-                                    a.succeed()?;
-                                    config_changed = true;
-                                    needs_reset = true;
-                                } else {
-                                    warn!("SSH_STAMP_WIFI_SSID too long");
-                                    a.fail()?;
-                                }
-                            }
-                        }
-                    }
-                    "SSH_STAMP_WIFI_PSK" => {
-                        let mut config_guard = config.lock().await;
-                        if !(auth_checked || config_guard.first_login) {
-                            warn!(
-                                "SSH_STAMP_WIFI_PSK env received but not authenticated; rejecting"
-                            );
-                            a.fail()?;
-                        } else {
-                            let value = a.value()?;
-                            if !is_valid_wifi_credential(value) {
-                                warn!(
-                                    "SSH_STAMP_WIFI_PSK contains invalid characters (null bytes or non-printable ASCII)"
-                                );
-                                a.fail()?;
-                            } else if value.len() < 8 {
-                                warn!("SSH_STAMP_WIFI_PSK too short (min 8 characters)");
-                                a.fail()?;
-                            } else if value.len() > 63 {
-                                warn!("SSH_STAMP_WIFI_PSK too long (max 63 characters)");
-                                a.fail()?;
-                            } else {
-                                let mut s = String::<63>::new();
-                                if s.push_str(value).is_ok() {
-                                    config_guard.wifi_pw = Some(s);
-                                    debug!("Set WIFI PSK from ENV");
-                                    a.succeed()?;
-                                    config_changed = true;
-                                    needs_reset = true;
-                                } else {
-                                    warn!("SSH_STAMP_WIFI_PSK push_str failed unexpectedly");
-                                    a.fail()?;
-                                }
-                            }
-                        }
-                    }
-                    "SSH_STAMP_WIFI_MAC_ADDRESS" => {
-                        let mut config_guard = config.lock().await;
-                        if !(auth_checked || config_guard.first_login) {
-                            warn!(
-                                "SSH_STAMP_WIFI_MAC_ADDRESS env received but not authenticated; rejecting"
-                            );
-                            a.fail()?;
-                        } else {
-                            let value = a.value()?;
-                            if value.len() != 17 {
-                                warn!(
-                                    "SSH_STAMP_WIFI_MAC_ADDRESS must be XX:XX:XX:XX:XX:XX format"
-                                );
-                                a.fail()?;
-                            } else {
-                                let parts: heapless::Vec<u8, 6> = value
-                                    .split(':')
-                                    .filter_map(|p| u8::from_str_radix(p, 16).ok())
-                                    .collect();
-                                if parts.len() == 6 {
-                                    let mac: [u8; 6] = [
-                                        parts[0], parts[1], parts[2], parts[3], parts[4], parts[5],
-                                    ];
-                                    config_guard.mac = mac;
-                                    debug!("Set MAC address from ENV: {:02X?}", mac);
-                                    a.succeed()?;
-                                    config_changed = true;
-                                    needs_reset = true;
-                                } else {
-                                    warn!("SSH_STAMP_WIFI_MAC_ADDRESS invalid format");
-                                    a.fail()?;
-                                }
-                            }
-                        }
-                    }
-                    "SSH_STAMP_WIFI_MAC_RANDOM" => {
-                        let mut config_guard = config.lock().await;
-                        if !(auth_checked || config_guard.first_login) {
-                            warn!(
-                                "SSH_STAMP_WIFI_MAC_RANDOM env received but not authenticated; rejecting"
-                            );
-                            a.fail()?;
-                        } else {
-                            config_guard.mac = [0xFF; 6];
-                            debug!("Set MAC address to random mode");
-                            a.succeed()?;
-                            config_changed = true;
-                            needs_reset = true;
-                        }
-                    }
-                    _ => {
-                        debug!("Ignoring unknown environment variable: {}", a.name()?);
-                        a.succeed()?;
-                    }
-                }
-            }
-            ServEvent::SessionPty(a) => {
-                let first_login = { config.lock().await.first_login };
-
-                if auth_checked || first_login {
-                    debug!("ServEvent::SessionPty: Session granted");
-                    a.succeed()?;
-                } else {
-                    debug!("ServEvent::SessionPty: No auth not session");
-                    a.fail()?;
-                }
+                handle_session_env(
+                    a,
+                    config,
+                    &mut config_changed,
+                    &mut needs_reset,
+                    &mut auth_checked,
+                )
+                .await?;
             }
             ServEvent::SessionExec(a) => {
                 a.fail()?;
             }
             ServEvent::Defunct => {
                 debug!("Expected caller to handle event");
-                error::BadUsage.fail()?
+                error::BadUsage.fail()?;
             }
             ServEvent::PollAgain => {}
         }
     }
 }
 
-pub async fn connection_disable() -> () {
+async fn handle_first_auth(
+    mut a: sunset::event::ServFirstAuth<'_, '_>,
+    config: &SunsetMutex<SSHStampConfig>,
+) -> Result<(), sunset::Error> {
+    debug!("ServEvent::FirstAuth");
+    let config_guard = config.lock().await;
+    a.enable_password_auth(false)?;
+    a.enable_pubkey_auth(true)?;
+    if config_guard.first_login {
+        a.allow()?;
+    } else {
+        debug!("FirstAuth received but not first-login, rejecting");
+        a.reject()?;
+    }
+    Ok(())
+}
+
+async fn handle_session_pty(
+    a: sunset::event::ServPtyRequest<'_, '_>,
+    config: &SunsetMutex<SSHStampConfig>,
+    auth_checked: bool,
+) -> Result<(), sunset::Error> {
+    let first_login = { config.lock().await.first_login };
+    if auth_checked || first_login {
+        debug!("ServEvent::SessionPty: Session granted");
+        a.succeed()?;
+    } else {
+        debug!("ServEvent::SessionPty: No auth not session");
+        a.fail()?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "sftp-ota")]
+fn handle_session_subsystem(
+    a: sunset::event::ServExecRequest<'_, '_>,
+    session: &mut Option<ChanHandle>,
+    auth_checked: &mut bool,
+    chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
+) -> Result<(), sunset::Error> {
+    debug!("ServEvent::SessionSubsystem");
+    if !*auth_checked {
+        warn!("Unauthenticated SessionSubsystem rejected");
+        a.fail()?;
+        return Ok(());
+    }
+
+    if a.command()?.to_lowercase().as_str() != "sftp" {
+        return Ok(());
+    }
+
+    if let Some(ch) = session.take() {
+        debug_assert!(ch.num() == a.channel());
+        a.succeed()?;
+        debug!("We got SFTP subsystem");
+        match chan_pipe.try_send(SessionType::Sftp(ch)) {
+            Ok(_) => *auth_checked = false,
+            Err(e) => log::error!("Could not send the channel: {:?}", e),
+        }
+    } else {
+        a.fail()?;
+    }
+    Ok(())
+}
+
+#[cfg(not(feature = "sftp-ota"))]
+fn handle_session_subsystem(
+    a: sunset::event::ServExecRequest<'_, '_>,
+    session: &mut Option<ChanHandle>,
+    auth_checked: &mut bool,
+    _chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
+) -> Result<(), sunset::Error> {
+    debug!("ServEvent::SessionSubsystem");
+    if !*auth_checked {
+        warn!("Unauthenticated SessionSubsystem rejected");
+        a.fail()?;
+        return Ok(());
+    }
+
+    if a.command()?.to_lowercase().as_str() != "sftp" {
+        return Ok(());
+    }
+
+    if session.take().is_some() {
+        warn!("SFTP subsystem requested but not supported in this build");
+        a.fail()?;
+    } else {
+        a.fail()?;
+    }
+    Ok(())
+}
+
+async fn handle_session_shell(
+    a: sunset::event::ServShellRequest<'_, '_>,
+    session: &mut Option<ChanHandle>,
+    config_changed: &mut bool,
+    needs_reset: bool,
+    config: &SunsetMutex<SSHStampConfig>,
+    chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
+    auth_checked: &mut bool,
+) {
+    debug!("ServEvent::SessionShell");
+    if !*auth_checked {
+        warn!("Unauthenticated SessionShell rejected");
+        let _ = a.fail();
+        return;
+    }
+
+    if let Some(ch) = session.take() {
+        let cc = *config_changed;
+        *config_changed = false;
+        save_config_and_reboot(config, cc, needs_reset).await;
+        debug_assert!(ch.num() == a.channel());
+        let _ = a.succeed();
+        UART_SIGNAL.signal(1);
+        match chan_pipe.try_send(SessionType::Bridge(ch)) {
+            Ok(()) => *auth_checked = false,
+            Err(e) => log::error!("Could not send the channel: {e:?}"),
+        }
+    } else {
+        let _ = a.fail();
+    }
+}
+
+async fn handle_session_env(
+    a: sunset::event::ServEnvironmentRequest<'_, '_>,
+    config: &SunsetMutex<SSHStampConfig>,
+    config_changed: &mut bool,
+    needs_reset: &mut bool,
+    auth_checked: &mut bool,
+) -> Result<(), sunset::Error> {
+    debug!("Got ENV request");
+    debug!("ENV name: {}", a.name()?);
+    debug!("ENV value: {}", a.value()?);
+
+    match a.name()? {
+        "LANG" => {
+            a.succeed()?;
+        }
+        "SSH_STAMP_PUBKEY" => {
+            handle::pubkey_env(a, config, config_changed, auth_checked).await?;
+        }
+        "SSH_STAMP_WIFI_SSID" => {
+            handle::wifi_ssid_env(a, config, config_changed, needs_reset, *auth_checked).await?;
+        }
+        "SSH_STAMP_WIFI_PSK" => {
+            handle::wifi_psk_env(a, config, config_changed, needs_reset, *auth_checked).await?;
+        }
+        "SSH_STAMP_WIFI_MAC_ADDRESS" => {
+            handle::wifi_mac_address_env(a, config, config_changed, needs_reset, *auth_checked)
+                .await?;
+        }
+        "SSH_STAMP_WIFI_MAC_RANDOM" => {
+            handle::wifi_mac_random_env(a, config, config_changed, needs_reset, *auth_checked)
+                .await?;
+        }
+        _ => {
+            debug!("Ignoring unknown environment variable: {}", a.name()?);
+            a.succeed()?;
+        }
+    }
+    Ok(())
+}
+
+pub fn connection_disable() {
     debug!("Connection loop disabled: WIP");
     // TODO: Correctly disable/restart Conection loop and/or send messsage to user over SSH
 }
 
-pub async fn ssh_wait_for_initialisation<'server>(
+pub fn ssh_wait_for_initialisation<'server>(
     inbuf: &'server mut [u8; UART_BUFFER_SIZE],
     outbuf: &'server mut [u8; UART_BUFFER_SIZE],
 ) -> SSHServer<'server> {
     SSHServer::new(inbuf, outbuf)
 }
 
-pub async fn ssh_disable() -> () {
+pub fn ssh_disable() {
     debug!("SSH Server disabled: WIP");
     // TODO: Correctly disable/restart SSH Server and/or send messsage to user over SSH
 }
@@ -390,6 +350,10 @@ use crate::espressif::buffered_uart::BufferedUart;
 use crate::serial::serial_bridge;
 use sunset_async::ChanInOut;
 
+/// Handles an SSH client connection, bridging UART and SSH.
+///
+/// # Errors
+/// Returns an error if SSH protocol operations or I/O fail.
 pub async fn handle_ssh_client<'a, 'b>(
     uart_buff: &'a BufferedUart,
     ssh_server: &'b SSHServer<'a>,
@@ -402,9 +366,9 @@ pub async fn handle_ssh_client<'a, 'b>(
         SessionType::Bridge(ch) => {
             info!("Handling bridge session");
             let stdio: ChanInOut<'_> = ssh_server.stdio(ch).await?;
-            let (stdin, stdout) = stdio.split();
+            let (input, output) = stdio.split();
             info!("Starting bridge");
-            serial_bridge(stdin, stdout, uart_buff).await?
+            serial_bridge(input, output, uart_buff).await?;
         }
         #[cfg(feature = "sftp-ota")]
         SessionType::Sftp(ch) => {
@@ -416,11 +380,11 @@ pub async fn handle_ssh_client<'a, 'b>(
                 ota::run_ota_server::<storage::esp_ota::OtaWriter>(stdio, ota_writer).await?
             }
         }
-    };
+    }
     Ok(())
 }
 
-pub async fn bridge_disable() -> () {
+pub fn bridge_disable() {
     // disable bridge
     debug!("Bridge disabled: WIP");
     // TODO: Correctly disable/restart bridge and/or send message to user over SSH

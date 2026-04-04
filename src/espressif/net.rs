@@ -44,6 +44,13 @@ macro_rules! mk_static {
     }};
 }
 
+/// Brings up the `WiFi` interface.
+///
+/// # Errors
+/// Returns an error if the `WiFi` configuration or initialization fails.
+///
+/// # Panics
+/// Panics if flash storage is not initialized or if persisting the wifi password fails.
 pub async fn if_up(
     spawner: Spawner,
     controller: Controller<'static>,
@@ -53,7 +60,7 @@ pub async fn if_up(
 ) -> Result<Stack<'static>, sunset::Error> {
     let wifi_init = &*mk_static!(Controller<'static>, controller);
     let (mut wifi_controller, interfaces) =
-        esp_radio::wifi::new(wifi_init, wifi, Default::default())
+        esp_radio::wifi::new(wifi_init, wifi, Config::default())
             .map_err(|_| sunset::error::BadUsage.build())?;
 
     // Ensure WiFi PSK exists before applying AP config to avoid esp_wifi_set_config errors
@@ -66,7 +73,7 @@ pub async fn if_up(
             }
 
             let mut pw = String::<63>::new();
-            for &byte in rnd.iter() {
+            for &byte in &rnd {
                 let _ = pw.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
             }
 
@@ -77,7 +84,7 @@ pub async fn if_up(
                 panic!("Flash storage not initialized; cannot persist wifi password");
             };
             let mut flash_storage = flash_storage_guard.lock().await;
-            if let Err(e) = store::save(&mut flash_storage, &guard).await {
+            if let Err(e) = store::save(&mut flash_storage, &guard) {
                 panic!("Failed to persist generated wifi password: {:?}", e);
             }
         }
@@ -105,17 +112,17 @@ pub async fn if_up(
             .with_password(AllocString::from(wifi_password(config).await.as_str())),
     );
     let res = wifi_controller.set_config(&ap_config);
-    debug!("wifi_set_configuration returned {:?}", res);
+    debug!("wifi_set_configuration returned {res:?}");
 
     let gw_ip_addr_ipv4 = *DEFAULT_IP;
 
     let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(gw_ip_addr_ipv4, 24),
         gateway: Some(gw_ip_addr_ipv4),
-        dns_servers: Default::default(),
+        dns_servers: heapless::Vec::new(),
     });
 
-    let seed = (rng.random() as u64) << 32 | rng.random() as u64;
+    let seed = u64::from(rng.random()) << 32 | u64::from(rng.random());
 
     // Init network stack
     let (ap_stack, runner) = embassy_net::new(
@@ -137,21 +144,18 @@ pub async fn if_up(
         Timer::after(Duration::from_millis(500)).await;
     }
 
-    info!(
-        "Connect to the AP `{}` as a DHCP client with IP: {}",
-        ssid_name, gw_ip_addr_ipv4
-    );
+    info!("Connect to the AP `{ssid_name}` as a DHCP client with IP: {gw_ip_addr_ipv4}");
 
     Ok(ap_stack)
 }
 
-pub async fn ap_stack_disable() -> () {
+pub fn ap_stack_disable() {
     // drop ap_stack
     debug!("AP Stack disabled: WIP");
     // TODO: Correctly disable/restart AP Stack and/or send messsage to user over SSH
 }
 
-pub async fn tcp_socket_disable() -> () {
+pub fn tcp_socket_disable() {
     // drop tcp stack
     debug!("TCP socket disabled: WIP");
     // TODO: Correctly disable/restart tcp socket and/or send messsage to user over SSH
@@ -172,27 +176,32 @@ pub async fn accept_requests<'a>(
         })
         .await
     {
-        error!("connect error: {:?}", e);
+        error!("connect error: {e:?}");
         // continue;
-        tcp_socket_disable().await;
+        tcp_socket_disable();
     }
     debug!("Connected, port 22");
 
     tcp_socket
 }
 
-/// Returns the configured WiFi SSID from the config.
+/// Returns the configured `WiFi` SSID from the config.
+///
+/// # Panics
+/// Panics if `wifi_ssid` is not set in the config or exceeds 63 characters.
 pub async fn wifi_ssid(config: &'static SunsetMutex<SSHStampConfig>) -> String<63> {
     let guard = config.lock().await;
     String::<63>::try_from(guard.wifi_ssid.as_str()).expect("SSID should always be set")
 }
 
-/// Returns the WiFi password from the config.
-/// Panics if wifi_pw is not set in the config.
+/// Returns the `WiFi` password from the config.
+///
+/// # Panics
+/// Panics if `wifi_pw` is not set in the config or exceeds 63 characters.
 pub async fn wifi_password(config: &'static SunsetMutex<SSHStampConfig>) -> String<63> {
     let guard = config.lock().await;
     match &guard.wifi_pw {
-        Some(pw) => String::<63>::try_from(pw.as_str()).unwrap_or_else(|_| {
+        Some(pw) => String::<63>::try_from(pw.as_str()).unwrap_or_else(|()| {
             panic!("wifi_pw stored value exceeds 63 characters");
         }),
         None => panic!("wifi_pw must be set before calling wifi_password()"),
@@ -204,17 +213,17 @@ fn print_hostkey_fingerprint(hostkey: &sunset::SignKey) {
         sunset::SignKey::Ed25519(_) => {
             let pubkey = hostkey.pubkey();
             match pubkey.fingerprint(ssh_key::HashAlg::Sha256) {
-                Ok(fp) => info!("SSH hostkey fingerprint: {}", fp),
-                Err(e) => warn!("Failed to compute fingerprint: {:?}", e),
+                Ok(fp) => info!("SSH hostkey fingerprint: {fp}"),
+                Err(e) => warn!("Failed to compute fingerprint: {e:?}"),
             }
         }
-        _ => {
+        sunset::SignKey::AgentEd25519(_) => {
             warn!("Unsupported key type for fingerprint");
         }
     }
 }
 
-/// Manages the WiFi access point lifecycle.
+/// Manages the `WiFi` access point lifecycle.
 /// Starts the AP with the configured SSID and password from the config.
 /// Handles reconnection if the AP stops.
 #[embassy_executor::task]
@@ -238,17 +247,17 @@ pub async fn wifi_up(
 
         if esp_radio::wifi::ap_state() == WifiApState::Started {
             wifi_controller.wait_for_event(WifiEvent::ApStop).await;
-            Timer::after(Duration::from_millis(5000)).await
+            Timer::after(Duration::from_millis(5000)).await;
         }
         if !matches!(wifi_controller.is_started(), Ok(true)) {
             if let Err(e) = wifi_controller.set_config(&client_config) {
-                debug!("Failed to set wifi config: {:?}", e);
+                debug!("Failed to set wifi config: {e:?}");
                 Timer::after(Duration::from_millis(1000)).await;
                 continue;
             }
             debug!("Starting wifi");
             if let Err(e) = wifi_controller.start_async().await {
-                debug!("Failed to start wifi: {:?}", e);
+                debug!("Failed to start wifi: {e:?}");
                 Timer::after(Duration::from_millis(1000)).await;
                 continue;
             }
@@ -258,7 +267,7 @@ pub async fn wifi_up(
     }
 }
 
-pub async fn wifi_controller_disable() -> () {
+pub fn wifi_controller_disable() {
     // TODO: Correctly disable wifi controller
     // pub async fn wifi_disable(wifi_controller: EspWifiController<'_>) -> (){
     // drop wifi controller
@@ -268,11 +277,11 @@ pub async fn wifi_controller_disable() -> () {
     //software_reset();
 }
 
-use esp_radio::wifi::WifiDevice;
+use esp_radio::wifi::{Config, WifiDevice};
 #[embassy_executor::task]
 async fn net_up(mut runner: Runner<'static, WifiDevice<'static>>) {
     debug!("Bringing up network stack...\n");
-    runner.run().await
+    runner.run().await;
 }
 
 #[embassy_executor::task]

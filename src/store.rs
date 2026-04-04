@@ -14,7 +14,7 @@ use crate::config::SSHStampConfig;
 use storage::flash::FlashBuffer;
 
 use sunset::sshwire::{self, OwnOrBorrow};
-use sunset_sshwire_derive::*;
+use sunset_sshwire_derive::{SSHDecode, SSHEncode};
 
 // TODO: [Nice to have] Read the right partition and write there instead of hardcoding offset and size.
 pub const CONFIG_VERSION_SIZE: usize = 4;
@@ -44,7 +44,7 @@ impl FlashConfig<'_> {
             &mut fb.buf[..esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN],
         )
         .map_err(|e| {
-            error!("Failed to read partition table: {:?}", e);
+            error!("Failed to read partition table: {e:?}");
             SSHStampError::FlashStorageError
         })?;
 
@@ -73,9 +73,12 @@ fn config_hash(config: &SSHStampConfig) -> Result<[u8; 32], SunsetError> {
     Ok(h.finalize().into())
 }
 
-/// Loads a SSHConfig at startup. Good for persisting hostkeys.
-pub async fn load_or_create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
-    match load(flash).await {
+/// Loads a `SSHConfig` at startup. Good for persisting hostkeys.
+///
+/// # Errors
+/// Returns an error if config creation or flash write fails.
+pub fn load_or_create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
+    match load(flash) {
         Ok(c) => {
             debug!("Good existing config");
             return Ok(c);
@@ -83,27 +86,35 @@ pub async fn load_or_create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfi
         Err(e) => debug!("Existing config bad, making new. {e}"),
     }
 
-    create(flash).await
+    create(flash)
 }
 
-pub async fn create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
+/// Creates a new `SSHStampConfig` and saves it to flash.
+///
+/// # Errors
+/// Returns an error if config creation or flash write fails.
+pub fn create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
     let c = SSHStampConfig::new()?;
-    save(flash, &c).await?;
+    save(flash, &c)?;
     debug!("Created new config: {:?}", &c);
 
     Ok(c)
 }
 
-pub async fn load(fl: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
+/// Loads `SSHStampConfig` from flash.
+///
+/// # Errors
+/// Returns an error if flash read fails, config is invalid, or hash mismatch.
+pub fn load(fl: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
     // If at some point you target a 64bit arch these can truncate and cause
     // corruption of the bootloader or the ota partition.
+    let offset =
+        u32::try_from(CONFIG_OFFSET).map_err(|_| SunsetError::msg("CONFIG_OFFSET overflow"))?;
 
-    fl.flash
-        .read(CONFIG_OFFSET as u32, &mut fl.buf)
-        .map_err(|e| {
-            error!("flash read error 0x{CONFIG_OFFSET:x} {e:?}");
-            SunsetError::msg("flash error")
-        })?;
+    fl.flash.read(offset, &mut fl.buf).map_err(|e| {
+        error!("flash read error 0x{CONFIG_OFFSET:x} {e:?}");
+        SunsetError::msg("flash error")
+    })?;
 
     let flash_config: FlashConfig = sshwire::read_ssh(&fl.buf, None)
         .map_err(|_| SunsetError::msg("failed to decode flash config"))?;
@@ -128,7 +139,11 @@ pub async fn load(fl: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetErro
     Ok(config)
 }
 
-pub async fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(), SunsetError> {
+/// Saves `SSHStampConfig` to flash.
+///
+/// # Errors
+/// Returns an error if flash write fails or config serialization fails.
+pub fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(), SunsetError> {
     let sc = FlashConfig {
         version: SSHStampConfig::CURRENT_VERSION,
         config: OwnOrBorrow::Borrow(config),
@@ -156,18 +171,18 @@ pub async fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(
 
     const { assert!(CONFIG_AREA_SIZE > FlashConfig::BUF_SIZE) };
 
-    fl.flash
-        .erase(
-            CONFIG_OFFSET as u32,
-            (CONFIG_OFFSET + CONFIG_AREA_SIZE) as u32,
-        )
-        .map_err(|e| {
-            error!("flash erase error: {:?}", e);
-            SunsetError::msg("flash erase error")
-        })?;
+    let offset =
+        u32::try_from(CONFIG_OFFSET).map_err(|_| SunsetError::msg("CONFIG_OFFSET overflow"))?;
+    let area_size = u32::try_from(CONFIG_AREA_SIZE)
+        .map_err(|_| SunsetError::msg("CONFIG_AREA_SIZE overflow"))?;
 
-    fl.flash.write(CONFIG_OFFSET as u32, &fl.buf).map_err(|e| {
-        error!("flash write error: {:?}", e);
+    fl.flash.erase(offset, offset + area_size).map_err(|e| {
+        error!("flash erase error: {e:?}");
+        SunsetError::msg("flash erase error")
+    })?;
+
+    fl.flash.write(offset, &fl.buf).map_err(|e| {
+        error!("flash write error: {e:?}");
         SunsetError::msg("flash write error")
     })?;
 

@@ -18,6 +18,10 @@ use sunset_sftp::{
 use log::{debug, error, info, warn};
 use rustc_hash::FxHasher;
 
+/// Runs the OTA SFTP server
+///
+/// # Errors
+/// Returns an error if the SFTP server loop encounters an error
 pub async fn run_ota_server<W: OtaActions>(
     stdio: ChanInOut<'_>,
     ota_writer: W,
@@ -34,12 +38,12 @@ pub async fn run_ota_server<W: OtaActions>(
     .process_loop(stdio, &mut buffer_in)
     .await
     {
-        Ok(_) => {
+        Ok(()) => {
             debug!("sftp server loop finished gracefully");
             Ok(())
         }
         Err(e) => {
-            warn!("sftp server loop finished with an error: {:?}", &e);
+            warn!("sftp server loop finished with an error: {e:?}");
             Err(e.into())
         }
     }
@@ -49,7 +53,7 @@ pub async fn run_ota_server<W: OtaActions>(
 /// while still providing a reasonable level of uniqueness.
 /// We are not expecting more than one OTA operation at a time.
 const OPAQUE_HASH_LEN: usize = 4;
-/// OtaOpaqueFileHandle for OTA SFTP server
+/// `OtaOpaqueFileHandle` for OTA SFTP server
 ///
 /// Minimal implementation of an opaque file handle with a tiny hash
 #[derive(Hash, Debug, Eq, PartialEq, Clone)]
@@ -62,8 +66,9 @@ impl OpaqueFileHandle for OtaOpaqueFileHandle {
     fn new(seed: &str) -> Self {
         let mut hasher = FxHasher::default();
         hasher.write(seed.as_bytes());
+        let hash_bytes = u32::try_from(hasher.finish()).unwrap_or(0).to_be_bytes();
         OtaOpaqueFileHandle {
-            tiny_hash: (hasher.finish() as u32).to_be_bytes(),
+            tiny_hash: hash_bytes,
         }
     }
 
@@ -89,7 +94,7 @@ impl OpaqueFileHandle for OtaOpaqueFileHandle {
 
 /// SFTP server implementation for OTA updates
 ///
-/// This struct implements the SftpServer trait for handling OTA updates over SFTP
+/// This struct implements the `SftpServer` trait for handling OTA updates over SFTP
 /// For now, all methods log an error and return unsupported operation as this is a placeholder
 struct SftpOtaServer<T, W: OtaActions> {
     // Add fields as necessary for OTA server state
@@ -109,7 +114,7 @@ impl<T, W: OtaActions> SftpOtaServer<T, W> {
     }
 }
 
-impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer<T, W> {
+impl<T: OpaqueFileHandle, W: OtaActions> SftpServer<'_, T> for SftpOtaServer<T, W> {
     async fn open(
         &'_ mut self,
         path: &str,
@@ -131,8 +136,7 @@ impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer
             Ok(handle)
         } else {
             error!(
-                "SftpServer Open operation failed: already writing OTA, path = {:?}, attrs = {:?}",
-                path, mode
+                "SftpServer Open operation failed: already writing OTA, path = {path:?}, attrs = {mode:?}"
             );
             Err(sunset_sftp::protocol::StatusCode::SSH_FX_PERMISSION_DENIED)
         }
@@ -141,40 +145,31 @@ impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer
     async fn close(&mut self, handle: &T) -> sunset_sftp::server::SftpOpResult<()> {
         // TODO: At this point I need to reset the target if all is ok or reset the processor if not so we are
         // either loading a new firmware or ready to receive a correct one.
-        info!("Close called for handle {:?}", handle);
+        info!("Close called for handle {handle:?}");
         if let Some(current_handle) = &self.file_handle {
             if current_handle == handle {
                 let ret_val = match self.processor.finalize().await {
-                    Ok(_) => {
+                    Ok(()) => {
                         info!("OTA update finalized successfully.");
                         self.processor.reset_device();
                         Ok(())
                     }
                     Err(e) => {
-                        error!("OTA update finalization failed: {:?}", e);
+                        error!("OTA update finalization failed: {e:?}");
                         Err(sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE)
                     }
                 };
-                info!(
-                    "SftpServer Close operation for OTA completed: handle = {:?}",
-                    handle
-                );
+                info!("SftpServer Close operation for OTA completed: handle = {handle:?}");
                 self.file_handle = None;
                 self.write_permission = false;
 
                 ret_val
             } else {
-                warn!(
-                    "SftpServer Close operation failed: handle mismatch = {:?}",
-                    handle
-                );
+                warn!("SftpServer Close operation failed: handle mismatch = {handle:?}");
                 Err(sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE)
             }
         } else {
-            warn!(
-                "SftpServer Close operation granted on untracked handle: {:?}",
-                handle
-            );
+            warn!("SftpServer Close operation granted on untracked handle: {handle:?}");
             Ok(())
         }
     }
@@ -188,8 +183,7 @@ impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer
         _reply: &mut sunset_sftp::server::ReadReply<'_, N>,
     ) -> sunset_sftp::error::SftpResult<()> {
         error!(
-            "SftpServer Read operation not defined: handle = {:?}, offset = {:?}, len = {:?}",
-            opaque_file_handle, offset, len
+            "SftpServer Read operation not defined: handle = {opaque_file_handle:?}, offset = {offset:?}, len = {len:?}"
         );
         Err(sunset_sftp::error::SftpError::FileServerError(
             sunset_sftp::protocol::StatusCode::SSH_FX_OP_UNSUPPORTED,
@@ -207,8 +201,7 @@ impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer
         {
             if !self.write_permission {
                 warn!(
-                    "SftpServer Write operation denied: no write permission for handle = {:?}",
-                    opaque_file_handle
+                    "SftpServer Write operation denied: no write permission for handle = {opaque_file_handle:?}"
                 );
                 return Err(sunset_sftp::protocol::StatusCode::SSH_FX_PERMISSION_DENIED);
             }
@@ -223,41 +216,30 @@ impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer
                 match e {
                     crate::handler::OtaError::IllegalOperation => {
                         error!(
-                            "SftpServer Write operation failed during OTA processing: Illegal Operation - {:?}",
-                            e
+                            "SftpServer Write operation failed during OTA processing: Illegal Operation - {e:?}"
                         );
                         return Err(sunset_sftp::protocol::StatusCode::SSH_FX_PERMISSION_DENIED);
                     }
                     crate::handler::OtaError::UnknownTlvType => {
                         error!(
-                            "SftpServer Write operation failed during OTA processing: Unknown TLV Type - {:?}",
-                            e
+                            "SftpServer Write operation failed during OTA processing: Unknown TLV Type - {e:?}"
                         );
                         return Err(sunset_sftp::protocol::StatusCode::SSH_FX_OP_UNSUPPORTED);
                     }
                     _ => {
-                        error!(
-                            "SftpServer Write operation failed during OTA processing: {:?}",
-                            e
-                        );
+                        error!("SftpServer Write operation failed during OTA processing: {e:?}");
                         return Err(sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE);
                     }
                 }
-            } else {
-                debug!(
-                    "SftpServer Write operation for OTA processed successfully: handle = {:?}, offset = {:?}, buf_len = {:?}",
-                    opaque_file_handle,
-                    offset,
-                    buf.len()
-                );
-                return Ok(());
             }
+            debug!(
+                "SftpServer Write operation for OTA processed successfully: handle = {opaque_file_handle:?}, offset = {offset:?}, buf_len = {:?}",
+                buf.len()
+            );
+            return Ok(());
         }
 
-        warn!(
-            "SftpServer Write operation failed: handle mismatch = {:?}",
-            opaque_file_handle
-        );
+        warn!("SftpServer Write operation failed: handle mismatch = {opaque_file_handle:?}");
         Err(sunset_sftp::protocol::StatusCode::SSH_FX_FAILURE)
     }
 
@@ -273,19 +255,16 @@ impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer
     // For OTA, we do not expect any directory listing
     async fn readdir<const N: usize>(
         &mut self,
-        _opaque_dir_handle: &T,
+        opaque_dir_handle: &T,
         _reply: &mut sunset_sftp::server::DirReply<'_, N>,
     ) -> sunset_sftp::server::SftpOpResult<()> {
-        info!(
-            "SftpServer ReadDir called for OTA SFTP server on handle: {:?}",
-            _opaque_dir_handle
-        );
+        info!("SftpServer ReadDir called for OTA SFTP server on handle: {opaque_dir_handle:?}");
         Err(sunset_sftp::protocol::StatusCode::SSH_FX_EOF)
     }
 
     // For OTA, realpath will always return root
     async fn realpath(&mut self, dir: &str) -> sunset_sftp::server::SftpOpResult<NameEntry<'_>> {
-        info!("SftpServer RealPath: dir = {:?}", dir);
+        info!("SftpServer RealPath: dir = {dir:?}");
         Ok(NameEntry {
             filename: Filename::from("/"),
             _longname: Filename::from("/"),
@@ -300,9 +279,8 @@ impl<'a, T: OpaqueFileHandle, W: OtaActions> SftpServer<'a, T> for SftpOtaServer
         file_path: &str,
     ) -> sunset_sftp::server::SftpOpResult<sunset_sftp::protocol::Attrs> {
         error!(
-            "SftpServer Stats operation not defined: follow_link = {:?}, \
-            file_path = {:?}",
-            follow_links, file_path
+            "SftpServer Stats operation not defined: follow_link = {follow_links:?}, \
+            file_path = {file_path:?}"
         );
         Err(sunset_sftp::protocol::StatusCode::SSH_FX_OP_UNSUPPORTED)
     }
