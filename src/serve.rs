@@ -27,7 +27,18 @@ use sunset_async::{ProgressHolder, SSHServer};
 mod env_parser {
     use heapless::String;
 
+    /// Sanitizes environment variable input by checking for valid ASCII graphic characters.
+    ///
+    /// Returns `true` if the input contains at least one character and all characters
+    /// are ASCII graphic characters (printable characters excluding space).
+    pub(crate) fn env_sanitize(s: &str) -> bool {
+        !s.is_empty() && s.bytes().all(|b| b.is_ascii_graphic())
+    }
+
     pub fn parse_wifi_ssid(value: &str) -> Option<String<32>> {
+        if !env_sanitize(value) {
+            return None;
+        }
         let mut s = String::new();
         s.push_str(value).ok()?;
         Some(s)
@@ -37,12 +48,18 @@ mod env_parser {
         if value.len() < 8 || value.len() > 63 {
             return None;
         }
+        if !env_sanitize(value) {
+            return None;
+        }
         let mut s = String::new();
         s.push_str(value).ok()?;
         Some(s)
     }
 
     pub fn parse_mac_address(value: &str) -> Option<[u8; 6]> {
+        if !env_sanitize(value) {
+            return None;
+        }
         if value.len() != 17 {
             return None;
         }
@@ -85,10 +102,6 @@ async fn save_config_and_reboot(
         info!("Configuration saved. Rebooting to apply WiFi changes...");
         software_reset();
     }
-}
-
-fn is_valid_wifi_credential(s: &str) -> bool {
-    !s.is_empty() && s.bytes().all(|b| b.is_ascii_graphic())
 }
 
 /// Handles the SSH connection loop, processing events from clients.
@@ -348,6 +361,9 @@ async fn handle_session_env(
             if !config_guard.first_login {
                 warn!("SSH_STAMP_PUBKEY env received but not first-login; rejecting");
                 a.fail()?;
+            } else if !env_parser::env_sanitize(a.value()?) {
+                warn!("SSH_STAMP_PUBKEY contains invalid characters");
+                a.fail()?;
             } else if config_guard.add_pubkey(a.value()?).is_ok() {
                 debug!("Added new pubkey from ENV");
                 a.succeed()?;
@@ -369,7 +385,7 @@ async fn handle_session_env(
                     *config_changed = true;
                     *needs_reset = true;
                 } else {
-                    warn!("SSH_STAMP_WIFI_SSID too long");
+                    warn!("SSH_STAMP_WIFI_SSID invalid and/or too long");
                     a.fail()?;
                 }
             } else {
@@ -387,7 +403,7 @@ async fn handle_session_env(
                     *config_changed = true;
                     *needs_reset = true;
                 } else {
-                    warn!("SSH_STAMP_WIFI_PSK must be 8-63 characters");
+                    warn!("SSH_STAMP_WIFI_PSK invalid and/or not within 8-63 characters");
                     a.fail()?;
                 }
             } else {

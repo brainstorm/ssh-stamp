@@ -217,7 +217,7 @@ fn print_hostkey_fingerprint(hostkey: &sunset::SignKey) {
                 Err(e) => warn!("Failed to compute fingerprint: {e:?}"),
             }
         }
-        _ => {
+        sunset::SignKey::AgentEd25519(_) => {
             warn!("Unsupported key type for fingerprint");
         }
     }
