@@ -11,6 +11,7 @@
 pub mod config;
 pub mod errors;
 pub mod espressif;
+pub mod handle;
 pub mod serial;
 pub mod serve;
 pub mod settings;
