@@ -213,8 +213,8 @@ fn print_hostkey_fingerprint(hostkey: &sunset::SignKey) {
         sunset::SignKey::Ed25519(_) => {
             let pubkey = hostkey.pubkey();
             match pubkey.fingerprint(ssh_key::HashAlg::Sha256) {
-                Ok(fp) => info!("SSH hostkey fingerprint: {}", fp),
-                Err(e) => warn!("Failed to compute fingerprint: {:?}", e),
+                Ok(fp) => info!("SSH hostkey fingerprint: {fp}"),
+                Err(e) => warn!("Failed to compute fingerprint: {e:?}"),
             }
         }
         _ => {
@@ -223,7 +223,7 @@ fn print_hostkey_fingerprint(hostkey: &sunset::SignKey) {
     }
 }
 
-/// Manages the WiFi access point lifecycle.
+/// Manages the `WiFi` access point lifecycle.
 /// Starts the AP with the configured SSID and password from the config.
 /// Handles reconnection if the AP stops.
 #[embassy_executor::task]
