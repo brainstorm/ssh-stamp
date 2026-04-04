@@ -68,7 +68,7 @@ cargo run-esp32c6
 (...)
 INFO - WIFI PSK: <PSK>
 INFO - WIFI MAC: <MAC>
-INFO - SSH hostkey fingerprint: <FINGER PRINT>
+INFO - SSH hostkey fingerprint: <FINGERPRINT>
 INFO - Connect to the AP `<RANDOM AP NAME>` as a DHCP client with IP: 192.168.4.1
 ```
 
