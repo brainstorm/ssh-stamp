@@ -67,7 +67,9 @@ cargo run-esp32c6
 ```
 (...)
 INFO - WIFI PSK: <PSK>
-INFO - Connect to the AP `ssh-stamp` as a DHCP client with IP: 192.168.4.1
+INFO - WIFI MAC: <MAC>
+INFO - SSH hostkey fingerprint: <FINGER PRINT>
+INFO - Connect to the AP `<RANDOM AP NAME>` as a DHCP client with IP: 192.168.4.1
 ```
 
 2. Connect a laptop/phone to the `ssh-stamp` AP using the printed PSK, then SSH into the device at `root@192.168.4.1`.
