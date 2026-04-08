@@ -19,13 +19,13 @@ pub type OtaTlvType = u8;
 pub type OtaTlvLen = u8;
 
 // TODO: We could provide a new type for better debugging information
-pub const OTA_TYPE_VALUE_SSH_STAMP: u32 = 0x73736873; // 'sshs' big endian in ASCII
+pub const OTA_TYPE_VALUE_SSH_STAMP: u32 = 0x7373_6873; // 'sshs' big endian in ASCII
 
 pub const CHECKSUM_LEN: u32 = 32;
 /// Maximum size for LTV (Length-Type-Value) entries in OTA metadata. Used during the reading of OTA parameters.
-pub const MAX_TLV_SIZE: u32 = (core::mem::size_of::<OtaTlvType>()
-    + core::mem::size_of::<OtaTlvLen>()
-    + u8::MAX as usize) as u32; // type + length + value
+///
+/// Calculated as: `size_of::<OtaTlvType>() + size_of::<OtaTlvLen>() + u8::MAX = 1 + 1 + 255 = 257`
+pub const MAX_TLV_SIZE: u32 = 257;
 
 /// Encodes the length and value of a sized values
 fn enc_len_val<SE>(
@@ -35,7 +35,9 @@ fn enc_len_val<SE>(
 where
     SE: Sized + SSHEncode,
 {
-    (core::mem::size_of::<SE>() as OtaTlvLen).enc(s)?;
+    OtaTlvLen::try_from(core::mem::size_of::<SE>())
+        .map_err(|_| sunset::sshwire::WireError::PacketWrong)?
+        .enc(s)?;
     value.enc(s)
 }
 
@@ -48,7 +50,9 @@ where
     SE: Sized,
 {
     let val_len = OtaTlvLen::dec(s)?;
-    if val_len != (core::mem::size_of::<SE>() as OtaTlvLen) {
+    let expected_len = OtaTlvLen::try_from(core::mem::size_of::<SE>())
+        .map_err(|_| sunset::sshwire::WireError::PacketWrong)?;
+    if val_len != expected_len {
         return Err(sunset::sshwire::WireError::PacketWrong);
     }
     Ok(())
@@ -60,14 +64,14 @@ pub const OTA_TYPE: OtaTlvType = 0;
 pub const FIRMWARE_BLOB: OtaTlvType = 1;
 pub const SHA256_CHECKSUM: OtaTlvType = 2;
 
-/// OTA_TLV enum for OTA metadata LTV entries
+/// `OTA_TLV` enum for OTA metadata LTV entries
 /// This TLV does not capture length as it will be captured during parsing
 /// Parsing will be done using sshwire types
 #[derive(Debug)]
 #[repr(u8)] // Must match the type of OtaTlvType
 pub enum Tlv {
     /// Type of OTA update. This **MUST be the first Tlv**.
-    /// For SSH Stamp, this must be OTA_FIRMWARE_BLOB_TYPE
+    /// For SSH Stamp, this must be `OTA_FIRMWARE_BLOB_TYPE`
     OtaType { ota_type: u32 },
     /// Expected SHA256 checksum of the firmware blob
     Sha256Checksum {
@@ -110,11 +114,13 @@ impl<'de> SSHDecode<'de> for Tlv {
                 Ok(Tlv::FirmwareBlob { size: u32::dec(s)? })
             }
             SHA256_CHECKSUM => {
-                if OtaTlvLen::dec(s)? != tlv::CHECKSUM_LEN as u8 {
+                let expected_len = OtaTlvLen::try_from(tlv::CHECKSUM_LEN)
+                    .map_err(|_| sunset::sshwire::WireError::PacketWrong)?;
+                if OtaTlvLen::dec(s)? != expected_len {
                     return Err(sunset::sshwire::WireError::PacketWrong);
                 }
                 let mut checksum = [0u8; tlv::CHECKSUM_LEN as usize];
-                for element in checksum.iter_mut() {
+                for element in &mut checksum {
                     *element = u8::dec(s)?;
                 }
                 Ok(Tlv::Sha256Checksum { checksum })
@@ -124,10 +130,8 @@ impl<'de> SSHDecode<'de> for Tlv {
                 let ota_type = u32::dec(s)?;
                 Ok(Tlv::OtaType { ota_type })
             }
-            // To handle unknown TLVs, it consumes the announced len
-            // and returns an UnknownVariant error
             _ => {
-                error!("Unknown TLV type encountered: {}", tlv_type);
+                error!("Unknown TLV type encountered: {tlv_type}");
                 let len = OtaTlvLen::dec(s)?;
                 s.take(len as usize)?; // Skip unknown TLV value
                 Err(sunset::sshwire::WireError::UnknownPacket { number: tlv_type })
@@ -136,7 +140,7 @@ impl<'de> SSHDecode<'de> for Tlv {
     }
 }
 
-/// An implementation of SSHSource based on [[sunset::sshwire::DecodeBytes]]
+/// An implementation of `SSHSource` based on [[`sunset::sshwire::DecodeBytes`]]
 ///
 pub struct TlvsSource<'a> {
     remaining_buf: &'a [u8],
@@ -145,6 +149,7 @@ pub struct TlvsSource<'a> {
 }
 
 impl<'a> TlvsSource<'a> {
+    #[must_use]
     pub fn new(buf: &'a [u8]) -> Self {
         Self {
             remaining_buf: buf,
@@ -153,17 +158,18 @@ impl<'a> TlvsSource<'a> {
         }
     }
 
+    #[must_use]
     pub fn used(&self) -> usize {
         self.used
     }
-    /// Puts bytes in the tlv_holder and updates current_len until an OTA TLV enum variant can be decoded
+    /// Puts bytes in the `tlv_holder` and updates `current_len` until an OTA TLV enum variant can be decoded
     ///
-    /// Even if it fails, it adds bytes to the tlv_holder and updates current_len accordingly
+    /// Even if it fails, it adds bytes to the `tlv_holder` and updates `current_len` accordingly
     /// so more data can be added later to complete the TLV
     ///
-    /// If more data is required, it returns WireError::RanOut
-    /// If successful, it returns Ok(()) and a dec
-    // TODO: Add test for RanOut and acomplete TLV
+    /// # Errors
+    /// - If more data is required, it returns `WireError::RanOut`
+    /// - If successful, it returns Ok(()) and a dec
     pub fn try_taking_bytes_for_tlv(
         &mut self,
         tlv_holder: &mut [u8],
@@ -175,7 +181,7 @@ impl<'a> TlvsSource<'a> {
             let needed = core::mem::size_of::<tlv::OtaTlvType>()
                 + core::mem::size_of::<tlv::OtaTlvLen>()
                 - *current_len;
-            debug!("Adding {} bytes to have up to TLV type and length", needed);
+            debug!("Adding {needed} bytes to have up to TLV type and length");
             let to_read = core::cmp::min(needed, self.remaining());
             let type_len_bytes = self.take(to_read)?;
             tlv_holder[*current_len..*current_len + to_read].copy_from_slice(type_len_bytes);
@@ -269,7 +275,8 @@ impl OtaHeader {
     /// Serializes the OTA header into the provided buffer
     ///
     /// Returns the number of bytes written to the buffer
-    // #[cfg(not(target_os = "none"))] // Maybe I should remove this from embedded side as well
+    /// # Panics
+    /// Panics if the TLV serialization fails
     pub fn serialize(&self, buf: &mut [u8]) -> usize {
         let mut offset = 0;
         if let Some(ota_type) = self.ota_type {
@@ -299,6 +306,8 @@ impl OtaHeader {
     ///
     /// This approach requires that the whole header is contained in the buffer. An incomplete
     /// header will result in unpopulated fields.
+    /// # Errors
+    /// Returns a `WireError` if the buffer contains invalid data
     pub fn deserialize(buf: &[u8]) -> Result<(Self, usize), sunset::sshwire::WireError> {
         let mut source = tlv::TlvsSource::new(buf);
         let mut ota_type = None;
@@ -309,11 +318,8 @@ impl OtaHeader {
             match tlv::Tlv::dec(&mut source) {
                 Err(sunset::sshwire::WireError::UnknownPacket { number }) => {
                     warn!(
-                        "Unknown packet type encountered: {}. TLV skipping it and continuing",
-                        number
+                        "Unknown packet type encountered: {number}. TLV skipping it and continuing"
                     );
-                    // Unknown TLV was skipped already in the decoder
-                    continue;
                 }
                 Err(e) => {
                     return Err(e);
@@ -350,12 +356,11 @@ impl OtaHeader {
     }
 
     fn check_ota_is_first_tlv(ota_type: Option<u32>) -> Result<(), WireError> {
-        match ota_type.is_none() {
-            true => {
-                error!("SHA256 Checksum TLV encountered before OTA Type TLV. Ignoring it");
-                Err(sunset::sshwire::WireError::PacketWrong)
-            }
-            false => Ok(()),
+        if ota_type.is_none() {
+            error!("SHA256 Checksum TLV encountered before OTA Type TLV. Ignoring it");
+            Err(sunset::sshwire::WireError::PacketWrong)
+        } else {
+            Ok(())
         }
     }
 }

@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 /// Wrapper around bidirectional embassy-sync Pipes, in order to handle UART
-/// RX/RX happening in an InterruptExecutor at higher priority.
+/// RX/RX happening in an `InterruptExecutor` at higher priority.
 ///
-/// Doesn't implement the InterruptExecutor, in the task in the app should await
+/// Doesn't implement the `InterruptExecutor`, in the task in the app should await
 /// the 'run' async function.
 ///
 use crate::config::SSHStampConfig;
@@ -43,6 +43,7 @@ pub struct BufferedUart {
 pub struct UartConfig {}
 
 impl BufferedUart {
+    #[must_use]
     pub fn new() -> Self {
         BufferedUart {
             outward: Pipe::new(),
@@ -54,18 +55,18 @@ impl BufferedUart {
     /// Transfer data between the UART and the buffer struct.
     ///
     /// This should be awaited from an Embassy task that's run
-    /// in an InterruptExecutor for lower latency.
+    /// in an `InterruptExecutor` for lower latency.
     pub async fn run(&self, uart: Uart<'_, Async>) {
         let (mut uart_rx, mut uart_tx) = uart.split();
-        let mut uart_rx_buf = [0u8; UART_BUF_SZ];
-        let mut uart_tx_buf = [0u8; UART_BUF_SZ];
+        let mut rx_buf = [0u8; UART_BUF_SZ];
+        let mut tx_buf = [0u8; UART_BUF_SZ];
 
         loop {
             let rd_from = async {
                 loop {
                     // Note: println! is intentionally avoided here as this runs in an
                     // InterruptExecutor at high priority. Blocking I/O would cause scheduler panics.
-                    let n = match uart_rx.read_async(&mut uart_rx_buf).await {
+                    let n = match uart_rx.read_async(&mut rx_buf).await {
                         Ok(n) => n,
                         Err(e) => {
                             warn!("Uart RxError: {e}");
@@ -73,7 +74,7 @@ impl BufferedUart {
                         }
                     };
 
-                    let mut rx_slice = &uart_rx_buf[..n];
+                    let mut rx_slice = &rx_buf[..n];
 
                     // Write rx_slice to 'inward' pipe, dropping bytes rather than blocking if
                     // the pipe is full
@@ -101,10 +102,10 @@ impl BufferedUart {
             };
             let rd_to = async {
                 loop {
-                    let n = self.outward.read(&mut uart_tx_buf).await;
+                    let n = self.outward.read(&mut tx_buf).await;
                     // TODO: handle write errors
-                    let _n = match uart_tx.write_async(&uart_tx_buf[..n]).await {
-                        Ok(_n) => _n,
+                    let _n = match uart_tx.write_async(&tx_buf[..n]).await {
+                        Ok(n) => n,
                         Err(e) => {
                             warn!("Uart TxError: {e}");
                             continue; // Re-write if write error has occured - Contents of the buffer have not been modified.
@@ -141,14 +142,14 @@ impl Default for BufferedUart {
     }
 }
 
-pub async fn uart_buffer_disable() -> () {
+pub fn uart_buffer_disable() {
     // disable uart buffer
     debug!("UART buffer disabled: WIP");
     // TODO: Correctly disable/restart UART buffer and/or send messsage to user over SSH
 }
 // use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 
-pub async fn uart_disable() -> () {
+pub fn uart_disable() {
     // disable uart
     debug!("UART disabled: WIP");
     // TODO: Correctly disable/restart UART and/or send messsage to user over SSH
@@ -170,7 +171,7 @@ pub struct UartPins<'a> {
 pub static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();
 pub static UART_SIGNAL: Signal<CriticalSectionRawMutex, u8> = Signal::new();
 
-pub async fn uart_buffer_wait_for_initialisation() -> &'static BufferedUart {
+pub fn uart_buffer_wait_for_initialisation() -> &'static BufferedUart {
     UART_BUF.init_with(BufferedUart::new)
 }
 
@@ -178,9 +179,11 @@ pub async fn uart_buffer_wait_for_initialisation() -> &'static BufferedUart {
 pub async fn uart_task(
     uart_buf: &'static BufferedUart,
     uart1: UART1<'static>,
-    _config: &'static SunsetMutex<SSHStampConfig>,
+    config: &'static SunsetMutex<SSHStampConfig>,
     pins: UartPins<'static>,
 ) {
+    // Config is reserved for future use in parameter reconfiguration
+    let _ = config;
     // Note: dbg!/println! avoided throughout as this task runs in an InterruptExecutor
     // at high priority where blocking I/O can cause scheduler panics.
 
@@ -204,5 +207,5 @@ pub async fn uart_task(
             error!("Uart config error {e}. Resetting.");
             software_reset();
         }
-    };
+    }
 }

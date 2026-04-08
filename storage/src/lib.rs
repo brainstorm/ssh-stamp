@@ -14,10 +14,10 @@
 pub mod esp_ota;
 
 // TODO: When the time comes, generalise the flash so it can be used with all supported targets
-/// [[flash]] is a packet to provide safe access to the Flash storage used by SSH-Stamp
+/// [`flash`] is a packet to provide safe access to the Flash storage used by SSH-Stamp
 ///
-/// It does so by storing the FlashStorage and a buffer for read/write operations in a single structure
-/// protected by a SunsetMutex for safe concurrent access in async contexts.
+/// It does so by storing the `FlashStorage` and a buffer for read/write operations in a single structure
+/// protected by a `SunsetMutex` for safe concurrent access in async contexts.
 pub mod flash {
     use esp_hal::peripherals::FLASH;
     use esp_storage::FlashStorage;
@@ -29,10 +29,10 @@ pub mod flash {
     use once_cell::sync::OnceCell;
     use sunset_async::SunsetMutex;
 
-    /// A structure that holds both the FlashStorage and a buffer for read/write operations
+    /// A structure that holds both the `FlashStorage` and a buffer for read/write operations
     ///
     /// The buffer is stored here to avoid allocating multiple buffers in different parts of the code.
-    /// It has a fixed size defined by FLASH_BUF_SIZE.
+    /// It has a fixed size defined by `FLASH_BUF_SIZE`.
     #[derive(Debug)]
     pub struct FlashBuffer<'d> {
         pub flash: FlashStorage<'d>,
@@ -40,6 +40,7 @@ pub mod flash {
     }
 
     impl<'d> FlashBuffer<'d> {
+        #[must_use]
         pub fn new(flash: FlashStorage<'static>) -> Self {
             Self {
                 flash,
@@ -57,7 +58,7 @@ pub mod flash {
     ///
     /// Calls to [`with_flash`] or [`get_flash`] will initialize the flash storage if not already done.
     ///
-    /// Multiple calls to init() are safe and will have no effect after the first one.
+    /// Multiple calls to `init()` are safe and will have no effect after the first one.
     pub fn init(flash: FLASH<'static>) {
         let fl = FlashBuffer::new(FlashStorage::new(flash));
 
