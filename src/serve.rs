@@ -16,8 +16,10 @@ use sunset_async::SunsetMutex;
 use core::option::Option::None;
 use core::result::Result;
 
+// Embassy
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
+// Sunset
 use sunset_async::{ProgressHolder, SSHServer};
 
 /// Handles the SSH connection loop, processing events from clients.
@@ -91,6 +93,7 @@ pub async fn connection_loop(
 
 pub async fn connection_disable() {
     debug!("Connection loop disabled: WIP");
+    // TODO: Correctly disable/restart Conection loop and/or send messsage to user over SSH
 }
 
 pub fn ssh_wait_for_initialisation<'server>(
@@ -102,4 +105,5 @@ pub fn ssh_wait_for_initialisation<'server>(
 
 pub async fn ssh_disable() {
     debug!("SSH Server disabled: WIP");
+    // TODO: Correctly disable/restart SSH Server and/or send messsage to user over SSH
 }

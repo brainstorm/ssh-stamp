@@ -147,7 +147,7 @@ pub async fn session_shell(
                     panic!("Could not acquire flash storage lock");
                 };
                 let mut flash_storage = flash_storage_guard.lock().await;
-                let _result = store::save(&mut flash_storage, &config_guard).await;
+                let _result = store::save(&mut flash_storage, &config_guard);
                 drop(config_guard);
                 if *ctx.needs_reset {
                     info!("Configuration saved. Rebooting to apply WiFi changes...");
@@ -184,9 +184,7 @@ pub async fn first_auth(
         if config_guard.first_login {
             a.allow()?;
         } else {
-            debug!(
-                "FirstAuth received but not first-login, rejecting"
-            );
+            debug!("FirstAuth received but not first-login, rejecting");
             a.reject()?;
         }
     }
@@ -302,6 +300,10 @@ pub async fn session_env(
     Ok(())
 }
 
+/// Handles `SSH_STAMP_PUBKEY` environment variable requests.
+///
+/// # Errors
+/// Returns an error if SSH protocol operations fail or if the pubkey cannot be added.
 /// Handles `SSH_STAMP_PUBKEY` environment variable requests.
 ///
 /// # Errors
@@ -470,6 +472,10 @@ pub fn defunct() -> Result<(), sunset::Error> {
     sunset::error::BadUsage.fail()
 }
 
+/// Handles an SSH client connection, bridging UART and SSH.
+///
+/// # Errors
+/// Returns an error if SSH protocol operations or I/O fail.
 pub async fn ssh_client<'a, 'b>(
     uart_buff: &'a crate::espressif::buffered_uart::BufferedUart,
     ssh_server: &'b SSHServer<'a>,
@@ -498,5 +504,8 @@ pub async fn ssh_client<'a, 'b>(
 }
 
 pub async fn bridge_disable() {
+    // disable bridge
     debug!("Bridge disabled: WIP");
+    // TODO: Correctly disable/restart bridge and/or send message to user over SSH
+    // software_reset();
 }

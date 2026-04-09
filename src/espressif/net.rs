@@ -35,13 +35,14 @@ use sunset_async::SunsetMutex;
 extern crate alloc;
 use alloc::string::String as AllocString;
 
-use hal_espressif::{DEFAULT_SSID, WIFI_PASSWORD_CHARS};
+use hal_espressif::WIFI_PASSWORD_CHARS;
 
 // Re-export functions from hal-espressif
 pub use hal_espressif::{
     accept_requests, ap_stack_disable, tcp_socket_disable, wifi_controller_disable,
 };
 
+// When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {
     ($t:ty, $val:expr) => {{
         static STATIC_CELL: static_cell::StaticCell<$t> = static_cell::StaticCell::new();
@@ -51,7 +52,13 @@ macro_rules! mk_static {
     }};
 }
 
-/// Bring up WiFi interface with app-specific configuration
+/// Brings up the `WiFi` interface.
+///
+/// # Errors
+/// Returns an error if the `WiFi` configuration or initialization fails.
+///
+/// # Panics
+/// Panics if flash storage is not initialized or if persisting the wifi password fails.
 pub async fn if_up(
     spawner: Spawner,
     controller: Controller<'static>,
@@ -85,7 +92,7 @@ pub async fn if_up(
                 panic!("Flash storage not initialized; cannot persist wifi password");
             };
             let mut flash_storage = flash_storage_guard.lock().await;
-            if let Err(e) = store::save(&mut flash_storage, &guard).await {
+            if let Err(e) = store::save(&mut flash_storage, &guard) {
                 panic!("Failed to persist generated wifi password: {e:?}");
             }
         }
@@ -160,7 +167,10 @@ pub async fn if_up(
     Ok(ap_stack)
 }
 
-/// Returns the configured WiFi SSID from the config, or the default SSID if not set.
+/// Returns the configured `WiFi` SSID from the config.
+///
+/// # Panics
+/// Panics if `wifi_ssid` is not set in the config or exceeds 63 characters.
 pub async fn wifi_ssid(config: &'static SunsetMutex<SSHStampConfig>) -> String<63> {
     let guard = config.lock().await;
     String::<63>::try_from(guard.wifi_ssid.as_str()).expect("SSID should always be set")
@@ -191,7 +201,9 @@ fn print_hostkey_fingerprint(hostkey: &sunset::SignKey) {
     }
 }
 
-/// WiFi task for Embassy executor
+/// Manages the `WiFi` access point lifecycle.
+/// Starts the AP with the configured SSID and password from the config.
+/// Handles reconnection if the AP stops.
 #[embassy_executor::task]
 pub async fn wifi_up(
     mut wifi_controller: WifiController<'static>,

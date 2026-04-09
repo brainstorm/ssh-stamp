@@ -15,7 +15,7 @@ use esp_hal::peripherals::UART1;
 use esp_hal::system::software_reset;
 use esp_hal::uart::{Config, RxConfig, Uart};
 use hal_espressif::EspUartPins;
-use log::error;
+use log::{debug, error};
 use sunset_async::SunsetMutex;
 
 /// UART pins wrapper for app compatibility
@@ -81,5 +81,3 @@ pub fn uart_buffer_disable() {
 pub fn uart_disable() {
     debug!("UART disabled: WIP");
 }
-
-use log::{debug, error};

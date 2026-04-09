@@ -241,7 +241,7 @@ async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Err
         }
     }
 
-    net::wifi_controller_disable();
+    net::wifi_controller_disable().await;
     Ok(()) // todo!() return relevant value
 }
 
@@ -272,7 +272,7 @@ pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(
             error!("AP Stack error: {e}");
         }
     }
-    net::ap_stack_disable();
+    net::ap_stack_disable().await;
     Ok(()) // todo!() return relevant value
 }
 
@@ -302,7 +302,7 @@ async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> 
                     .await
                 {
                     error!("connect error: {:?}", e);
-                    net::tcp_socket_disable();
+                    net::tcp_socket_disable().await;
                 }
                 debug!("Connected, port 22");
             } else {
@@ -321,7 +321,7 @@ async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> 
                 error!("TCP socket error: {e}");
             }
         }
-        net::tcp_socket_disable();
+        net::tcp_socket_disable().await;
     }
     // Ok(()) // todo!() return relevant value
 }
