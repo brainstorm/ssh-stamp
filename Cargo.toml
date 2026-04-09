@@ -14,44 +14,53 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace]
-members = ["storage", "ota"]
+members = ["hal", "hal-espressif", "ota"]
 
 [workspace.dependencies]
-sunset = { git = "https://github.com/jubeormk1/sunset.git", rev = "19f63d489ecc67ff8666205aaf2fdc069495908f", default-features = false, features = [
+# Async runtime
+embassy-sync = "0.7"
+embassy-executor = { version = "0.9.0" }
+embassy-time = { version = "0.5.0" }
+embassy-futures = "0.1.2"
+
+# Collections
+heapless = "0.8"
+
+# ESP32
+esp-hal = { version = "1", features = ["unstable", "log-04"] }
+
+# SSH protocol
+sunset = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-basic", default-features = false, features = [
     "openssh-key",
     "embedded-io",
 ] }
-sunset-async = { git = "https://github.com/jubeormk1/sunset.git", rev = "19f63d489ecc67ff8666205aaf2fdc069495908f", default-features = false, features = [
+sunset-async = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-basic", default-features = false, features = [
     "multi-thread",
 ] }
-sunset-sshwire-derive = { git = "https://github.com/jubeormk1/sunset.git", rev = "19f63d489ecc67ff8666205aaf2fdc069495908f", default-features = false }
-sunset-sftp = { git = "https://github.com/jubeormk1/sunset.git", rev = "19f63d489ecc67ff8666205aaf2fdc069495908f", default-features = false }
+sunset-sshwire-derive = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-basic", default-features = false }
+sunset-sftp = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-basic", default-features = false }
 
+# Crypto
 sha2 = { version = "0.10", default-features = false }
-rustc-hash = { version = "2.1", default-features = false } # For hash in the OTA SFTP server TODO: For the optimisation task: Remove this dependency and use sha2 instead?
-log = "0.4"
+rustc-hash = { version = "2.1", default-features = false }
+bcrypt = { version = "0.17", default-features = false }
+subtle = { version = "2", default-features = false }
+hmac = { version = "0.12", default-features = false }
+digest = { version = "0.10", default-features = false, features = [
+    "rand_core",
+    "subtle",
+] }
 
-esp-hal = { version = "1", features = ["unstable", "log-04"] }
+# Storage
 embedded-storage = "0.3.1"
-esp-storage = { version = "0.8.0" }
+embedded-storage-async = "0.4"
+esp-storage = { version = "0.8" }
 esp-bootloader-esp-idf = { version = "0.4.0" }
 
-static_cell = { version = "2.1" }
-# Used for storage::flash singleton
-once_cell = { version = "1", features = [
-    "critical-section",
-], default-features = false }
-
-[dependencies]
-storage = { path = "storage" }
-ota = { path = "ota" }
-
-sha2 = { workspace = true }
-rustc-hash = { workspace = true }
-
-cfg-if = "1"
-ed25519-dalek = { version = "2", default-features = false }
-embassy-executor = { version = "0.9.0" }
+# Networking
+edge-dhcp = "0.6"
+edge-nal = "0.5"
+edge-nal-embassy = "0.7"
 embassy-net = { version = "0.7", features = [
     "tcp",
     "udp",
@@ -62,16 +71,42 @@ smoltcp = { version = "0.12", default-features = false, features = [
     "medium-ethernet",
     "socket-raw",
 ] }
-embassy-time = { version = "0.5.0" }
+
+# Utilities
+log = "0.4"
+static_cell = { version = "2.1" }
+once_cell = { version = "1", features = [
+    "critical-section",
+], default-features = false }
+portable-atomic = "1"
+snafu = { version = "0.8", default-features = false }
+paste = "1"
+pretty-hex = { version = "0.4", default-features = false }
 embedded-io-async = "0.6.1"
+embassy-embedded-hal = "0.3"
+
+[dependencies]
+ota = { path = "ota" }
+
+sha2 = { workspace = true }
+rustc-hash = { workspace = true }
+
+cfg-if = "1"
+ed25519-dalek = { version = "2", default-features = false }
+embassy-executor = { workspace = true }
+embassy-net = { workspace = true }
+smoltcp = { workspace = true }
+embassy-time = { workspace = true }
+embedded-io-async = { workspace = true }
 esp-alloc = { version = "0.9.0" }
-esp-backtrace = { version = "0.18.0", features = ["panic-handler", "println"] }
+esp-backtrace = { version = "0.18", features = ["panic-handler", "println"] }
 esp-hal = { workspace = true }
+hal-espressif = { path = "hal-espressif", default-features = false }
 esp-rtos = { version = "0.2.0", features = ["embassy", "log-04", "esp-radio"] }
 esp-radio = { version = "0.17.0", features = ["wifi", "log-04"] }
 esp-println = { version = "0.16", features = ["log-04"] }
 hex = { version = "0.4", default-features = false }
-log = { version = "0.4" }
+log = { workspace = true }
 static_cell = { workspace = true }
 ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
 sunset = { workspace = true }
@@ -79,40 +114,33 @@ sunset-async = { workspace = true }
 sunset-sshwire-derive = { workspace = true }
 sunset-sftp = { workspace = true }
 getrandom = { version = "0.2.10", features = ["custom"] }
-embassy-sync = "0.7"
-heapless = "0.8"
-embassy-futures = "0.1.2"
-edge-dhcp = "0.6"
-edge-nal = "0.5"
-edge-nal-embassy = "0.7"
-#sequential-storage = { version = "4", features = ["heapless"] }
+embassy-sync = { workspace = true }
+heapless = { workspace = true }
+embassy-futures = { workspace = true }
+edge-dhcp = { workspace = true }
+edge-nal = { workspace = true }
+edge-nal-embassy = { workspace = true }
 esp-storage = { workspace = true }
 embedded-storage = { workspace = true }
-embassy-embedded-hal = "0.3"
-bcrypt = { version = "0.17", default-features = false }
-subtle = { version = "2", default-features = false }
-hmac = { version = "0.12", default-features = false }
-# sha2 = { version = "0.10", default-features = false }
-digest = { version = "0.10", default-features = false, features = [
-    "rand_core",
-    "subtle",
-] }
-embedded-storage-async = "0.4"
-portable-atomic = "1"
+embassy-embedded-hal = { workspace = true }
+bcrypt = { workspace = true }
+subtle = { workspace = true }
+hmac = { workspace = true }
+digest = { workspace = true }
+embedded-storage-async = { workspace = true }
+portable-atomic = { workspace = true }
 esp-bootloader-esp-idf = { workspace = true }
-snafu = { version = "0.8", default-features = false }
-pastey = "0.2"
-pretty-hex = { version = "0.4", default-features = false }
+snafu = { workspace = true }
+paste = { workspace = true }
+pretty-hex = { workspace = true }
 
 [profile.dev]
-# Rust debug is too slow.
-# For debug builds always builds with some optimization
 opt-level = 0
 debug = 2
 debug-assertions = true
 
 [profile.release]
-codegen-units = 1       # LLVM can perform better optimizations using a single thread
+codegen-units = 1
 debug = 2
 debug-assertions = true
 incremental = false
@@ -122,7 +150,7 @@ overflow-checks = true
 
 [profile.esp32s2]
 inherits = "release"
-opt-level = "s"      # Optimize for size.
+opt-level = "s"
 
 [profile.dev.package.esp-storage]
 opt-level = "s"
@@ -133,7 +161,7 @@ opt-level = "s"
 [features]
 ipv6 = []
 
-# Enables the SFTP OTA Subsystem. Use ota-packer to pack a binary and PUT it over sftp
+# Enables the SFTP OTA Subsystem. Use packer to pack a binary and PUT it over sftp
 sftp-ota = []
 
 # MCU options
@@ -146,6 +174,7 @@ esp32 = [
     "esp-println/esp32",
     "esp-storage/esp32",
     "esp-bootloader-esp-idf/esp32",
+    "hal-espressif/esp32",
 ]
 esp32c2 = [
     "esp-hal/esp32c2",
@@ -156,6 +185,7 @@ esp32c2 = [
     "esp-println/esp32c2",
     "esp-storage/esp32c2",
     "esp-bootloader-esp-idf/esp32c2",
+    "hal-espressif/esp32c2",
 ]
 esp32c3 = [
     "esp-hal/esp32c3",
@@ -166,27 +196,8 @@ esp32c3 = [
     "esp-println/esp32c3",
     "esp-storage/esp32c3",
     "esp-bootloader-esp-idf/esp32c3",
+    "hal-espressif/esp32c3",
 ]
-#esp32c5 = [
-#    "esp-hal/esp32c5",
-#    "esp-alloc/esp32c5",
-#    "esp-backtrace/esp32c5",
-#    "esp-radio/esp32c5",
-#    "esp-rtos/esp32c5",
-#    "esp-println/esp32c5",
-#    "esp-storage/esp32c5",
-#    "esp-bootloader-esp-idf/esp32c5",
-#]
-#esp32c61 = [
-#    "esp-hal/esp32c61",
-#    "esp-alloc/esp32c61",
-#    "esp-backtrace/esp32c61",
-#    "esp-radio/esp32c61",
-#    "esp-rtos/esp32c61",
-#    "esp-println/esp32c61",
-#    "esp-storage/esp32c61",
-#    "esp-bootloader-esp-idf/esp32c61",
-#]
 esp32c6 = [
     "esp-hal/esp32c6",
     "esp-alloc/esp32c6",
@@ -196,6 +207,7 @@ esp32c6 = [
     "esp-println/esp32c6",
     "esp-storage/esp32c6",
     "esp-bootloader-esp-idf/esp32c6",
+    "hal-espressif/esp32c6",
 ]
 esp32s2 = [
     "esp-hal/esp32s2",
@@ -206,6 +218,7 @@ esp32s2 = [
     "esp-println/esp32s2",
     "esp-storage/esp32s2",
     "esp-bootloader-esp-idf/esp32s2",
+    "hal-espressif/esp32s2",
 ]
 esp32s3 = [
     "esp-hal/esp32s3",
@@ -216,4 +229,5 @@ esp32s3 = [
     "esp-println/esp32s3",
     "esp-storage/esp32s3",
     "esp-bootloader-esp-idf/esp32s3",
+    "hal-espressif/esp32s3",
 ]

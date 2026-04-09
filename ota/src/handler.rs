@@ -4,7 +4,7 @@
 
 use sunset::sshwire::{SSHDecode, SSHSource, WireError};
 
-use crate::{OtaHeader, otatraits::OtaActions, tlv};
+use crate::{OtaHeader, tlv, traits::OtaActions};
 
 use log::{debug, error, info, warn};
 use sha2::{Digest, Sha256};

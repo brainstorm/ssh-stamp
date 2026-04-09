@@ -1,0 +1,44 @@
+[package]
+name = "hal-espressif"
+version = "0.2.0"
+edition = "2021"
+authors = ["Roman Valls Guimera <brain@brainstorm.name>"]
+description = "ESP32 implementation of the hal traits for ssh-stamp"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/brainstorm/ssh-stamp"
+
+[dependencies]
+hal = { path = "../hal" }
+embassy-sync = { workspace = true }
+embassy-executor = { workspace = true }
+embassy-time = { workspace = true }
+embassy-futures = { workspace = true }
+embassy-net = { workspace = true }
+heapless = { workspace = true }
+esp-hal = { workspace = true }
+esp-storage = { version = "0.8" }
+esp-bootloader-esp-idf = { version = "0.4.0" }
+esp-radio = { version = "0.17.0", features = ["wifi", "log-04"] }
+embedded-storage = { workspace = true }
+embedded-storage-async = { workspace = true }
+once_cell = { workspace = true }
+sunset-async = { workspace = true }
+sha2 = { workspace = true }
+hmac = { workspace = true }
+getrandom = { version = "0.2.10", features = ["custom"] }
+log = { workspace = true }
+static_cell = { workspace = true }
+portable-atomic = { version = "1" }
+edge-dhcp = { workspace = true }
+edge-nal = { workspace = true }
+edge-nal-embassy = { workspace = true }
+smoltcp = { workspace = true }
+
+[features]
+default = ["esp32c6"]
+esp32 = ["esp-hal/esp32", "esp-storage/esp32", "esp-bootloader-esp-idf/esp32", "esp-radio/esp32"]
+esp32c2 = ["esp-hal/esp32c2", "esp-storage/esp32c2", "esp-bootloader-esp-idf/esp32c2", "esp-radio/esp32c2"]
+esp32c3 = ["esp-hal/esp32c3", "esp-storage/esp32c3", "esp-bootloader-esp-idf/esp32c3", "esp-radio/esp32c3"]
+esp32c6 = ["esp-hal/esp32c6", "esp-storage/esp32c6", "esp-bootloader-esp-idf/esp32c6", "esp-radio/esp32c6"]
+esp32s2 = ["esp-hal/esp32s2", "esp-storage/esp32s2", "esp-bootloader-esp-idf/esp32s2", "esp-radio/esp32s2"]
+esp32s3 = ["esp-hal/esp32s3", "esp-storage/esp32s3", "esp-bootloader-esp-idf/esp32s3", "esp-radio/esp32s3"]
