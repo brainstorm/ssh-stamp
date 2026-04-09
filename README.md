@@ -127,7 +127,8 @@ Here are some PoC shots:
 
 ```
 cargo install cargo-cyclonedx
-cargo cyclonedx -f json --manifest-path ./docs/
+cargo cyclonedx  # Generates XML by default
+cargo cyclonedx -f json
 ```
 
 Sponsored by:
