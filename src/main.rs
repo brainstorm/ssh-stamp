@@ -244,6 +244,8 @@ async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Err
             Result::Err(e)
         }
     }
+
+    net::wifi_controller_disable().await;
 }
 
 pub struct WifiControllerEnabled<'a> {
@@ -279,6 +281,8 @@ pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(
             Result::Err(e)
         }
     }
+
+    net::ap_stack_disable().await;
 }
 
 pub struct TCPEnabled<'a> {
@@ -306,6 +310,7 @@ async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> 
                     .await
                 {
                     error!("connect error: {:?}", e);
+                    net::tcp_socket_disable().await;
                 }
                 debug!("Connected, port 22");
             } else {
@@ -328,6 +333,7 @@ async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> 
                 error!("TCP socket error: {e}");
             }
         }
+        net::tcp_socket_disable().await;
     }
 }
 

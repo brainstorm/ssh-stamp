@@ -60,7 +60,13 @@ macro_rules! mk_static {
     }};
 }
 
-/// Bring up WiFi interface with app-specific configuration
+/// Brings up the `WiFi` interface.
+///
+/// # Errors
+/// Returns an error if the `WiFi` configuration or initialization fails.
+///
+/// # Panics
+/// Panics if flash storage is not initialized or if persisting the wifi password fails.
 pub async fn if_up(
     spawner: Spawner,
     controller: Controller<'static>,
@@ -203,7 +209,9 @@ fn print_hostkey_fingerprint(hostkey: &sunset::SignKey) {
     }
 }
 
-/// WiFi task for Embassy executor
+/// Manages the `WiFi` access point lifecycle.
+/// Starts the AP with the configured SSID and password from the config.
+/// Handles reconnection if the AP stops.
 #[embassy_executor::task]
 pub async fn wifi_up(
     mut wifi_controller: WifiController<'static>,
