@@ -1324,7 +1324,6 @@ dependencies = [
 name = "hal"
 version = "0.2.0"
 dependencies = [
- "embassy-executor",
  "embassy-sync 0.7.2",
  "heapless 0.8.0",
 ]
@@ -1333,9 +1332,6 @@ dependencies = [
 name = "hal-espressif"
 version = "0.2.0"
 dependencies = [
- "edge-dhcp",
- "edge-nal",
- "edge-nal-embassy",
  "embassy-executor",
  "embassy-futures",
  "embassy-net",
@@ -1345,7 +1341,6 @@ dependencies = [
  "embedded-storage-async",
  "esp-bootloader-esp-idf",
  "esp-hal",
- "esp-radio",
  "esp-storage",
  "getrandom",
  "hal",
@@ -1355,7 +1350,6 @@ dependencies = [
  "once_cell",
  "portable-atomic",
  "sha2",
- "smoltcp",
  "static_cell",
  "sunset-async",
 ]
@@ -1641,6 +1635,12 @@ name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
+name = "pastey"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
 
 [[package]]
 name = "pem-rfc7468"
@@ -2061,7 +2061,7 @@ dependencies = [
  "hmac",
  "log",
  "ota",
- "paste",
+ "pastey",
  "portable-atomic",
  "pretty-hex",
  "rustc-hash",

@@ -19,7 +19,7 @@ pub enum HalError {
     Config,
     /// UART peripheral error.
     Uart(UartError),
-    /// WiFi peripheral error.
+    /// `WiFi` peripheral error.
     Wifi(WifiError),
     /// Flash storage error.
     Flash(FlashError),
@@ -49,7 +49,7 @@ pub enum UartError {
 /// WiFi-specific errors.
 #[derive(Debug)]
 pub enum WifiError {
-    /// WiFi hardware initialization failed.
+    /// `WiFi` hardware initialization failed.
     Initialization,
     /// Failed to create socket.
     SocketCreate,
@@ -99,11 +99,11 @@ impl fmt::Display for HalError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             HalError::Config => write!(f, "configuration error"),
-            HalError::Uart(e) => write!(f, "UART error: {:?}", e),
-            HalError::Wifi(e) => write!(f, "WiFi error: {:?}", e),
-            HalError::Flash(e) => write!(f, "Flash error: {:?}", e),
+            HalError::Uart(e) => write!(f, "UART error: {e:?}"),
+            HalError::Wifi(e) => write!(f, "WiFi error: {e:?}"),
+            HalError::Flash(e) => write!(f, "Flash error: {e:?}"),
             HalError::Rng => write!(f, "RNG error"),
-            HalError::Hash(e) => write!(f, "Hash error: {:?}", e),
+            HalError::Hash(e) => write!(f, "Hash error: {e:?}"),
             HalError::Timer => write!(f, "Timer error"),
             HalError::Executor => write!(f, "Executor error"),
         }

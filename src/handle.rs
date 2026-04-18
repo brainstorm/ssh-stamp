@@ -18,7 +18,7 @@ use core::fmt::Debug;
 use core::option::Option::None;
 use core::result::Result;
 
-use sunset::{ChanHandle, ServEvent};
+use sunset::{ChanFail, ChanHandle, ServEvent};
 use sunset_async::{ChanInOut, SSHServer, SunsetMutex};
 
 pub mod env_parser {
@@ -89,10 +89,15 @@ pub struct EventContext<'a> {
     pub needs_reset: &'a mut bool,
 }
 
+/// Handles SSH session subsystem requests (e.g., SFTP).
+///
+/// # Errors
+///
+/// Returns an error if SSH protocol operations fail.
 pub fn session_subsystem(
     ev: ServEvent<'_, '_>,
     ctx: &mut EventContext<'_>,
-    _chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
+    #[cfg(feature = "sftp-ota")] chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
 ) -> Result<(), sunset::Error> {
     if let ServEvent::SessionSubsystem(a) = ev {
         debug!("ServEvent::SessionSubsystem");
@@ -107,9 +112,9 @@ pub fn session_subsystem(
                 {
                     a.succeed()?;
                     debug!("We got SFTP subsystem");
-                    match _chan_pipe.try_send(SessionType::Sftp(ch)) {
+                    match chan_pipe.try_send(SessionType::Sftp(ch)) {
                         Ok(_) => *ctx.auth_checked = false,
-                        Err(e) => log::error!("Could not send the channel: {:?}", e),
+                        Err(e) => log::error!("Could not send the channel: {e:?}"),
                     };
                 }
                 #[cfg(not(feature = "sftp-ota"))]
@@ -127,6 +132,15 @@ pub fn session_subsystem(
     Ok(())
 }
 
+/// Handles SSH session shell requests.
+///
+/// # Errors
+///
+/// Returns an error if SSH protocol operations fail.
+///
+/// # Panics
+///
+/// Panics if flash storage lock cannot be acquired.
 pub async fn session_shell(
     ev: ServEvent<'_, '_>,
     ctx: &mut EventContext<'_>,
@@ -147,7 +161,7 @@ pub async fn session_shell(
                     panic!("Could not acquire flash storage lock");
                 };
                 let mut flash_storage = flash_storage_guard.lock().await;
-                let _result = store::save(&mut flash_storage, &config_guard);
+                store::save(&mut flash_storage, &config_guard)?;
                 drop(config_guard);
                 if *ctx.needs_reset {
                     info!("Configuration saved. Rebooting to apply WiFi changes...");
@@ -160,9 +174,9 @@ pub async fn session_shell(
             UART_SIGNAL.signal(1);
             debug!("Connection loop: UART_SIGNAL sent");
             match chan_pipe.try_send(SessionType::Bridge(ch)) {
-                Ok(_) => *ctx.auth_checked = false,
-                Err(e) => log::error!("Could not send the channel: {:?}", e),
-            };
+                Ok(()) => *ctx.auth_checked = false,
+                Err(e) => log::error!("Could not send the channel: {e:?}"),
+            }
         } else {
             a.fail()?;
         }
@@ -170,6 +184,11 @@ pub async fn session_shell(
     Ok(())
 }
 
+/// Handles the first authentication request.
+///
+/// # Errors
+///
+/// Returns an error if SSH protocol operations fail.
 pub async fn first_auth(
     ev: ServEvent<'_, '_>,
     config: &SunsetMutex<SSHStampConfig>,
@@ -191,6 +210,11 @@ pub async fn first_auth(
     Ok(())
 }
 
+/// Provides host keys to the SSH client.
+///
+/// # Errors
+///
+/// Returns an error if SSH protocol operations fail.
 pub async fn hostkeys(
     ev: ServEvent<'_, '_>,
     config: &SunsetMutex<SSHStampConfig>,
@@ -203,6 +227,11 @@ pub async fn hostkeys(
     Ok(())
 }
 
+/// Rejects password authentication requests.
+///
+/// # Errors
+///
+/// Returns an error if SSH protocol operations fail.
 pub fn password_auth(ev: ServEvent<'_, '_>) -> Result<(), sunset::Error> {
     if let ServEvent::PasswordAuth(a) = ev {
         warn!("Password auth is not supported, use public key auth instead.");
@@ -211,6 +240,11 @@ pub fn password_auth(ev: ServEvent<'_, '_>) -> Result<(), sunset::Error> {
     Ok(())
 }
 
+/// Handles SSH public key authentication.
+///
+/// # Errors
+///
+/// Returns an error if SSH protocol operations fail.
 pub async fn pubkey_auth(
     ev: ServEvent<'_, '_>,
     ctx: &mut EventContext<'_>,
@@ -229,14 +263,14 @@ pub async fn pubkey_auth(
                     .any(|slot| slot.as_ref().is_some_and(|stored| *stored == presented));
 
                 if matched {
-                    a.allow()?;
                     *ctx.auth_checked = true;
+                    a.allow()?;
                 } else {
                     debug!("No matching pubkey slot found");
                     a.reject()?;
                 }
             }
-            _ => {
+            sunset::packets::PubKey::Unknown(_) => {
                 a.reject()?;
             }
         }
@@ -244,6 +278,11 @@ pub async fn pubkey_auth(
     Ok(())
 }
 
+/// Handles SSH session open requests, rejecting duplicates.
+///
+/// # Errors
+///
+/// Returns an error if SSH protocol operations fail.
 pub fn open_session(
     ev: ServEvent<'_, '_>,
     ctx: &mut EventContext<'_>,
@@ -252,7 +291,8 @@ pub fn open_session(
         debug!("ServEvent::OpenSession");
         match ctx.session {
             Some(_) => {
-                todo!("Can't have two sessions");
+                warn!("Rejecting duplicate session channel");
+                a.reject(ChanFail::SSH_OPEN_ADMINISTRATIVELY_PROHIBITED)?;
             }
             None => {
                 *ctx.session = Some(a.accept()?);
@@ -262,6 +302,11 @@ pub fn open_session(
     Ok(())
 }
 
+/// Handles SSH environment variable requests.
+///
+/// # Errors
+///
+/// Returns an error if SSH protocol operations fail.
 pub async fn session_env(
     ev: ServEvent<'_, '_>,
     ctx: &mut EventContext<'_>,
@@ -303,10 +348,7 @@ pub async fn session_env(
 /// Handles `SSH_STAMP_PUBKEY` environment variable requests.
 ///
 /// # Errors
-/// Returns an error if SSH protocol operations fail or if the pubkey cannot be added.
-/// Handles `SSH_STAMP_PUBKEY` environment variable requests.
 ///
-/// # Errors
 /// Returns an error if SSH protocol operations fail or if the pubkey cannot be added.
 pub async fn pubkey_env(
     a: sunset::event::ServEnvironmentRequest<'_, '_>,
@@ -441,6 +483,11 @@ pub async fn wifi_mac_random_env(
     Ok(())
 }
 
+/// Handles SSH PTY requests.
+///
+/// # Errors
+///
+/// Returns an error if SSH protocol operations fail.
 pub async fn session_pty(
     ev: ServEvent<'_, '_>,
     ctx: &mut EventContext<'_>,
@@ -460,6 +507,11 @@ pub async fn session_pty(
     Ok(())
 }
 
+/// Rejects SSH exec requests.
+///
+/// # Errors
+///
+/// Returns an error if SSH protocol operations fail.
 pub fn session_exec(ev: ServEvent<'_, '_>) -> Result<(), sunset::Error> {
     if let ServEvent::SessionExec(a) = ev {
         a.fail()?;
@@ -467,6 +519,11 @@ pub fn session_exec(ev: ServEvent<'_, '_>) -> Result<(), sunset::Error> {
     Ok(())
 }
 
+/// Returns a `BadUsage` error for unhandled events.
+///
+/// # Errors
+///
+/// Always returns `BadUsage` error.
 pub fn defunct() -> Result<(), sunset::Error> {
     debug!("Expected caller to handle event");
     sunset::error::BadUsage.fail()
@@ -487,25 +544,23 @@ pub async fn ssh_client<'a, 'b>(
     match session_type {
         SessionType::Bridge(ch) => {
             info!("Handling bridge session");
-            let stdio: ChanInOut<'_> = ssh_server.stdio(ch).await?;
-            let (stdin, stdout) = stdio.split();
+            let chan_io: ChanInOut<'_> = ssh_server.stdio(ch).await?;
+            let (stdin, stdout) = chan_io.split();
             info!("Starting bridge");
-            serial_bridge(stdin, stdout, uart_buff).await?
+            serial_bridge(stdin, stdout, uart_buff).await?;
         }
         #[cfg(feature = "sftp-ota")]
         SessionType::Sftp(ch) => {
             debug!("Handling SFTP session");
             let stdio = ssh_server.stdio(ch).await?;
             let ota_writer = hal_espressif::EspOtaWriter::new();
-            ota::run_ota_server::<hal_espressif::EspOtaWriter>(stdio, ota_writer).await?
+            ota::run_ota_server::<hal_espressif::EspOtaWriter>(stdio, ota_writer).await?;
         }
-    };
+    }
     Ok(())
 }
 
-pub async fn bridge_disable() {
-    // disable bridge
-    debug!("Bridge disabled: WIP");
+pub fn bridge_disable() {
     // TODO: Correctly disable/restart bridge and/or send message to user over SSH
-    // software_reset();
+    debug!("Bridge disabled: WIP");
 }

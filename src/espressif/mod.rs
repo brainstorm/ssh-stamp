@@ -10,9 +10,4 @@ pub mod buffered_uart;
 pub mod net;
 
 // Re-export RNG registration from hal-espressif
-pub use hal_espressif::EspRng;
-
-/// Register the hardware RNG for use with getrandom
-pub fn register_custom_rng(rng: esp_hal::rng::Rng) {
-    hal_espressif::EspRng::register(rng);
-}
+pub use hal_espressif::register_custom_rng;

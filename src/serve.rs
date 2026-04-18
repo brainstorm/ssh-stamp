@@ -54,7 +54,10 @@ pub async fn connection_loop(
 
         match ev {
             ServEvent::SessionSubsystem(_) => {
+                #[cfg(feature = "sftp-ota")]
                 session_subsystem(ev, &mut ctx, chan_pipe)?;
+                #[cfg(not(feature = "sftp-ota"))]
+                session_subsystem(ev, &mut ctx)?;
             }
             ServEvent::SessionShell(_) => {
                 session_shell(ev, &mut ctx, config, chan_pipe).await?;
@@ -91,9 +94,9 @@ pub async fn connection_loop(
     }
 }
 
-pub async fn connection_disable() {
+pub fn connection_disable() {
+    // TODO: Correctly disable/restart Connection loop and/or send message to user over SSH
     debug!("Connection loop disabled: WIP");
-    // TODO: Correctly disable/restart Conection loop and/or send messsage to user over SSH
 }
 
 pub fn ssh_wait_for_initialisation<'server>(
@@ -103,7 +106,7 @@ pub fn ssh_wait_for_initialisation<'server>(
     SSHServer::new(inbuf, outbuf)
 }
 
-pub async fn ssh_disable() {
+pub fn ssh_disable() {
+    // TODO: Correctly disable/restart SSH Server and/or send message to user over SSH
     debug!("SSH Server disabled: WIP");
-    // TODO: Correctly disable/restart SSH Server and/or send messsage to user over SSH
 }

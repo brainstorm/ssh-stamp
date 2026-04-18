@@ -21,7 +21,7 @@ pub enum StorageError {
 /// Storage result type alias
 pub type StorageResult<T> = core::result::Result<T, StorageError>;
 
-/// Convert HalError to StorageError
+/// Convert `HalError` to `StorageError`
 impl From<HalError> for StorageError {
     fn from(_: HalError) -> Self {
         StorageError::InternalError

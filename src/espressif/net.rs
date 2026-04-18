@@ -35,7 +35,7 @@ use sunset_async::SunsetMutex;
 extern crate alloc;
 use alloc::string::String as AllocString;
 
-use hal_espressif::WIFI_PASSWORD_CHARS;
+use crate::settings::WIFI_PASSWORD_CHARS;
 
 // Re-export functions from hal-espressif
 pub use hal_espressif::{
@@ -246,7 +246,7 @@ pub async fn wifi_up(
 #[embassy_executor::task]
 pub async fn net_up(mut runner: Runner<'static, esp_radio::wifi::WifiDevice<'static>>) {
     debug!("Bringing up network stack...");
-    runner.run().await
+    runner.run().await;
 }
 
 /// DHCP server task for Embassy executor

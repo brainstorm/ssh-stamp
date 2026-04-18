@@ -196,47 +196,47 @@ impl<T: OpaqueFileHandle + InitWithSeed, W: OtaActions> SftpServer<'_, T> for Sf
         offset: u64,
         buf: &[u8],
     ) -> sunset_sftp::server::SftpOpResult<()> {
-        if let Some(current_handle) = &self.file_handle {
-            if current_handle == opaque_file_handle {
-                if !self.write_permission {
-                    warn!(
-                        "SftpServer Write operation denied: no write permission for handle = {opaque_file_handle:?}"
-                    );
-                    return Err(StatusCode::SSH_FX_PERMISSION_DENIED);
-                }
-                debug!(
-                    "SftpServer Write operation for OTA: handle = {opaque_file_handle:?}, offset = {offset:?}, buf_len = {:?}",
-                    buf.len()
+        if let Some(current_handle) = &self.file_handle
+            && current_handle == opaque_file_handle
+        {
+            if !self.write_permission {
+                warn!(
+                    "SftpServer Write operation denied: no write permission for handle = {opaque_file_handle:?}"
                 );
+                return Err(StatusCode::SSH_FX_PERMISSION_DENIED);
+            }
+            debug!(
+                "SftpServer Write operation for OTA: handle = {opaque_file_handle:?}, offset = {offset:?}, buf_len = {:?}",
+                buf.len()
+            );
 
-                if let Err(e) = self.processor.process_data(offset, buf).await {
-                    match e {
-                        crate::handler::OtaError::IllegalOperation => {
-                            error!(
-                                "SftpServer Write operation failed during OTA processing: Illegal Operation - {e:?}"
-                            );
-                            return Err(StatusCode::SSH_FX_PERMISSION_DENIED);
-                        }
-                        crate::handler::OtaError::UnknownTlvType => {
-                            error!(
-                                "SftpServer Write operation failed during OTA processing: Unknown TLV Type - {e:?}"
-                            );
-                            return Err(StatusCode::SSH_FX_OP_UNSUPPORTED);
-                        }
-                        _ => {
-                            error!(
-                                "SftpServer Write operation failed during OTA processing: {e:?}"
-                            );
-                            return Err(StatusCode::SSH_FX_FAILURE);
-                        }
+            if let Err(e) = self.processor.process_data(offset, buf).await {
+                match e {
+                    crate::handler::OtaError::IllegalOperation => {
+                        error!(
+                            "SftpServer Write operation failed during OTA processing: Illegal Operation - {e:?}"
+                        );
+                        return Err(StatusCode::SSH_FX_PERMISSION_DENIED);
+                    }
+                    crate::handler::OtaError::UnknownTlvType => {
+                        error!(
+                            "SftpServer Write operation failed during OTA processing: Unknown TLV Type - {e:?}"
+                        );
+                        return Err(StatusCode::SSH_FX_OP_UNSUPPORTED);
+                    }
+                    _ => {
+                        error!(
+                            "SftpServer Write operation failed during OTA processing: {e:?}"
+                        );
+                        return Err(StatusCode::SSH_FX_FAILURE);
                     }
                 }
-                debug!(
-                    "SftpServer Write operation for OTA processed successfully: handle = {opaque_file_handle:?}, offset = {offset:?}, buf_len = {:?}",
-                    buf.len()
-                );
-                return Ok(());
             }
+            debug!(
+                "SftpServer Write operation for OTA processed successfully: handle = {opaque_file_handle:?}, offset = {offset:?}, buf_len = {:?}",
+                buf.len()
+            );
+            return Ok(());
         }
 
         warn!("SftpServer Write operation failed: handle mismatch = {opaque_file_handle:?}");

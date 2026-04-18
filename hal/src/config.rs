@@ -14,7 +14,7 @@
 pub struct HardwareConfig {
     /// UART configuration.
     pub uart: UartConfig,
-    /// WiFi access point configuration.
+    /// `WiFi` access point configuration.
     pub wifi: WifiApConfigStatic,
 }
 
@@ -47,9 +47,9 @@ impl Default for UartConfig {
     }
 }
 
-/// WiFi access point configuration (static).
+/// `WiFi` access point configuration (static).
 ///
-/// Contains settings for running the device as a WiFi access point.
+/// Contains settings for running the device as a `WiFi` access point.
 /// Uses `heapless::String` for `no_std` compatibility.
 #[derive(Clone, Debug)]
 pub struct WifiApConfigStatic {
@@ -57,7 +57,7 @@ pub struct WifiApConfigStatic {
     pub ssid: heapless::String<32>,
     /// Optional WPA2 password, max 63 characters.
     pub password: Option<heapless::String<63>>,
-    /// WiFi channel (1-14 for 2.4GHz).
+    /// `WiFi` channel (1-14 for 2.4GHz).
     pub channel: u8,
     /// MAC address for the access point interface.
     pub mac: [u8; 6],

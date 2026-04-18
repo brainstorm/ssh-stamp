@@ -7,7 +7,6 @@
 //! This module re-exports all HAL trait definitions. Each trait provides
 //! an abstract interface for a specific hardware peripheral.
 
-mod executor;
 mod flash;
 mod hash;
 mod network;
@@ -15,7 +14,6 @@ mod rng;
 mod timer;
 mod uart;
 
-pub use executor::ExecutorHal;
 pub use flash::{FlashHal, OtaActions};
 pub use hash::HashHal;
 pub use network::{EthernetHal, WifiHal};

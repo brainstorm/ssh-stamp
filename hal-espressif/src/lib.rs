@@ -20,17 +20,15 @@ pub use executor::EspExecutor;
 pub use flash::{get_flash_n_buffer, init as flash_init, EspFlash, EspOtaWriter, FlashBuffer};
 pub use hash::EspHmac;
 pub use network::{
-    accept_requests, ap_stack_disable, dhcp_server, init_wifi_ap, net_up, tcp_socket_disable,
-    wifi_controller_disable, wifi_up, EspWifi, DEFAULT_SSID, WIFI_PASSWORD_CHARS,
+    accept_requests, ap_stack_disable, tcp_socket_disable, wifi_controller_disable, EspWifi,
 };
-pub use rng::EspRng;
+pub use rng::{register_custom_rng, EspRng};
 pub use timer::EspTimer;
 pub use uart::{
     uart_buffer_wait_for_initialisation, uart_task, BufferedUart, EspUart, EspUartPins, UART_BUF,
     UART_SIGNAL,
 };
 
-use embassy_executor::Spawner;
 use hal::{HalError, HalPlatform, HardwareConfig};
 
 impl HalPlatform for EspHalPlatform {
@@ -40,9 +38,8 @@ impl HalPlatform for EspHalPlatform {
     type Flash = EspFlash;
     type Hash = EspHmac;
     type Timer = EspTimer;
-    type Executor = EspExecutor;
 
-    async fn init(_config: HardwareConfig, spawner: Spawner) -> Result<Self, HalError>
+    async fn init(_config: HardwareConfig) -> Result<Self, HalError>
     where
         Self: Sized,
     {
@@ -55,7 +52,6 @@ impl HalPlatform for EspHalPlatform {
             flash: EspFlash,
             hash: EspHmac,
             timer: EspTimer,
-            executor: EspExecutor::new(spawner),
         })
     }
 
@@ -120,5 +116,4 @@ pub struct EspHalPlatform {
     pub flash: EspFlash,
     pub hash: EspHmac,
     pub timer: EspTimer,
-    pub executor: EspExecutor,
 }

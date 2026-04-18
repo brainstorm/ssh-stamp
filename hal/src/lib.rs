@@ -12,7 +12,7 @@
 //! The HAL is organized around several key concepts:
 //!
 //! - [`HalPlatform`]: Top-level trait bundling all peripherals together
-//! - Peripheral traits: [`UartHal`], [`WifiHal`], [`RngHal`], [`FlashHal`], [`HashHal`], [`TimerHal`], [`ExecutorHal`]
+//! - Peripheral traits: [`UartHal`], [`WifiHal`], [`RngHal`], [`FlashHal`], [`HashHal`], [`TimerHal`]
 //! - Configuration: [`HardwareConfig`], [`UartConfig`], [`WifiApConfigStatic`], [`EthernetConfig`]
 //! - Error handling: [`HalError`] with variants for each peripheral type
 //!
@@ -40,7 +40,6 @@ pub use error::{FlashError, HalError, HashError, UartError, WifiError};
 pub use traits::*;
 
 use core::future::Future;
-use embassy_executor::Spawner;
 
 /// Platform abstraction bundling all HAL peripherals.
 ///
@@ -69,7 +68,7 @@ pub trait HalPlatform {
     /// UART peripheral implementation.
     type Uart: UartHal;
 
-    /// WiFi peripheral implementation.
+    /// `WiFi` peripheral implementation.
     type Wifi: WifiHal;
 
     /// Random number generator implementation.
@@ -84,25 +83,8 @@ pub trait HalPlatform {
     /// Timer implementation.
     type Timer: TimerHal;
 
-    /// Async executor implementation.
-    type Executor: ExecutorHal;
-
-    /// Initialize all peripherals with given configuration.
-    ///
-    /// This method should be called once at startup to configure and instantiate
-    /// all hardware peripherals.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - Hardware configuration including pin assignments and settings
-    /// * `spawner` - Embassy executor spawner for spawning async tasks
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(Self)` on successful initialization, or `Err(HalError)` on failure.
     fn init(
         config: HardwareConfig,
-        spawner: Spawner,
     ) -> impl Future<Output = Result<Self, HalError>>
     where
         Self: Sized;

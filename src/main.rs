@@ -356,7 +356,7 @@ async fn socket_enabled(s: TCPEnabled<'_>) -> Result<(), sunset::Error> {
         }
     }
 
-    serve::ssh_disable().await;
+    serve::ssh_disable();
     // }
     Ok(()) // todo!() return relevant value
 }
@@ -397,7 +397,7 @@ async fn ssh_enabled(s: SocketEnabled<'_>) -> Result<(), sunset::Error> {
         }
     }
 
-    serve::connection_disable().await;
+    serve::connection_disable();
     // }
     Ok(()) // todo!() return relevant value
 }
@@ -436,7 +436,7 @@ where
         }
     }
 
-    handle::bridge_disable().await;
+    handle::bridge_disable();
 
     Ok(())
 }

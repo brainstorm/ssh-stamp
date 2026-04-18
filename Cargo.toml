@@ -80,7 +80,7 @@ once_cell = { version = "1", features = [
 ], default-features = false }
 portable-atomic = "1"
 snafu = { version = "0.8", default-features = false }
-paste = "1"
+pastey = "0.1"
 pretty-hex = { version = "0.4", default-features = false }
 embedded-io-async = "0.6.1"
 embassy-embedded-hal = "0.3"
@@ -131,7 +131,7 @@ embedded-storage-async = { workspace = true }
 portable-atomic = { workspace = true }
 esp-bootloader-esp-idf = { workspace = true }
 snafu = { workspace = true }
-paste = { workspace = true }
+pastey = { workspace = true }
 pretty-hex = { workspace = true }
 
 [profile.dev]

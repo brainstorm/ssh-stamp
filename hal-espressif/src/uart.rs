@@ -30,6 +30,7 @@ pub struct BufferedUart {
 }
 
 impl BufferedUart {
+    #[must_use]
     pub fn new() -> Self {
         BufferedUart {
             outward: Pipe::new(),
@@ -41,23 +42,23 @@ impl BufferedUart {
 
     /// Transfer data between UART hardware and internal buffers.
     ///
-    /// This should be awaited from an Embassy task run in an InterruptExecutor
+    /// This should be awaited from an Embassy task run in an `InterruptExecutor`
     /// for lower latency.
     pub async fn run(&self, uart: Uart<'_, Async>) {
         let (mut uart_rx, mut uart_tx) = uart.split();
-        let mut uart_rx_buf = [0u8; UART_BUF_SZ];
-        let mut uart_tx_buf = [0u8; UART_BUF_SZ];
+        let mut rx_buf = [0u8; UART_BUF_SZ];
+        let mut tx_buf = [0u8; UART_BUF_SZ];
 
         loop {
             use embassy_futures::select::select;
 
             let rd_from = async {
                 loop {
-                    let Ok(n) = uart_rx.read_async(&mut uart_rx_buf).await else {
+                    let Ok(n) = uart_rx.read_async(&mut rx_buf).await else {
                         continue;
                     };
 
-                    let mut rx_slice = &uart_rx_buf[..n];
+                    let mut rx_slice = &rx_buf[..n];
 
                     while !rx_slice.is_empty() {
                         rx_slice = match self.inward.try_write(rx_slice) {
@@ -82,8 +83,8 @@ impl BufferedUart {
 
             let rd_to = async {
                 loop {
-                    let n = self.outward.read(&mut uart_tx_buf).await;
-                    let _ = uart_tx.write_async(&uart_tx_buf[..n]).await;
+                    let n = self.outward.read(&mut tx_buf).await;
+                    let _ = uart_tx.write_async(&tx_buf[..n]).await;
                 }
             };
 
@@ -130,6 +131,7 @@ pub struct EspUart {
 
 impl EspUart {
     /// Create a new ESP UART instance
+    #[must_use]
     pub fn new(buffered: &'static BufferedUart) -> Self {
         Self {
             buffered,
@@ -138,6 +140,7 @@ impl EspUart {
     }
 
     /// Get the buffered UART for task spawning
+    #[must_use]
     pub fn buffered(&self) -> &'static BufferedUart {
         self.buffered
     }

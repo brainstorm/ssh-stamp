@@ -8,7 +8,7 @@
 ///
 /// If you are looking into improving this, consider looking into [proto.rs](https://github.com/mkj/sunset/blob/8e5d20916cf7b29111b90e4d3b7bb7827c9be8e5/sftp/src/proto.rs)
 /// for an example on how to automate the generation of protocols with macros
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use sunset::sshwire::{SSHDecode, SSHEncode, SSHSource, WireError};
 
 use crate::tlv;
@@ -317,9 +317,8 @@ impl OtaHeader {
         while source.remaining() > 0 {
             match tlv::Tlv::dec(&mut source) {
                 Err(sunset::sshwire::WireError::UnknownPacket { number }) => {
-                    warn!(
-                        "Unknown packet type encountered: {number}. TLV skipping it and continuing"
-                    );
+                    error!("Unknown packet type encountered: {number}");
+                    return Err(sunset::sshwire::WireError::UnknownPacket { number });
                 }
                 Err(e) => {
                     return Err(e);

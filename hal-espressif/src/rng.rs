@@ -8,8 +8,8 @@
 
 use core::cell::RefCell;
 
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::Mutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use esp_hal::rng::Rng;
 use getrandom::register_custom_getrandom;
 use hal::{HalError, RngHal};
@@ -19,24 +19,21 @@ static RNG: StaticCell<Rng> = StaticCell::new();
 static RNG_MUTEX: Mutex<CriticalSectionRawMutex, RefCell<Option<&'static mut Rng>>> =
     Mutex::new(RefCell::new(None));
 
-/// ESP32 RNG implementation
-pub struct EspRng {
-    _inner: (),
+register_custom_getrandom!(esp_getrandom_custom_func);
+
+/// Register the hardware RNG for use with getrandom
+pub fn register_custom_rng(rng: Rng) {
+    let rng_ref = RNG.init(rng);
+    RNG_MUTEX.lock(|t| t.borrow_mut().replace(rng_ref));
 }
 
-impl EspRng {
-    /// Create a new ESP RNG instance
-    ///
-    /// Note: The actual RNG must be registered via `register()` before use.
-    pub fn new() -> Self {
-        Self { _inner: () }
-    }
+/// ESP32 RNG implementation
+pub struct EspRng;
 
-    /// Register the RNG for use with getrandom
-    pub fn register(rng: Rng) {
-        let rng_ref = RNG.init(rng);
-        RNG_MUTEX.lock(|t| t.borrow_mut().replace(rng_ref));
-        register_custom_getrandom!(esp_getrandom_custom_func);
+impl EspRng {
+    #[must_use]
+    pub fn new() -> Self {
+        Self
     }
 }
 
@@ -57,14 +54,20 @@ impl RngHal for EspRng {
     }
 }
 
-/// ESP32-specific getrandom implementation
+/// Custom getrandom function for ESP-HAL.
+///
+/// # Errors
+///
+/// Returns an error if the RNG has not been registered via `register_custom_rng`.
+///
+/// # Panics
+///
+/// Panics if the RNG mutex lock fails internally.
 pub fn esp_getrandom_custom_func(buf: &mut [u8]) -> Result<(), getrandom::Error> {
     RNG_MUTEX.lock(|t| {
-        let mut rng = t.borrow_mut();
-        let rng = rng
-            .as_mut()
-            .expect("register() should have been called first");
+        let mut rng_ref = t.borrow_mut();
+        let rng = rng_ref.as_mut().ok_or(getrandom::Error::UNEXPECTED)?;
         rng.read(buf);
-    });
-    Ok(())
+        Ok(())
+    })
 }

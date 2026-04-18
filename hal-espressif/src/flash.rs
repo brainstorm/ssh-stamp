@@ -24,6 +24,7 @@ pub struct FlashBuffer<'d> {
 }
 
 impl<'d> FlashBuffer<'d> {
+    #[must_use]
     pub fn new(flash: FlashStorage<'static>) -> Self {
         Self {
             flash,
@@ -97,6 +98,7 @@ impl FlashHal for EspFlash {
 pub struct EspOtaWriter {}
 
 impl EspOtaWriter {
+    #[must_use]
     pub fn new() -> Self {
         EspOtaWriter {}
     }
@@ -108,7 +110,7 @@ impl EspOtaWriter {
         };
         let mut fb = fb.lock().await;
 
-        let (storage, _buffer) = fb.split_ref_mut();
+        let (storage, _) = fb.split_ref_mut();
         let mut buff_ota = [0u8; esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN];
 
         let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
@@ -117,7 +119,8 @@ impl EspOtaWriter {
             .next_partition()
             .map_err(|_| HalError::Flash(FlashError::InternalError))?;
 
-        Ok(target_partition.partition_size() as u32)
+        u32::try_from(target_partition.partition_size())
+            .map_err(|_| HalError::Flash(FlashError::InternalError))
     }
 
     async fn write_to_target(offset: u32, data: &[u8]) -> Result<(), HalError> {
@@ -127,7 +130,7 @@ impl EspOtaWriter {
         };
         let mut fb = fb.lock().await;
 
-        let (storage, _buffer) = fb.split_ref_mut();
+        let (storage, _) = fb.split_ref_mut();
         let mut buff_ota = [0u8; esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN];
 
         let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
@@ -136,7 +139,7 @@ impl EspOtaWriter {
             .next_partition()
             .map_err(|_| HalError::Flash(FlashError::InternalError))?;
 
-        debug!("Flashing image to {:?}", part_type);
+        debug!("Flashing image to {part_type:?}");
         debug!(
             "Writing data to target_partition at offset {}, with len {}",
             offset,
@@ -156,7 +159,7 @@ impl EspOtaWriter {
         };
         let mut fb = fb.lock().await;
 
-        let (storage, _buffer) = fb.split_ref_mut();
+        let (storage, _) = fb.split_ref_mut();
         let mut buff_ota = [0u8; esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN];
 
         let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
@@ -185,13 +188,12 @@ impl OtaActions for EspOtaWriter {
         };
         let mut fb = fb.lock().await;
 
-        let (storage, _buffer) = fb.split_ref_mut();
+        let (storage, _) = fb.split_ref_mut();
         let mut buff_ota = [0u8; esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN];
 
         let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
             .map_err(|_| HalError::Flash(FlashError::InternalError))?;
-        let _current = ota
-            .selected_partition()
+        ota.selected_partition()
             .map_err(|_| HalError::Flash(FlashError::InternalError))?;
 
         debug!("current image state {:?}", ota.current_ota_state());

@@ -7,6 +7,7 @@ use heapless::String;
 
 /// Default peripheral configuration for ESP32-C6
 #[cfg(feature = "esp32c6")]
+#[must_use]
 pub fn default_config() -> HardwareConfig {
     HardwareConfig {
         uart: UartConfig {
@@ -27,6 +28,7 @@ pub fn default_config() -> HardwareConfig {
 
 /// Default peripheral configuration for ESP32-S3
 #[cfg(feature = "esp32s3")]
+#[must_use]
 pub fn default_config() -> HardwareConfig {
     HardwareConfig {
         uart: UartConfig {
@@ -47,6 +49,7 @@ pub fn default_config() -> HardwareConfig {
 
 /// Default peripheral configuration for ESP32
 #[cfg(feature = "esp32")]
+#[must_use]
 pub fn default_config() -> HardwareConfig {
     HardwareConfig {
         uart: UartConfig {
@@ -67,6 +70,7 @@ pub fn default_config() -> HardwareConfig {
 
 /// Default peripheral configuration for ESP32-S2
 #[cfg(feature = "esp32s2")]
+#[must_use]
 pub fn default_config() -> HardwareConfig {
     HardwareConfig {
         uart: UartConfig {
@@ -87,6 +91,7 @@ pub fn default_config() -> HardwareConfig {
 
 /// Default peripheral configuration for ESP32-C3
 #[cfg(feature = "esp32c3")]
+#[must_use]
 pub fn default_config() -> HardwareConfig {
     HardwareConfig {
         uart: UartConfig {
@@ -107,6 +112,7 @@ pub fn default_config() -> HardwareConfig {
 
 /// Default peripheral configuration for ESP32-C2
 #[cfg(feature = "esp32c2")]
+#[must_use]
 pub fn default_config() -> HardwareConfig {
     HardwareConfig {
         uart: UartConfig {

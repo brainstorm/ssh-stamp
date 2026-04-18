@@ -2,16 +2,16 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! WiFi trait for access point mode.
+//! `WiFi` trait for access point mode.
 
 use core::future::Future;
 
 use crate::{HalError, WifiApConfigStatic};
 
-/// WiFi hardware abstraction for access point mode.
+/// `WiFi` hardware abstraction for access point mode.
 ///
-/// Provides configuration and control of WiFi hardware in AP mode.
-/// Implementations manage the underlying WiFi radio and TCP/IP stack.
+/// Provides configuration and control of `WiFi` hardware in AP mode.
+/// Implementations manage the underlying `WiFi` radio and `TCP/IP` stack.
 ///
 /// # Example
 ///
@@ -27,14 +27,14 @@ use crate::{HalError, WifiApConfigStatic};
 /// }
 /// ```
 pub trait WifiHal {
-    /// Start WiFi access point with given configuration.
+    /// Start `WiFi` access point with given configuration.
     ///
-    /// Initializes the WiFi radio and starts broadcasting an access point
+    /// Initializes the `WiFi` radio and starts broadcasting an access point
     /// with the specified SSID, password, and channel.
     ///
     /// # Arguments
     ///
-    /// * `config` - AP configuration including SSID, password, channel, and MAC.
+    /// * `config` - `AP` configuration including `SSID`, password, channel, and `MAC`.
     ///
     /// # Returns
     ///
