@@ -8,9 +8,9 @@ The firmware runs on ESP32 family microcontrollers (ESP32, ESP32-C3, ESP32-C6, E
 
 ## Architecture Philosophy
 
-**Platform-agnostic core, platform-specific HAL.** The main firmware (`src/`) knows nothing about ESP32 hardware. All hardware concerns flow through the Hardware Abstraction Layer (`hal/`). This separation means porting to other microcontrollers (i.e: Nordic nRF, STM32, RP2040) requires only implementing the HAL traits in a new `hal-*` crate.
+**Platform-agnostic core, platform-specific HAL.** The main firmware (`src/`) knows nothing about ESP32 hardware. All hardware concerns flow through the Hardware Abstraction Layer (`ssh-stamp-hal/`). This separation means porting to other microcontrollers (i.e: Nordic nRF, STM32, RP2040) requires only implementing the HAL traits in a new `ssh-stamp-*` crate.
 
-**Traits define contracts.** Each peripheral category (UART, WiFi, Flash, etc.) has a trait in `hal/src/traits/`. Implementations live in platform-specific crates like `hal-espressif/`.
+**Fine-grained, composable traits.** Following the [embedded-hal](https://github.com/rust-embedded/embedded-hal) pattern, each peripheral has its own trait. There is no monolithic `HalPlatform` bundle — new MCU ports implement only the traits they support. Standard peripheral operations defer to ecosystem crates (`embedded-storage-async`, `embedded-io-async`) where possible.
 
 **State machine drives the application.** The firmware uses a Hierarchical State Machine (HSM). States like "WaitingForWiFi", "SSHConnected", and "Bridging" encode what's configured and what's running at any moment.
 
@@ -18,48 +18,48 @@ The firmware runs on ESP32 family microcontrollers (ESP32, ESP32-C3, ESP32-C6, E
 
 ```
 ssh-stamp/
-├── hal/                    # Platform-agnostic trait definitions
-├── hal-espressif/          # ESP32 implementation of hal traits
-├── ota/                    # SFTP-based OTA update server
-└── src/                    # Main firmware (platform-agnostic)
+├── ssh-stamp-hal/           # Platform-agnostic trait definitions
+├── ssh-stamp-esp32/         # ESP32 implementation of ssh-stamp-hal traits
+├── ota/                     # SFTP-based OTA update server
+└── src/                     # Main firmware (platform-agnostic)
 ```
 
-### `hal/` — Trait Definitions
+### `ssh-stamp-hal/` — Trait Definitions
 
-The `hal` crate defines *what* a hardware platform must provide, not *how*. It contains traits and configuration structs, no implementations.
+The `ssh-stamp-hal` crate defines *what* a hardware platform must provide, not *how*. It contains traits and configuration structs, no implementations.
 
 Key entities:
-- `HalPlatform` — Bundles all peripherals together. Entry point for hardware initialization.
 - `UartHal` — Async read/write for serial communication.
 - `WifiHal` — WiFi access point creation and TCP socket management.
-- `FlashHal` — Raw flash read/write/erase operations.
 - `OtaActions` — OTA partition management (validate, write, finalize, reset).
 - `HashHal` — HMAC-SHA256 for secure operations.
 - `RngHal` — Hardware random number generation.
-- `ExecutorHal` — Async runtime with interrupt priority management.
+- `TimerHal` — Async timer/delay operations.
+
+Flash storage operations use `embedded-storage-async::NorFlash` from the embedded-hal ecosystem directly, rather than a custom trait.
 
 Files to read first:
-- `hal/src/lib.rs` — The `HalPlatform` trait that ties everything together.
-- `hal/src/traits/uart.rs` — Example of a simple trait.
-- `hal/src/traits/network/wifi.rs` — Example of a more complex trait with associated types.
+- `ssh-stamp-hal/src/lib.rs` — Re-exports and crate overview.
+- `ssh-stamp-hal/src/traits/uart.rs` — Example of a simple trait.
+- `ssh-stamp-hal/src/traits/flash.rs` — Example of an application-specific trait (`OtaActions`).
 
-### `hal-espressif/` — ESP32 Implementation
+### `ssh-stamp-esp32/` — ESP32 Implementation
 
-Implements all `hal` traits for ESP32 family chips using `esp-hal`, `esp-radio`, and related crates.
+Implements `ssh-stamp-hal` traits for ESP32 family chips using `esp-hal`, `esp-radio`, and related crates.
 
 Key entities:
-- `EspHalPlatform` — Implements `HalPlatform`. Contains the full hardware bundle.
 - `EspUart` — Uses `esp-hal::uart` with DMA buffering.
 - `EspWifi` — Uses `esp-radio::wifi` for AP mode.
-- `EspFlash` — Uses `esp-storage` for flash access.
+- `EspOtaWriter` — Uses `esp-storage` and `esp-bootloader-esp-idf` for OTA partition management.
+- `reset()` / `mac_address()` — Direct functions for hardware operations.
 
 Files to read first:
-- `hal-espressif/src/lib.rs` — See how peripherals are bundled.
-- `hal-espressif/src/config.rs` — Per-target default UART/WiFi pin configurations.
+- `ssh-stamp-esp32/src/lib.rs` — Re-exports, `reset()`, `mac_address()`.
+- `ssh-stamp-esp32/src/config.rs` — Per-target default UART/WiFi pin configurations.
 
 ### `ota/` — OTA Update Server
 
-Platform-agnostic SFTP server implementation that receives firmware updates. Uses `OtaActions` trait from `hal` to write to flash and reboot.
+Platform-agnostic SFTP server implementation that receives firmware updates. Uses `OtaActions` trait from `ssh-stamp-hal` to write to flash and reboot.
 
 Key entities:
 - `OtaWriter` — Implements `OtaActions` for the platform.
@@ -102,25 +102,25 @@ On first boot (`first_login = true`), the device accepts any SSH connection with
 
 ## Architectural Invariants
 
-**No direct hardware dependencies in `src/`.** The main firmware crate never imports `esp-hal`, `esp-radio`, or similar. All hardware access goes through `hal::HalPlatform` or its trait methods.
+**No direct hardware dependencies in `src/`.** The main firmware crate never imports `esp-hal`, `esp-radio`, or similar. All hardware access goes through `ssh-stamp-hal` traits or `ssh-stamp-esp32` functions.
 
 **State machine owns all peripherals.** Peripherals are passed into the HSM at initialization and flow through states. No global mutable state for hardware resources.
 
 **UART is exclusive resource.** Only one `UartHal` instance exists. The serial bridge takes ownership when SSH session starts.
 
-**Flash operations are async.** All flash read/write/erase operations return futures. The `FlashHal` trait abstracts platform-specific blocking or non-blocking implementations.
+**Flash operations are async.** All flash read/write/erase operations return futures. Flash uses `embedded-storage-async::NorFlash` from the embedded-hal ecosystem.
 
 **OTA is optional.** The `sftp-ota` feature flag enables SFTP-based firmware updates. Without it, the firmware is smaller and simpler.
 
 ## Boundaries Between Layers
 
-### `hal/` ↔ `hal-espressif/`
+### `ssh-stamp-hal/` ↔ `ssh-stamp-esp32/`
 
-The boundary is defined by traits. `hal/` contains trait definitions and configuration structs. `hal-espressif/` contains implementations. Adding a new platform (e.g., `hal-nordic/`) requires implementing all traits but no changes to `hal/`.
+The boundary is defined by traits. `ssh-stamp-hal/` contains trait definitions and configuration structs. `ssh-stamp-esp32/` contains implementations. Adding a new platform (e.g., `ssh-stamp-nrf/`) requires implementing the needed traits but no changes to `ssh-stamp-hal/`.
 
-### `hal` ↔ `ota`
+### `ssh-stamp-hal` ↔ `ota`
 
-The `ota` crate depends on `hal::OtaActions` trait. It knows nothing about flash partitions, ESP-IDF, or ESP-specific OTA. The platform implementation (`hal-espressif/src/flash.rs`) handles partition management.
+The `ota` crate depends on `ssh_stamp_hal::OtaActions` trait. It knows nothing about flash partitions, ESP-IDF, or ESP-specific OTA. The platform implementation (`ssh-stamp-esp32/src/flash.rs`) handles partition management.
 
 ### `src/handle.rs` ↔ `sunset`
 
@@ -130,11 +130,11 @@ The `ota` crate depends on `hal::OtaActions` trait. It knows nothing about flash
 
 ### Error Handling
 
-All HAL operations return `Result<T, HalError>`. The `HalError` enum in `hal/src/error.rs` aggregates all platform error types. Platform-specific error details are converted to common variants (e.g., `UartError::Read` → `HalError::Uart(UartError::Read)`).
+All HAL operations return `Result<T, HalError>`. The `HalError` enum in `ssh-stamp-hal/src/error.rs` aggregates all platform error types. Platform-specific error details are converted to common variants (e.g., `UartError::Read` → `HalError::Uart(UartError::Read)`).
 
 ### Async Runtime
 
-Uses `embassy-executor` for async task scheduling. The `ExecutorHal` trait provides access to the spawner and handles interrupt priority configuration. ESP32 uses `esp-rtos` as the Embassy runtime backend.
+Uses `embassy-executor` for async task scheduling. Embassy is used across all MCU targets, so no HAL trait is needed for it. ESP32 uses `esp-rtos` as the Embassy runtime backend.
 
 ### Logging
 
@@ -143,22 +143,22 @@ Uses `log` crate facade. Platform implementations wire up appropriate backends (
 ### Feature Flags
 
 Root `Cargo.toml` defines unified feature flags:
-- `target-esp32`, `target-esp32c6`, etc. — Select target MCU
+- `esp32`, `esp32c6`, etc. — Select target MCU
 - `sftp-ota` — Enable SFTP-based OTA updates
 
-Target selection propagates to `hal-espressif` which enables corresponding `esp-hal` features.
+Target selection propagates to `ssh-stamp-esp32` which enables corresponding `esp-hal` features.
 
 ## Adding New Hardware Support
 
 To port to a new microcontroller family:
 
-1. Create `hal-yourplatform/` crate
-2. Implement all traits from `hal/src/traits/`
-3. Create `YourPlatformHalPlatform` struct implementing `HalPlatform`
+1. Create `ssh-stamp-yourplatform/` crate
+2. Implement the needed traits from `ssh-stamp-hal/src/traits/`
+3. Provide `reset()` and `mac_address()` functions
 4. Add feature flag in root `Cargo.toml`
-5. Add per-target default configs in `hal-yourplatform/src/config.rs`
+5. Add per-target default configs in `ssh-stamp-yourplatform/src/config.rs`
 
-No changes needed in `src/` or `hal/`.
+No changes needed in `src/` or `ssh-stamp-hal/`. You only implement the traits your platform supports — missing peripherals are gated by feature flags in the app.
 
 ## Common Tasks
 
@@ -177,10 +177,10 @@ Edit `src/handle.rs`. Find `session_env()` function. Add a new match arm for you
 
 ### Adding a new UART configuration option
 
-1. Add field to `UartConfig` in `hal/src/config.rs`
-2. Update `UartHal` trait if needed (`hal/src/traits/uart.rs`)
-3. Implement in `hal-espressif/src/uart.rs`
-4. Update per-target defaults in `hal-espressif/src/config.rs`
+1. Add field to `UartConfig` in `ssh-stamp-hal/src/config.rs`
+2. Update `UartHal` trait if needed (`ssh-stamp-hal/src/traits/uart.rs`)
+3. Implement in `ssh-stamp-esp32/src/uart.rs`
+4. Update per-target defaults in `ssh-stamp-esp32/src/config.rs`
 
 ### Adding a new HSM state
 
@@ -195,9 +195,9 @@ Edit `src/handle.rs`. Find `session_env()` function. Add a new match arm for you
 |------|-------|
 | SSH event handling | `src/handle.rs` |
 | HSM states | `src/main.rs` |
-| Hardware traits | `hal/src/traits/*.rs` |
-| ESP32 implementations | `hal-espressif/src/*.rs` |
-| Default pin configs | `hal-espressif/src/config.rs` |
+| Hardware traits | `ssh-stamp-hal/src/traits/*.rs` |
+| ESP32 implementations | `ssh-stamp-esp32/src/*.rs` |
+| Default pin configs | `ssh-stamp-esp32/src/config.rs` |
 | Configuration struct | `src/config.rs` |
 | Serial bridge logic | `src/serial.rs` |
 | OTA server | `ota/src/lib.rs` |
@@ -207,17 +207,20 @@ Edit `src/handle.rs`. Find `session_env()` function. Add a new match arm for you
 Key external crates:
 - `sunset` / `sunset-async` — SSH protocol implementation
 - `embassy-sync` / `embassy-executor` — Async primitives and runtime
-- `esp-hal` — ESP32 peripheral access (only in `hal-espressif/`)
-- `esp-radio` — ESP32 WiFi (only in `hal-espressif/`)
-- `heapless` — No-std collections (String, Vec)
+- `embedded-storage-async` — Flash storage traits (embedded-hal ecosystem)
+- `esp-hal` — ESP32 peripheral access (only in `ssh-stamp-esp32/`)
+- `esp-radio` — ESP32 WiFi (only in `ssh-stamp-esp32/`)
 - `heapless` — Stack-allocated collections
 
 ## Testing
 
-Currently no automated tests. Manual testing requires:
+OTA TLV serialization tests run on host:
+```bash
+cargo test-ota
+```
+
+Manual testing requires:
 1. Hardware target (ESP32 dev board)
 2. WiFi client to connect to AP
 3. SSH client to test connection
 4. Serial device connected to UART pins for bridge testing
-
-Focus on architecture correctness over test coverage for now.
