@@ -1,5 +1,5 @@
 [package]
-name = "hal"
+name = "ssh-stamp-hal"
 version = "0.2.0"
 edition = "2021"
 authors = ["Roman Valls Guimera <brain@brainstorm.name>"]

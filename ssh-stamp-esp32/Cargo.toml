@@ -1,14 +1,14 @@
 [package]
-name = "hal-espressif"
+name = "ssh-stamp-esp32"
 version = "0.2.0"
 edition = "2021"
 authors = ["Roman Valls Guimera <brain@brainstorm.name>"]
-description = "ESP32 implementation of the hal traits for ssh-stamp"
+description = "ESP32 implementation of the ssh-stamp-hal traits for ssh-stamp"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/brainstorm/ssh-stamp"
 
 [dependencies]
-hal = { path = "../hal" }
+ssh-stamp-hal = { path = "../ssh-stamp-hal" }
 embassy-sync = { workspace = true }
 embassy-executor = { workspace = true }
 embassy-time = { workspace = true }

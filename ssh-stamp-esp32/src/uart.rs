@@ -13,7 +13,7 @@ use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals::UART1;
 use esp_hal::uart::{Config, RxConfig, Uart};
 use esp_hal::Async;
-use hal::{HalError, UartConfig, UartHal};
+use ssh_stamp_hal::{HalError, UartConfig, UartHal};
 use portable_atomic::{AtomicUsize, Ordering};
 use static_cell::StaticCell;
 

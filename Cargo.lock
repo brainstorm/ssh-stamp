@@ -1321,40 +1321,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hal"
-version = "0.2.0"
-dependencies = [
- "embassy-sync 0.7.2",
- "heapless 0.8.0",
-]
-
-[[package]]
-name = "hal-espressif"
-version = "0.2.0"
-dependencies = [
- "embassy-executor",
- "embassy-futures",
- "embassy-net",
- "embassy-sync 0.7.2",
- "embassy-time 0.5.1",
- "embedded-storage",
- "embedded-storage-async",
- "esp-bootloader-esp-idf",
- "esp-hal",
- "esp-storage",
- "getrandom",
- "hal",
- "heapless 0.8.0",
- "hmac",
- "log",
- "once_cell",
- "portable-atomic",
- "sha2",
- "static_cell",
- "sunset-async",
-]
-
-[[package]]
 name = "hash32"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1621,10 +1587,10 @@ name = "ota"
 version = "0.1.0"
 dependencies = [
  "clap",
- "hal",
  "log",
  "rustc-hash",
  "sha2",
+ "ssh-stamp-hal",
  "sunset",
  "sunset-async",
  "sunset-sftp",
@@ -2055,7 +2021,6 @@ dependencies = [
  "esp-rtos",
  "esp-storage",
  "getrandom",
- "hal-espressif",
  "heapless 0.8.0",
  "hex",
  "hmac",
@@ -2069,12 +2034,47 @@ dependencies = [
  "smoltcp",
  "snafu",
  "ssh-key",
+ "ssh-stamp-esp32",
  "static_cell",
  "subtle",
  "sunset",
  "sunset-async",
  "sunset-sftp",
  "sunset-sshwire-derive",
+]
+
+[[package]]
+name = "ssh-stamp-esp32"
+version = "0.2.0"
+dependencies = [
+ "embassy-executor",
+ "embassy-futures",
+ "embassy-net",
+ "embassy-sync 0.7.2",
+ "embassy-time 0.5.1",
+ "embedded-storage",
+ "embedded-storage-async",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "esp-storage",
+ "getrandom",
+ "heapless 0.8.0",
+ "hmac",
+ "log",
+ "once_cell",
+ "portable-atomic",
+ "sha2",
+ "ssh-stamp-hal",
+ "static_cell",
+ "sunset-async",
+]
+
+[[package]]
+name = "ssh-stamp-hal"
+version = "0.2.0"
+dependencies = [
+ "embassy-sync 0.7.2",
+ "heapless 0.8.0",
 ]
 
 [[package]]

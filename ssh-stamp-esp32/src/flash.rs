@@ -2,11 +2,11 @@
 //!
 //! Provides access to flash storage for configuration persistence and firmware updates.
 
-use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
+use embedded_storage::nor_flash::NorFlash;
 use esp_bootloader_esp_idf;
 use esp_hal::peripherals::FLASH;
 use esp_storage::FlashStorage;
-use hal::{FlashError, FlashHal, HalError, OtaActions};
+use ssh_stamp_hal::{FlashError, HalError, OtaActions};
 use log::{debug, error};
 use once_cell::sync::OnceCell;
 use sunset_async::SunsetMutex;
@@ -51,46 +51,6 @@ pub fn init(flash: FLASH<'static>) {
 /// Get flash storage and buffer
 pub fn get_flash_n_buffer() -> Option<&'static SunsetMutex<FlashBuffer<'static>>> {
     FLASH_STORAGE.get()
-}
-
-/// ESP Flash implementation
-pub struct EspFlash;
-
-impl FlashHal for EspFlash {
-    async fn read(&self, offset: u32, buf: &mut [u8]) -> Result<(), HalError> {
-        let Some(fb) = get_flash_n_buffer() else {
-            return Err(HalError::Flash(FlashError::Read));
-        };
-        let mut fb = fb.lock().await;
-
-        fb.flash
-            .read(offset, buf)
-            .map_err(|_| HalError::Flash(FlashError::Read))
-    }
-
-    async fn write(&self, offset: u32, buf: &[u8]) -> Result<(), HalError> {
-        let Some(fb) = get_flash_n_buffer() else {
-            return Err(HalError::Flash(FlashError::Write));
-        };
-        let mut fb = fb.lock().await;
-
-        NorFlash::write(&mut fb.flash, offset, buf).map_err(|_| HalError::Flash(FlashError::Write))
-    }
-
-    async fn erase(&self, offset: u32, len: u32) -> Result<(), HalError> {
-        let Some(fb) = get_flash_n_buffer() else {
-            return Err(HalError::Flash(FlashError::Erase));
-        };
-        let mut fb = fb.lock().await;
-
-        NorFlash::erase(&mut fb.flash, offset, len).map_err(|_| HalError::Flash(FlashError::Erase))
-    }
-
-    fn size(&self) -> u32 {
-        // ESP32 flash size varies by chip, return a reasonable default
-        // Actual size can be read from efuse in production
-        4 * 1024 * 1024 // 4MB default
-    }
 }
 
 /// OTA writer for ESP32

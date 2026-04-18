@@ -8,7 +8,7 @@ default = []
 std = []
 
 [dependencies]
-hal = { path = "../hal" }
+ssh-stamp-hal = { path = "../ssh-stamp-hal" }
 sunset.workspace = true
 sunset-async.workspace = true
 sunset-sftp.workspace = true

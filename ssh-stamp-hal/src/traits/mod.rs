@@ -14,9 +14,9 @@ mod rng;
 mod timer;
 mod uart;
 
-pub use flash::{FlashHal, OtaActions};
+pub use flash::OtaActions;
 pub use hash::HashHal;
-pub use network::{EthernetHal, WifiHal};
+pub use network::WifiHal;
 pub use rng::RngHal;
 pub use timer::TimerHal;
 pub use uart::UartHal;

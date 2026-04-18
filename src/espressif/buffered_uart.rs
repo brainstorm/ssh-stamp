@@ -4,17 +4,17 @@
 
 //! Buffered UART support with app-specific configuration
 //!
-//! Re-exports from hal-espressif and provides app-specific task wrappers.
+//! Re-exports from ssh-stamp-esp32 and provides app-specific task wrappers.
 
 // Re-export core types from HAL
-pub use hal_espressif::{BufferedUart, UART_BUF, UART_SIGNAL};
+pub use ssh_stamp_esp32::{BufferedUart, UART_BUF, UART_SIGNAL};
 
 use crate::config::SSHStampConfig;
 use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals::UART1;
 use esp_hal::system::software_reset;
 use esp_hal::uart::{Config, RxConfig, Uart};
-use hal_espressif::EspUartPins;
+use ssh_stamp_esp32::EspUartPins;
 use log::{debug, error};
 use sunset_async::SunsetMutex;
 
@@ -71,7 +71,7 @@ pub async fn uart_task(
 
 /// Wait for UART buffer initialization
 pub async fn uart_buffer_wait_for_initialisation() -> &'static BufferedUart {
-    hal_espressif::uart_buffer_wait_for_initialisation().await
+    ssh_stamp_esp32::uart_buffer_wait_for_initialisation().await
 }
 
 pub fn uart_buffer_disable() {

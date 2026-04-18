@@ -73,10 +73,3 @@ impl Default for WifiApConfigStatic {
         }
     }
 }
-
-/// Ethernet interface configuration.
-#[derive(Clone, Debug, Default)]
-pub struct EthernetConfig {
-    /// MAC address for the Ethernet interface.
-    pub mac: [u8; 6],
-}

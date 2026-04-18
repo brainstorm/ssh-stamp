@@ -29,8 +29,6 @@ pub enum HalError {
     Hash(HashError),
     /// Timer error.
     Timer,
-    /// Async executor error.
-    Executor,
 }
 
 /// UART-specific errors.
@@ -105,7 +103,6 @@ impl fmt::Display for HalError {
             HalError::Rng => write!(f, "RNG error"),
             HalError::Hash(e) => write!(f, "Hash error: {e:?}"),
             HalError::Timer => write!(f, "Timer error"),
-            HalError::Executor => write!(f, "Executor error"),
         }
     }
 }

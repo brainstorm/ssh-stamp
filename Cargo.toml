@@ -14,7 +14,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace]
-members = ["hal", "hal-espressif", "ota"]
+members = ["ssh-stamp-hal", "ssh-stamp-esp32", "ota"]
 
 [workspace.dependencies]
 # Async runtime
@@ -101,7 +101,7 @@ embedded-io-async = { workspace = true }
 esp-alloc = { version = "0.9.0" }
 esp-backtrace = { version = "0.18", features = ["panic-handler", "println"] }
 esp-hal = { workspace = true }
-hal-espressif = { path = "hal-espressif", default-features = false }
+ssh-stamp-esp32 = { path = "ssh-stamp-esp32", default-features = false }
 esp-rtos = { version = "0.2.0", features = ["embassy", "log-04", "esp-radio"] }
 esp-radio = { version = "0.17.0", features = ["wifi", "log-04"] }
 esp-println = { version = "0.16", features = ["log-04"] }
@@ -174,7 +174,7 @@ esp32 = [
     "esp-println/esp32",
     "esp-storage/esp32",
     "esp-bootloader-esp-idf/esp32",
-    "hal-espressif/esp32",
+    "ssh-stamp-esp32/esp32",
 ]
 esp32c2 = [
     "esp-hal/esp32c2",
@@ -185,7 +185,7 @@ esp32c2 = [
     "esp-println/esp32c2",
     "esp-storage/esp32c2",
     "esp-bootloader-esp-idf/esp32c2",
-    "hal-espressif/esp32c2",
+    "ssh-stamp-esp32/esp32c2",
 ]
 esp32c3 = [
     "esp-hal/esp32c3",
@@ -196,7 +196,7 @@ esp32c3 = [
     "esp-println/esp32c3",
     "esp-storage/esp32c3",
     "esp-bootloader-esp-idf/esp32c3",
-    "hal-espressif/esp32c3",
+    "ssh-stamp-esp32/esp32c3",
 ]
 esp32c6 = [
     "esp-hal/esp32c6",
@@ -207,7 +207,7 @@ esp32c6 = [
     "esp-println/esp32c6",
     "esp-storage/esp32c6",
     "esp-bootloader-esp-idf/esp32c6",
-    "hal-espressif/esp32c6",
+    "ssh-stamp-esp32/esp32c6",
 ]
 esp32s2 = [
     "esp-hal/esp32s2",
@@ -218,7 +218,7 @@ esp32s2 = [
     "esp-println/esp32s2",
     "esp-storage/esp32s2",
     "esp-bootloader-esp-idf/esp32s2",
-    "hal-espressif/esp32s2",
+    "ssh-stamp-esp32/esp32s2",
 ]
 esp32s3 = [
     "esp-hal/esp32s3",
@@ -229,5 +229,5 @@ esp32s3 = [
     "esp-println/esp32s3",
     "esp-storage/esp32s3",
     "esp-bootloader-esp-idf/esp32s3",
-    "hal-espressif/esp32s3",
+    "ssh-stamp-esp32/esp32s3",
 ]

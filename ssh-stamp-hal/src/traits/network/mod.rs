@@ -4,8 +4,6 @@
 
 //! Network peripheral traits.
 
-mod ethernet;
 mod wifi;
 
-pub use ethernet::EthernetHal;
 pub use wifi::WifiHal;

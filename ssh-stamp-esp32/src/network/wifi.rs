@@ -8,7 +8,7 @@
 
 use embassy_net::tcp::TcpSocket;
 use embassy_net::IpListenEndpoint;
-use hal::{HalError, WifiApConfigStatic, WifiHal};
+use ssh_stamp_hal::{HalError, WifiApConfigStatic, WifiHal};
 use log::debug;
 
 /// ESP32 `WiFi` implementation

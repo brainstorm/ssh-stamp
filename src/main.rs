@@ -16,7 +16,7 @@ use ssh_stamp::{
     settings::UART_BUFFER_SIZE,
 };
 
-use hal_espressif::flash;
+use ssh_stamp_esp32::flash;
 #[cfg(feature = "sftp-ota")]
 use ota::traits::OtaActions;
 
@@ -106,7 +106,7 @@ async fn main(spawner: Spawner) -> ! {
     flash::init(peripherals.FLASH);
     #[cfg(feature = "sftp-ota")]
     {
-        hal_espressif::EspOtaWriter::try_validating_current_ota_partition()
+        ssh_stamp_esp32::EspOtaWriter::try_validating_current_ota_partition()
             .await
             .expect("Failed to validate the current ota partition");
     }

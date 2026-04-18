@@ -9,5 +9,5 @@
 pub mod buffered_uart;
 pub mod net;
 
-// Re-export RNG registration from hal-espressif
-pub use hal_espressif::register_custom_rng;
+// Re-export RNG registration from ssh-stamp-esp32
+pub use ssh_stamp_esp32::register_custom_rng;

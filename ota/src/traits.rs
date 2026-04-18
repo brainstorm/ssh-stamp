@@ -2,12 +2,12 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! OTA traits - re-exported from hal crate
+//! OTA traits - re-exported from ssh-stamp-hal crate
 //!
 //! This module exists for backward compatibility.
-//! The actual trait definition is in `hal::traits::OtaActions`.
+//! The actual trait definition is in `ssh_stamp_hal::traits::OtaActions`.
 
-pub use hal::{HalError, OtaActions};
+pub use ssh_stamp_hal::{HalError, OtaActions};
 
 /// Storage error type for OTA operations
 #[derive(Debug)]

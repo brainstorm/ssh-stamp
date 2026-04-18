@@ -12,7 +12,7 @@ use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use esp_hal::rng::Rng;
 use getrandom::register_custom_getrandom;
-use hal::{HalError, RngHal};
+use ssh_stamp_hal::{HalError, RngHal};
 use static_cell::StaticCell;
 
 static RNG: StaticCell<Rng> = StaticCell::new();

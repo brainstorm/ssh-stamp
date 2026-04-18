@@ -7,7 +7,7 @@
 //! Provides microsecond and millisecond timing using ESP32 hardware timers.
 
 use embassy_time::{Duration, Instant};
-use hal::TimerHal;
+use ssh_stamp_hal::TimerHal;
 
 /// ESP32 Timer implementation using Embassy time
 pub struct EspTimer;

@@ -4,7 +4,7 @@
 
 //! Network support with app-specific configuration
 //!
-//! Re-exports from hal-espressif and provides app-specific network initialization.
+//! Re-exports from ssh-stamp-esp32 and provides app-specific network initialization.
 
 use crate::config::SSHStampConfig;
 use crate::settings::DEFAULT_IP;
@@ -27,7 +27,7 @@ use esp_radio::Controller;
 use esp_radio::wifi::{
     AccessPointConfig, AuthMethod, ModeConfig, WifiApState, WifiController, WifiEvent,
 };
-use hal_espressif::flash;
+use ssh_stamp_esp32::flash;
 use heapless::String;
 use log::{debug, error, info, warn};
 use sunset_async::SunsetMutex;
@@ -37,8 +37,8 @@ use alloc::string::String as AllocString;
 
 use crate::settings::WIFI_PASSWORD_CHARS;
 
-// Re-export functions from hal-espressif
-pub use hal_espressif::{
+// Re-export functions from ssh-stamp-esp32
+pub use ssh_stamp_esp32::{
     accept_requests, ap_stack_disable, tcp_socket_disable, wifi_controller_disable,
 };
 
