@@ -16,9 +16,9 @@ use ssh_stamp::{
     settings::UART_BUFFER_SIZE,
 };
 
-use ssh_stamp_esp32::flash;
 #[cfg(feature = "sftp-ota")]
 use ota::traits::OtaActions;
+use ssh_stamp_esp32::flash;
 
 extern crate alloc;
 use alloc::boxed::Box;

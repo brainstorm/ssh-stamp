@@ -6,10 +6,10 @@
 //!
 //! Provides `WiFi` access point functionality for SSH-Stamp.
 
-use embassy_net::tcp::TcpSocket;
 use embassy_net::IpListenEndpoint;
-use ssh_stamp_hal::{HalError, WifiApConfigStatic, WifiHal};
+use embassy_net::tcp::TcpSocket;
 use log::debug;
+use ssh_stamp_hal::{HalError, WifiApConfigStatic, WifiHal};
 
 /// ESP32 `WiFi` implementation
 pub struct EspWifi {
@@ -51,8 +51,7 @@ pub async fn accept_requests<'a>(
             port: 22,
         })
         .await
-    {
-    }
+    {}
     debug!("Connected, port 22");
 
     tcp_socket

@@ -14,8 +14,8 @@ use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals::UART1;
 use esp_hal::system::software_reset;
 use esp_hal::uart::{Config, RxConfig, Uart};
-use ssh_stamp_esp32::EspUartPins;
 use log::{debug, error};
+use ssh_stamp_esp32::EspUartPins;
 use sunset_async::SunsetMutex;
 
 /// UART pins wrapper for app compatibility

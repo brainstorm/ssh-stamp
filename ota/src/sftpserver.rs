@@ -225,9 +225,7 @@ impl<T: OpaqueFileHandle + InitWithSeed, W: OtaActions> SftpServer<'_, T> for Sf
                         return Err(StatusCode::SSH_FX_OP_UNSUPPORTED);
                     }
                     _ => {
-                        error!(
-                            "SftpServer Write operation failed during OTA processing: {e:?}"
-                        );
+                        error!("SftpServer Write operation failed during OTA processing: {e:?}");
                         return Err(StatusCode::SSH_FX_FAILURE);
                     }
                 }
@@ -245,7 +243,7 @@ impl<T: OpaqueFileHandle + InitWithSeed, W: OtaActions> SftpServer<'_, T> for Sf
 
     async fn opendir(&mut self, dir: &str) -> sunset_sftp::server::SftpOpResult<T> {
         let handle = T::init_with_seed(dir).map_err(|_| StatusCode::SSH_FX_FAILURE)?;
-        info!("SftpServer OpenDir: dir = {dir:?}. Returning {handle:?}",);
+        info!("SftpServer OpenDir: dir = {dir:?}. Returning {handle:?}");
         Ok(handle)
     }
 

@@ -6,9 +6,9 @@ use embedded_storage::nor_flash::NorFlash;
 use esp_bootloader_esp_idf;
 use esp_hal::peripherals::FLASH;
 use esp_storage::FlashStorage;
-use ssh_stamp_hal::{FlashError, HalError, OtaActions};
 use log::{debug, error};
 use once_cell::sync::OnceCell;
+use ssh_stamp_hal::{FlashError, HalError, OtaActions};
 use sunset_async::SunsetMutex;
 
 const FLASH_BUF_SIZE: usize = FlashStorage::SECTOR_SIZE as usize;
@@ -159,14 +159,13 @@ impl OtaActions for EspOtaWriter {
         debug!("current image state {:?}", ota.current_ota_state());
 
         let state_result = ota.current_ota_state();
-        if let Ok(state) = state_result {
-            if state == esp_bootloader_esp_idf::ota::OtaImageState::New
-                || state == esp_bootloader_esp_idf::ota::OtaImageState::PendingVerify
-            {
-                ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::Valid)
-                    .map_err(|_| HalError::Flash(FlashError::Write))?;
-                debug!("Changed state to VALID");
-            }
+        if let Ok(state) = state_result
+            && (state == esp_bootloader_esp_idf::ota::OtaImageState::New
+                || state == esp_bootloader_esp_idf::ota::OtaImageState::PendingVerify)
+        {
+            ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::Valid)
+                .map_err(|_| HalError::Flash(FlashError::Write))?;
+            debug!("Changed state to VALID");
         }
 
         Ok(())

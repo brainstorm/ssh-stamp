@@ -9,12 +9,12 @@
 use embassy_sync::pipe::TryWriteError;
 use embassy_sync::signal::Signal;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pipe::Pipe};
+use esp_hal::Async;
 use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals::UART1;
 use esp_hal::uart::{Config, RxConfig, Uart};
-use esp_hal::Async;
-use ssh_stamp_hal::{HalError, UartConfig, UartHal};
 use portable_atomic::{AtomicUsize, Ordering};
+use ssh_stamp_hal::{HalError, UartConfig, UartHal};
 use static_cell::StaticCell;
 
 const INWARD_BUF_SZ: usize = 512;

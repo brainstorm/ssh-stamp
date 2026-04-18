@@ -6,9 +6,9 @@
 //!
 //! Uses ESP32's hardware-accelerated HMAC peripheral.
 
-use ssh_stamp_hal::{HashError, HashHal};
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256 as Sha256Impl};
+use ssh_stamp_hal::{HashError, HashHal};
 
 /// ESP32 HMAC implementation  
 pub struct EspHmac;
@@ -30,7 +30,11 @@ impl HashHal for EspHmac {
         Ok(())
     }
 
-    async fn sha256(&mut self, message: &[u8], output: &mut [u8; 32]) -> Result<(), ssh_stamp_hal::HalError> {
+    async fn sha256(
+        &mut self,
+        message: &[u8],
+        output: &mut [u8; 32],
+    ) -> Result<(), ssh_stamp_hal::HalError> {
         let mut hasher = Sha256Impl::new();
         hasher.update(message);
         let result = hasher.finalize();

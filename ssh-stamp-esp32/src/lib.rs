@@ -15,16 +15,16 @@ mod timer;
 mod uart;
 
 pub use config::*;
-pub use flash::{get_flash_n_buffer, init as flash_init, EspOtaWriter, FlashBuffer};
+pub use flash::{EspOtaWriter, FlashBuffer, get_flash_n_buffer, init as flash_init};
 pub use hash::EspHmac;
 pub use network::{
-    accept_requests, ap_stack_disable, tcp_socket_disable, wifi_controller_disable, EspWifi,
+    EspWifi, accept_requests, ap_stack_disable, tcp_socket_disable, wifi_controller_disable,
 };
-pub use rng::{register_custom_rng, EspRng};
+pub use rng::{EspRng, register_custom_rng};
 pub use timer::EspTimer;
 pub use uart::{
-    uart_buffer_wait_for_initialisation, uart_task, BufferedUart, EspUart, EspUartPins, UART_BUF,
-    UART_SIGNAL,
+    BufferedUart, EspUart, EspUartPins, UART_BUF, UART_SIGNAL, uart_buffer_wait_for_initialisation,
+    uart_task,
 };
 
 /// Perform hardware reset.

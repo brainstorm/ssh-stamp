@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use ssh_stamp_hal::{HardwareConfig, UartConfig, WifiApConfigStatic};
 use heapless::String;
+use ssh_stamp_hal::{HardwareConfig, UartConfig, WifiApConfigStatic};
 
 /// Default peripheral configuration for ESP32-C6
 #[cfg(feature = "esp32c6")]

@@ -5,5 +5,5 @@
 mod wifi;
 
 pub use wifi::{
-    accept_requests, ap_stack_disable, tcp_socket_disable, wifi_controller_disable, EspWifi,
+    EspWifi, accept_requests, ap_stack_disable, tcp_socket_disable, wifi_controller_disable,
 };

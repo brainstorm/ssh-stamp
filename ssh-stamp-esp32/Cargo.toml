@@ -1,7 +1,7 @@
 [package]
 name = "ssh-stamp-esp32"
 version = "0.2.0"
-edition = "2021"
+edition = "2024"
 authors = ["Roman Valls Guimera <brain@brainstorm.name>"]
 description = "ESP32 implementation of the ssh-stamp-hal traits for ssh-stamp"
 license = "GPL-3.0-or-later"
