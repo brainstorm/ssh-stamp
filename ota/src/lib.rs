@@ -37,7 +37,7 @@ mod ota_tlv_tests {
 
     use crate::OtaHeader;
     use crate::tlv::*;
-    use sunset::sshwire::{self, SSHDecode, SSHEncode};
+    use sunset::sshwire;
 
     #[test]
     fn test_ota_tlv_round_trip() {
@@ -210,7 +210,7 @@ mod ota_tlv_tests {
     }
 
     #[test]
-    fn skipping_unknown_tlv() {
+    fn unknown_tlv_rejected() {
         let mut buffer = [0u8; 512];
         let mut offset = 0;
 
@@ -237,12 +237,11 @@ mod ota_tlv_tests {
             .expect("Failed to write Firmware Blob TLV");
         offset += used;
 
-        let (header, _) =
-            OtaHeader::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
-
-        assert_eq!(header.ota_type, Some(OTA_TYPE_VALUE_SSH_STAMP));
-        assert_eq!(header.firmware_blob_size, Some(2048));
-        assert_eq!(header.sha256_checksum, None);
+        let result = OtaHeader::deserialize(&buffer[..offset]);
+        assert!(
+            result.is_err(),
+            "Unknown TLV types should be rejected for security, got: {result:?}"
+        );
     }
 
     // TODO: Test more error cases, such as incomplete TLVs
