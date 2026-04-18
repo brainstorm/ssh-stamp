@@ -33,11 +33,9 @@ use esp_radio::Controller;
 use esp_radio::wifi::{
     AccessPointConfig, AuthMethod, Config, ModeConfig, WifiApState, WifiController, WifiEvent,
 };
-use hal_espressif::flash;
 use heapless::String;
 use log::{debug, error, info, warn};
 use ssh_stamp_esp32::flash;
-use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
 
 extern crate alloc;

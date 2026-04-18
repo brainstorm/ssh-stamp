@@ -169,9 +169,10 @@ impl OtaActions for EspOtaWriter {
 
         let state_result = ota.current_ota_state();
         if let Ok(state) = state_result
-            && (state == OtaImageState::New || state == OtaImageState::PendingVerify)
+            && (state == esp_bootloader_esp_idf::ota::OtaImageState::New
+                || state == esp_bootloader_esp_idf::ota::OtaImageState::PendingVerify)
         {
-            ota.set_current_ota_state(OtaImageState::Valid)
+            ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::Valid)
                 .map_err(|_| HalError::Flash(FlashError::Write))?;
             debug!("Changed state to VALID");
         }

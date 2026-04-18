@@ -13,7 +13,6 @@
 //! Provides `WiFi` access point functionality for SSH-Stamp.
 
 use embassy_net::IpListenEndpoint;
-use embassy_net::Stack;
 use embassy_net::tcp::TcpSocket;
 use log::debug;
 use ssh_stamp_hal::{HalError, WifiApConfigStatic, WifiHal};
