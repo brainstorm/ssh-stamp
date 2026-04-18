@@ -611,5 +611,5 @@ pub fn bridge_disable() {
     // TODO: Correctly disable/restart bridge and/or send message to user over SSH
     debug!("Bridge disabled: WIP");
     // TODO: Correctly disable/restart bridge and/or send message to user over SSH
-    // software_reset();
+    debug!("Bridge disabled: WIP");
 }
