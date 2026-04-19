@@ -30,6 +30,7 @@ use esp_radio::wifi::{
 use heapless::String;
 use log::{debug, error, info, warn};
 use ssh_stamp_esp32::flash;
+use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
 
 extern crate alloc;
@@ -66,6 +67,9 @@ pub async fn if_up(
     rng: Rng,
     config: &'static SunsetMutex<SSHStampConfig>,
 ) -> Result<Stack<'static>, sunset::Error> {
+    static SSID_CELL: StaticCell<String<63>> = StaticCell::new();
+    static PASSWORD_CELL: StaticCell<String<63>> = StaticCell::new();
+
     let wifi_init = &*mk_static!(Controller<'static>, controller);
     let (mut wifi_controller, interfaces) =
         esp_radio::wifi::new(wifi_init, wifi, Config::default())
@@ -142,11 +146,8 @@ pub async fn if_up(
     let ssid = wifi_ssid(config).await;
     let password = wifi_password(config).await;
 
-    // Convert to static strings for the task
-    let ssid_static: &'static str =
-        alloc::boxed::Box::leak(alloc::string::String::from(ssid.as_str()).into_boxed_str());
-    let password_static: &'static str =
-        alloc::boxed::Box::leak(alloc::string::String::from(password.as_str()).into_boxed_str());
+    let ssid_static: &'static str = SSID_CELL.uninit().write(ssid).as_str();
+    let password_static: &'static str = PASSWORD_CELL.uninit().write(password).as_str();
 
     spawner
         .spawn(wifi_up(wifi_controller, ssid_static, password_static))
