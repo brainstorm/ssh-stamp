@@ -3,7 +3,9 @@
 //! Provides access to flash storage for configuration persistence and firmware updates.
 
 use embedded_storage::nor_flash::NorFlash;
-use esp_bootloader_esp_idf;
+use esp_bootloader_esp_idf::ota::OtaImageState;
+use esp_bootloader_esp_idf::ota_updater::OtaUpdater;
+use esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN;
 use esp_hal::peripherals::FLASH;
 use esp_storage::FlashStorage;
 use log::{debug, error};
@@ -71,9 +73,9 @@ impl EspOtaWriter {
         let mut fb = fb.lock().await;
 
         let (storage, _) = fb.split_ref_mut();
-        let mut buff_ota = [0u8; esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN];
+        let mut buff_ota = [0u8; PARTITION_TABLE_MAX_LEN];
 
-        let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
+        let mut ota = OtaUpdater::new(storage, &mut buff_ota)
             .map_err(|_| HalError::Flash(FlashError::InternalError))?;
         let (target_partition, _) = ota
             .next_partition()
@@ -91,9 +93,9 @@ impl EspOtaWriter {
         let mut fb = fb.lock().await;
 
         let (storage, _) = fb.split_ref_mut();
-        let mut buff_ota = [0u8; esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN];
+        let mut buff_ota = [0u8; PARTITION_TABLE_MAX_LEN];
 
-        let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
+        let mut ota = OtaUpdater::new(storage, &mut buff_ota)
             .map_err(|_| HalError::Flash(FlashError::InternalError))?;
         let (mut target_partition, part_type) = ota
             .next_partition()
@@ -120,14 +122,14 @@ impl EspOtaWriter {
         let mut fb = fb.lock().await;
 
         let (storage, _) = fb.split_ref_mut();
-        let mut buff_ota = [0u8; esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN];
+        let mut buff_ota = [0u8; PARTITION_TABLE_MAX_LEN];
 
-        let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
+        let mut ota = OtaUpdater::new(storage, &mut buff_ota)
             .map_err(|_| HalError::Flash(FlashError::InternalError))?;
 
         ota.activate_next_partition()
             .map_err(|_| HalError::Flash(FlashError::Write))?;
-        ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::New)
+        ota.set_current_ota_state(OtaImageState::New)
             .map_err(|_| HalError::Flash(FlashError::Write))?;
 
         Ok(())
@@ -149,9 +151,9 @@ impl OtaActions for EspOtaWriter {
         let mut fb = fb.lock().await;
 
         let (storage, _) = fb.split_ref_mut();
-        let mut buff_ota = [0u8; esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN];
+        let mut buff_ota = [0u8; PARTITION_TABLE_MAX_LEN];
 
-        let mut ota = esp_bootloader_esp_idf::ota_updater::OtaUpdater::new(storage, &mut buff_ota)
+        let mut ota = OtaUpdater::new(storage, &mut buff_ota)
             .map_err(|_| HalError::Flash(FlashError::InternalError))?;
         ota.selected_partition()
             .map_err(|_| HalError::Flash(FlashError::InternalError))?;
@@ -160,10 +162,9 @@ impl OtaActions for EspOtaWriter {
 
         let state_result = ota.current_ota_state();
         if let Ok(state) = state_result
-            && (state == esp_bootloader_esp_idf::ota::OtaImageState::New
-                || state == esp_bootloader_esp_idf::ota::OtaImageState::PendingVerify)
+            && (state == OtaImageState::New || state == OtaImageState::PendingVerify)
         {
-            ota.set_current_ota_state(esp_bootloader_esp_idf::ota::OtaImageState::Valid)
+            ota.set_current_ota_state(OtaImageState::Valid)
                 .map_err(|_| HalError::Flash(FlashError::Write))?;
             debug!("Changed state to VALID");
         }

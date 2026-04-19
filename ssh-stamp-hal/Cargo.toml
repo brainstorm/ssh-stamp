@@ -2,7 +2,7 @@
 name = "ssh-stamp-hal"
 version = "0.2.0"
 edition = "2024"
-authors = ["Roman Valls Guimera <brain@brainstorm.name>"]
+authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
 description = "Hardware Abstraction Layer traits for ssh-stamp"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/brainstorm/ssh-stamp"

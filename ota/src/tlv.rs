@@ -9,6 +9,7 @@
 /// If you are looking into improving this, consider looking into [proto.rs](https://github.com/mkj/sunset/blob/8e5d20916cf7b29111b90e4d3b7bb7827c9be8e5/sftp/src/proto.rs)
 /// for an example on how to automate the generation of protocols with macros
 use log::{debug, error, info};
+use sunset::packets::ParseContext;
 use sunset::sshwire::{SSHDecode, SSHEncode, SSHSource, WireError};
 
 use crate::tlv;
@@ -144,7 +145,7 @@ impl<'de> SSHDecode<'de> for Tlv {
 ///
 pub struct TlvsSource<'a> {
     remaining_buf: &'a [u8],
-    ctx: sunset::packets::ParseContext,
+    ctx: ParseContext,
     used: usize,
 }
 
@@ -153,7 +154,7 @@ impl<'a> TlvsSource<'a> {
     pub fn new(buf: &'a [u8]) -> Self {
         Self {
             remaining_buf: buf,
-            ctx: sunset::packets::ParseContext::default(),
+            ctx: ParseContext::default(),
             used: 0,
         }
     }
@@ -234,7 +235,7 @@ impl<'de> SSHSource<'de> for TlvsSource<'de> {
         self.remaining_buf.len()
     }
 
-    fn ctx(&mut self) -> &mut sunset::packets::ParseContext {
+    fn ctx(&mut self) -> &mut ParseContext {
         &mut self.ctx
     }
 }

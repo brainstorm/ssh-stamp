@@ -18,6 +18,7 @@ use core::fmt::Debug;
 use core::option::Option::None;
 use core::result::Result;
 
+use sunset::packets::PubKey;
 use sunset::{ChanFail, ChanHandle, ServEvent};
 use sunset_async::{ChanInOut, SSHServer, SunsetMutex};
 
@@ -256,7 +257,7 @@ pub async fn pubkey_auth(
         let client_pubkey = a.pubkey()?;
 
         match client_pubkey {
-            sunset::packets::PubKey::Ed25519(presented) => {
+            PubKey::Ed25519(presented) => {
                 let matched = config_guard
                     .pubkeys
                     .iter()
@@ -270,7 +271,7 @@ pub async fn pubkey_auth(
                     a.reject()?;
                 }
             }
-            sunset::packets::PubKey::Unknown(_) => {
+            PubKey::Unknown(_) => {
                 a.reject()?;
             }
         }

@@ -2,21 +2,24 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! `WiFi` trait for access point mode.
+//! `WiFi` hardware abstraction trait.
 
 use core::future::Future;
 
 use crate::{HalError, WifiApConfigStatic};
 
-/// `WiFi` hardware abstraction for access point mode.
+/// `WiFi` hardware abstraction.
 ///
-/// Provides configuration and control of `WiFi` hardware in AP mode.
+/// Provides configuration and control of `WiFi` hardware.
 /// Implementations manage the underlying `WiFi` radio and `TCP/IP` stack.
+///
+/// Currently supports access point (AP) mode. Station (STA) mode will be
+/// added when client connectivity to existing networks is needed.
 ///
 /// # Example
 ///
 /// ```ignore
-/// async fn setup_wifi<W: WifiHal>(wifi: &mut W) -> Result<(), HalError> {
+/// async fn start_wifi_ap<W: WifiHal>(wifi: &mut W) -> Result<(), HalError> {
 ///     let config = WifiApConfigStatic {
 ///         ssid: heapless::String::from("MyDevice"),
 ///         password: Some(heapless::String::from("secretpass")),
@@ -30,15 +33,15 @@ pub trait WifiHal {
     /// Start `WiFi` access point with given configuration.
     ///
     /// Initializes the `WiFi` radio and starts broadcasting an access point
-    /// with the specified SSID, password, and channel.
+    /// with the specified `SSID`, password, and channel.
     ///
     /// # Arguments
     ///
     /// * `config` - `AP` configuration including `SSID`, password, channel, and `MAC`.
     ///
-    /// # Returns
+    /// # Errors
     ///
-    /// `Ok(())` on success, or a [`HalError::Wifi`] error on failure.
+    /// Returns `HalError::Wifi` on failure.
     fn start_ap(
         &mut self,
         config: WifiApConfigStatic,

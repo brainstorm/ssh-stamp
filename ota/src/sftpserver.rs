@@ -4,7 +4,10 @@
 
 use core::hash::Hasher;
 
-use crate::{handler::UpdateProcessor, traits::OtaActions};
+use crate::{
+    handler::{OtaError, UpdateProcessor},
+    traits::OtaActions,
+};
 
 use sunset::sshwire::{BinString, WireError};
 use sunset_async::ChanInOut;
@@ -212,13 +215,13 @@ impl<T: OpaqueFileHandle + InitWithSeed, W: OtaActions> SftpServer<'_, T> for Sf
 
             if let Err(e) = self.processor.process_data(offset, buf).await {
                 match e {
-                    crate::handler::OtaError::IllegalOperation => {
+                    OtaError::IllegalOperation => {
                         error!(
                             "SftpServer Write operation failed during OTA processing: Illegal Operation - {e:?}"
                         );
                         return Err(StatusCode::SSH_FX_PERMISSION_DENIED);
                     }
-                    crate::handler::OtaError::UnknownTlvType => {
+                    OtaError::UnknownTlvType => {
                         error!(
                             "SftpServer Write operation failed during OTA processing: Unknown TLV Type - {e:?}"
                         );

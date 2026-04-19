@@ -1,6 +1,7 @@
 use embedded_storage::ReadStorage;
 use embedded_storage::nor_flash::NorFlash;
 use esp_bootloader_esp_idf::partitions;
+use esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN as PT_MAX_LEN;
 
 use pretty_hex::PrettyHex;
 use sha2::Digest;
@@ -39,14 +40,11 @@ impl FlashConfig<'_> {
     pub fn find_config_partition(fb: &mut FlashBuffer) -> Result<(), SSHStampError> {
         debug!("Flash size = {} Mb", fb.flash.capacity() / (1024 * 1024));
         debug!("Flash storage : {:?}", fb.flash);
-        let pt = partitions::read_partition_table(
-            &mut fb.flash,
-            &mut fb.buf[..esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN],
-        )
-        .map_err(|e| {
-            error!("Failed to read partition table: {e:?}");
-            SSHStampError::FlashStorageError
-        })?;
+        let pt = partitions::read_partition_table(&mut fb.flash, &mut fb.buf[..PT_MAX_LEN])
+            .map_err(|e| {
+                error!("Failed to read partition table: {e:?}");
+                SSHStampError::FlashStorageError
+            })?;
 
         let Some(nvs) = pt
             .find_partition(partitions::PartitionType::Data(

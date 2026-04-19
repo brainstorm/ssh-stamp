@@ -9,12 +9,14 @@ use embassy_net::{Ipv4Cidr, StaticConfigV4};
 use embassy_net::{Ipv6Cidr, StaticConfigV6};
 use esp_hal::efuse::Efuse;
 use heapless::String;
+use ssh_key::PublicKey;
+use ssh_key::public::KeyData;
 
 use sunset::packets::Ed25519PubKey;
 use sunset::{KeyType, Result};
 use sunset::{
     SignKey,
-    sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
+    sshwire::{Blob, SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
 };
 
 use crate::errors::Error;
@@ -148,16 +150,14 @@ impl SSHStampConfig {
             key_str.trim()
         );
 
-        let openssh = ssh_key::PublicKey::from_str(key_str.trim())?;
+        let openssh = PublicKey::from_str(key_str.trim())?;
 
         debug!("Public key format valid, continuing to parse");
 
         match openssh.key_data() {
-            ssh_key::public::KeyData::Ed25519(k) => {
+            KeyData::Ed25519(k) => {
                 let bytes = k.0; // [u8; 32]
-                let newk = Ed25519PubKey {
-                    key: sunset::sshwire::Blob(bytes),
-                };
+                let newk = Ed25519PubKey { key: Blob(bytes) };
 
                 debug!("Parsed Ed25519 public key, adding to config");
                 for slot in &mut self.pubkeys {

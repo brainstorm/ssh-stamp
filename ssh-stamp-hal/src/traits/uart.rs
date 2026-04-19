@@ -6,6 +6,9 @@
 
 use core::future::Future;
 
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::signal::Signal;
+
 use crate::{HalError, UartConfig};
 
 /// UART hardware abstraction.
@@ -63,9 +66,7 @@ pub trait UartHal {
     /// Returns a signal that is signalled when data becomes available for reading.
     /// This enables efficient async/await patterns where the caller can wait
     /// for the signal instead of polling [`Self::can_read`].
-    fn signal(
-        &self,
-    ) -> &embassy_sync::signal::Signal<embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex, ()>;
+    fn signal(&self) -> &Signal<CriticalSectionRawMutex, ()>;
 
     /// Reconfigure UART with new settings.
     ///

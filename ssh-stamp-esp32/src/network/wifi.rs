@@ -7,6 +7,7 @@
 //! Provides `WiFi` access point functionality for SSH-Stamp.
 
 use embassy_net::IpListenEndpoint;
+use embassy_net::Stack;
 use embassy_net::tcp::TcpSocket;
 use log::debug;
 use ssh_stamp_hal::{HalError, WifiApConfigStatic, WifiHal};
@@ -38,7 +39,7 @@ impl WifiHal for EspWifi {
 
 /// Accept incoming TCP connection
 pub async fn accept_requests<'a>(
-    tcp_stack: embassy_net::Stack<'a>,
+    tcp_stack: Stack<'a>,
     rx_buffer: &'a mut [u8],
     tx_buffer: &'a mut [u8],
 ) -> TcpSocket<'a> {
