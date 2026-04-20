@@ -11,6 +11,10 @@ use crate::config::SSHStampConfig;
 pub mod env_parser {
     use super::String;
 
+    /// Limit the maximum length accepted for an SSH key, Ed25519 lines
+    /// should be less than this.
+    const PUBKEY_MAX_LEN: usize = 256;
+
     /// Sanitizes environment variable input by checking for valid ASCII graphic characters.
     ///
     /// Returns `true` if the input contains at least one character and all characters
@@ -18,6 +22,26 @@ pub mod env_parser {
     #[must_use]
     pub fn env_sanitize(s: &str) -> bool {
         !s.is_empty() && s.bytes().all(|b| b.is_ascii_graphic())
+    }
+
+    /// Validates a public key environment value.
+    ///
+    /// This accepts printable ASCII, including spaces, as the format
+    /// for a key expects `<type> <base64> [comment]`. This would be
+    /// rejected by `env_sanitize` which is stricter, so it is separated
+    /// out here for pubkey environment variables only.
+    #[must_use]
+    pub fn parse_pubkey(value: &str) -> Option<&str> {
+        let trimmed = value.trim();
+
+        if trimmed.is_empty() || trimmed.len() > PUBKEY_MAX_LEN {
+            return None;
+        }
+        if !trimmed.bytes().all(|b| b.is_ascii_graphic() || b == b' ') {
+            return None;
+        }
+
+        Some(trimmed)
     }
 
     #[must_use]
@@ -77,18 +101,25 @@ pub async fn pubkey_env(
     if !config_guard.first_login {
         warn!("SSH_STAMP_PUBKEY env received but not first-login; rejecting");
         a.fail()?;
-    } else if !env_parser::env_sanitize(a.value()?) {
-        warn!("SSH_STAMP_PUBKEY contains invalid characters");
-        a.fail()?;
-    } else if config_guard.add_pubkey(a.value()?).is_ok() {
-        debug!("Added new pubkey from ENV");
-        a.succeed()?;
-        config_guard.first_login = false;
-        *config_changed = true;
-        *auth_checked = true;
     } else {
-        warn!("Failed to add new pubkey from ENV");
-        a.fail()?;
+        match env_parser::parse_pubkey(a.value()?) {
+            None => {
+                warn!("SSH_STAMP_PUBKEY contains invalid characters");
+                a.fail()?;
+            }
+            Some(trimmed) => {
+                if config_guard.add_pubkey(trimmed).is_ok() {
+                    debug!("Added new pubkey from ENV");
+                    a.succeed()?;
+                    config_guard.first_login = false;
+                    *config_changed = true;
+                    *auth_checked = true;
+                } else {
+                    warn!("Failed to add new pubkey from ENV");
+                    a.fail()?;
+                }
+            }
+        }
     }
     Ok(())
 }
