@@ -323,7 +323,6 @@ async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> 
             tcp_socket,
             uart_buf: s.uart_buf,
         };
-
         #[allow(clippy::large_futures)]
         match socket_enabled(tcp_enabled_struct).await {
             Ok(()) => {
