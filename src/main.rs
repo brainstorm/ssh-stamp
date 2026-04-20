@@ -1,9 +1,15 @@
-#![no_std]
-#![no_main]
-
-// SPDX-FileCopyrightText: 2025 Julio Beltran Ortega, Anthony Tambasco, Roman Valls Guimera, 2025
+// SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+// SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
+// SPDX-FileCopyrightText: 2026 Angus Gratton <gus@projectgus.com>
+// SPDX-FileCopyrightText: 2026 Sergio Gasquez <sergio.gasquez@gmail.com>
+// SPDX-FileCopyrightText: 2026 pancake <pancake@nopcode.org>
+// SPDX-FileCopyrightText: 2026 gabriel.ku <gabriel.ku@fsfe.org>
+// SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
+
+#![no_std]
+#![no_main]
 
 use log::{debug, error, warn};
 use ssh_stamp::{
@@ -200,11 +206,8 @@ async fn main(spawner: Spawner) -> ! {
         uart_buf,
     };
 
-    match Box::pin(peripherals_enabled(peripherals_enabled_struct)).await {
-        Ok(()) => (),
-        Err(e) => {
-            error!("Peripheral error: {e}");
-        }
+    if let Err(e) = Box::pin(peripherals_enabled(peripherals_enabled_struct)).await {
+        error!("Peripheral error: {e}");
     }
 
     peripherals_disable();
@@ -234,11 +237,8 @@ async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Err
         uart_buf: s.uart_buf,
         spawner: s.spawner,
     };
-    match Box::pin(wifi_controller_enabled(peripherals_enabled_struct)).await {
-        Ok(()) => (),
-        Err(e) => {
-            error!("Wifi controller error: {e}");
-        }
+    if let Err(e) = Box::pin(wifi_controller_enabled(peripherals_enabled_struct)).await {
+        error!("Wifi controller error: {e}");
     }
 
     net::wifi_controller_disable().await;
@@ -266,11 +266,8 @@ pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(
         uart_buf: s.uart_buf,
         tcp_stack,
     };
-    match Box::pin(tcp_enabled(wifi_controller_enabled_stack)).await {
-        Ok(()) => (),
-        Err(e) => {
-            error!("AP Stack error: {e}");
-        }
+    if let Err(e) = Box::pin(tcp_enabled(wifi_controller_enabled_stack)).await {
+        error!("AP Stack error: {e}");
     }
     net::ap_stack_disable().await;
     Ok(()) // todo!() return relevant value
@@ -315,11 +312,8 @@ async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> 
             tcp_socket,
             uart_buf: s.uart_buf,
         };
-        match Box::pin(socket_enabled(tcp_enabled_struct)).await {
-            Ok(()) => (),
-            Err(e) => {
-                error!("TCP socket error: {e}");
-            }
+        if let Err(e) = Box::pin(socket_enabled(tcp_enabled_struct)).await {
+            error!("TCP socket error: {e}");
         }
         net::tcp_socket_disable().await;
     }

@@ -1,4 +1,9 @@
-use ota::{OtaHeader, tlv};
+// SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+// SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+use ota::{tlv, OtaHeader};
 
 use clap::{ArgAction, Command};
 use sha2::{Digest, Sha256};

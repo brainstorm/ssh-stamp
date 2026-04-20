@@ -1,5 +1,11 @@
-use embedded_storage::ReadStorage;
+// SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+// SPDX-FileCopyrightText: 2026 pancake <pancake@nopcode.org>
+// SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use embedded_storage::nor_flash::NorFlash;
+use embedded_storage::ReadStorage;
 use esp_bootloader_esp_idf::partitions;
 use esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN as PT_MAX_LEN;
 

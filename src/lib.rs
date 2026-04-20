@@ -1,10 +1,13 @@
+// SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+// SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
+// SPDX-FileCopyrightText: 2026 gabriel.ku <gabriel.ku@fsfe.org>
+// SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #![no_std]
 #![no_main]
 // #![forbid(unsafe_code)]
-
-// SPDX-FileCopyrightText: 2025 Roman Valls, 2025
-//
-// SPDX-License-Identifier: GPL-3.0-or-later
 #[deny(clippy::mem_forget)] // avoids any UB, forces use of Drop impl instead
 #[deny(unused_imports)] // avoid accidentally leaving in debug imports
 #[deny(unused_variables)] // avoid accidentally leaving in debug variables

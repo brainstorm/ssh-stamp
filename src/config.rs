@@ -1,3 +1,9 @@
+// SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+// SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
+// SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use log::{debug, warn};
 
 use core::net::Ipv4Addr;
@@ -9,15 +15,15 @@ use embassy_net::{Ipv4Cidr, StaticConfigV4};
 use embassy_net::{Ipv6Cidr, StaticConfigV6};
 use esp_hal::efuse::Efuse;
 use heapless::String;
-use ssh_key::PublicKey;
 use ssh_key::public::KeyData;
+use ssh_key::PublicKey;
 
 use sunset::packets::Ed25519PubKey;
-use sunset::{KeyType, Result};
 use sunset::{
-    SignKey,
     sshwire::{Blob, SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
+    SignKey,
 };
+use sunset::{KeyType, Result};
 
 use crate::errors::Error;
 use crate::settings::{DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS, WIFI_PASSWORD_CHARS};

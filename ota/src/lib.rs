@@ -1,7 +1,11 @@
-#![cfg_attr(not(test), no_std)]
-// SPDX-FileCopyrightText: 2025 Roman Valls, 2025
+// SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+// SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
+// SPDX-FileCopyrightText: 2026 Sergio Gasquez <sergio.gasquez@gmail.com>
+// SPDX-FileCopyrightText: 2026 gabriel.ku <gabriel.ku@fsfe.org>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
+
+#![cfg_attr(not(test), no_std)]
 
 /// Runs the ota server taking care of reading ota file metadata,
 /// internal state, storage and target reset
