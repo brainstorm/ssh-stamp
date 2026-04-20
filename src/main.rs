@@ -205,6 +205,7 @@ async fn main(spawner: Spawner) -> ! {
         uart_buf,
     };
 
+    #[allow(clippy::large_futures)]
     match peripherals_enabled(peripherals_enabled_struct).await {
         Ok(()) => (),
         Err(e) => {
@@ -239,6 +240,7 @@ async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Err
         uart_buf: s.uart_buf,
         spawner: s.spawner,
     };
+    #[allow(clippy::large_futures)]
     match wifi_controller_enabled(peripherals_enabled_struct).await {
         Ok(()) => (),
         Err(e) => {
@@ -271,6 +273,7 @@ pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(
         uart_buf: s.uart_buf,
         tcp_stack,
     };
+    #[allow(clippy::large_futures)]
     match tcp_enabled(wifi_controller_enabled_stack).await {
         Ok(()) => (),
         Err(e) => {
@@ -320,6 +323,7 @@ async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> 
             tcp_socket,
             uart_buf: s.uart_buf,
         };
+        #[allow(clippy::large_futures)]
         match socket_enabled(tcp_enabled_struct).await {
             Ok(()) => (),
             Err(e) => {

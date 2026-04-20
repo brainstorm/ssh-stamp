@@ -394,7 +394,9 @@ pub async fn pubkey_env(
         config_guard.first_login = false;
         *ctx.config_changed = true;
         *ctx.auth_checked = true;
-    } else {
+    } 
+    
+    if config_guaard.first_login {
         match env_parser::parse_pubkey(a.value()?) {
             None => {
                 warn!("SSH_STAMP_PUBKEY contains invalid characters");
@@ -413,7 +415,11 @@ pub async fn pubkey_env(
                 }
             }
         }
+    } else {
+        warn!("SSH_STAMP_PUBKEY env received but not first-login; rejecting");
+        a.fail()?;
     }
+
     Ok(())
 }
 
