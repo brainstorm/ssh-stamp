@@ -174,6 +174,42 @@ pub async fn if_up(
     Ok(ap_stack)
 }
 
+pub fn ap_stack_disable() {
+    // drop ap_stack
+    debug!("AP Stack disabled: WIP");
+    // TODO: Correctly disable/restart AP Stack and/or send messsage to user over SSH
+}
+
+pub fn tcp_socket_disable() {
+    // drop tcp stack
+    debug!("TCP socket disabled: WIP");
+    // TODO: Correctly disable/restart tcp socket and/or send messsage to user over SSH
+}
+
+pub async fn accept_requests<'a>(
+    tcp_stack: Stack<'a>,
+    rx_buffer: &'a mut [u8],
+    tx_buffer: &'a mut [u8],
+) -> TcpSocket<'a> {
+    let mut tcp_socket = TcpSocket::new(tcp_stack, rx_buffer, tx_buffer);
+
+    debug!("Waiting for SSH client...");
+    if let Err(e) = tcp_socket
+        .accept(IpListenEndpoint {
+            addr: None,
+            port: 22,
+        })
+        .await
+    {
+        error!("connect error: {e:?}");
+        // continue;
+        tcp_socket_disable();
+    }
+    debug!("Connected, port 22");
+
+    tcp_socket
+}
+
 /// Returns the configured `WiFi` SSID from the config.
 ///
 /// # Panics
@@ -249,7 +285,17 @@ pub async fn wifi_up(
     }
 }
 
-/// Network task for Embassy executor
+pub fn wifi_controller_disable() {
+    // TODO: Correctly disable wifi controller
+    // pub async fn wifi_disable(wifi_controller: EspWifiController<'_>) -> (){
+    // drop wifi controller
+    // esp_wifi::deinit_unchecked()
+    // wifi_controller.deinit_unchecked()
+    debug!("Disabling wifi: WIP");
+    //software_reset();
+}
+
+use esp_radio::wifi::{Config, WifiDevice};
 #[embassy_executor::task]
 pub async fn net_up(mut runner: Runner<'static, esp_radio::wifi::WifiDevice<'static>>) {
     debug!("Bringing up network stack...");

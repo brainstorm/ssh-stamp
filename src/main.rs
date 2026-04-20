@@ -41,7 +41,6 @@ use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
 use esp_hal::interrupt::{Priority, software::SoftwareInterruptControl};
 use esp_hal::peripherals::WIFI;
 use esp_hal::rng::{Rng, TrngSource};
-use esp_hal::system::software_reset;
 
 use esp_println::logger;
 
@@ -55,11 +54,6 @@ cfg_if::cfg_if! {
         use log::info;
         use esp_hal::timer::timg::TimerGroup;
     }
-}
-
-pub fn peripherals_disable() {
-    // drop peripherals
-    debug!("Disabling peripherals: WIP");
 }
 
 pub struct SshStampInit<'a> {
@@ -87,7 +81,7 @@ async fn main(spawner: Spawner) -> ! {
     debug!("HSM: Initialising peripherals ");
 
     // System init
-    let peripherals = esp_hal::init(esp_hal::Config::default());
+    let peripherals = esp_hal::init(esp_hal::Config::default()); // !todo()  panic!("Peripheral initialisation error!"); on peripherial initialsation error
 
     // Enable true random number generation using ADC entropy source before config creation.
     // The ESP32 hardware RNG only produces true random numbers when RF subsystem is enabled
@@ -213,10 +207,7 @@ async fn main(spawner: Spawner) -> ! {
         }
     }
 
-    peripherals_disable();
-    // loop {}
-    warn!("End of Main... Reset!!");
-    software_reset();
+    panic!("End of Main: Peripheral error!");
 }
 
 pub struct PeripheralsEnabled<'a> {
@@ -230,26 +221,28 @@ pub struct PeripheralsEnabled<'a> {
 
 async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Error> {
     debug!("HSM: peripherals_enabled");
-    let controller = esp_radio::init().map_err(|_| sunset::error::BadUsage.build())?;
+    let controller = esp_radio::init().map_err(|e| panic!("Could not acquire esp_radio: {:?}", e));
 
     let peripherals_enabled_struct = PeripheralsEnabled {
         rng: s.rng,
         wifi: s.wifi,
         config: s.config,
-        controller,
+        controller: controller.unwrap(),
         uart_buf: s.uart_buf,
         spawner: s.spawner,
     };
+
     #[allow(clippy::large_futures)]
     match wifi_controller_enabled(peripherals_enabled_struct).await {
-        Ok(()) => (),
+        Ok(()) => {
+            debug!("Disabling wifi");
+            Ok(())
+        }
         Err(e) => {
             error!("Wifi controller error: {e}");
+            Result::Err(e)
         }
     }
-
-    net::wifi_controller_disable().await;
-    Ok(()) // todo!() return relevant value
 }
 
 pub struct WifiControllerEnabled<'a> {
@@ -273,15 +266,18 @@ pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(
         uart_buf: s.uart_buf,
         tcp_stack,
     };
+
     #[allow(clippy::large_futures)]
     match tcp_enabled(wifi_controller_enabled_stack).await {
-        Ok(()) => (),
+        Ok(()) => {
+            debug!("AP Stack disabled");
+            Ok(())
+        }
         Err(e) => {
             error!("AP Stack error: {e}");
+            Result::Err(e)
         }
     }
-    net::ap_stack_disable().await;
-    Ok(()) // todo!() return relevant value
 }
 
 pub struct TCPEnabled<'a> {
@@ -293,7 +289,6 @@ pub struct TCPEnabled<'a> {
 cfg_if::cfg_if!(if #[cfg(feature = "esp32")] {use embassy_net::IpListenEndpoint;});
 async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> {
     debug!("HSM: tcp_enabled");
-
     let mut rx_buffer = [0u8; 1536];
     let mut tx_buffer = [0u8; 1536];
     loop {
@@ -310,7 +305,6 @@ async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> 
                     .await
                 {
                     error!("connect error: {:?}", e);
-                    net::tcp_socket_disable().await;
                 }
                 debug!("Connected, port 22");
             } else {
@@ -323,16 +317,17 @@ async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> 
             tcp_socket,
             uart_buf: s.uart_buf,
         };
+
         #[allow(clippy::large_futures)]
         match socket_enabled(tcp_enabled_struct).await {
-            Ok(()) => (),
+            Ok(()) => {
+                debug!("TCP socket disabled");
+            }
             Err(e) => {
                 error!("TCP socket error: {e}");
             }
         }
-        net::tcp_socket_disable().await;
     }
-    // Ok(()) // todo!() return relevant value
 }
 
 pub struct SocketEnabled<'a> {
@@ -344,7 +339,6 @@ pub struct SocketEnabled<'a> {
 
 async fn socket_enabled(s: TCPEnabled<'_>) -> Result<(), sunset::Error> {
     debug!("HSM: socket_enabled");
-    // loop {
     // Spawn network tasks to handle incoming connections with demo_common::session()
     let mut inbuf = [0u8; UART_BUFFER_SIZE];
     let mut outbuf = [0u8; UART_BUFFER_SIZE];
@@ -359,15 +353,15 @@ async fn socket_enabled(s: TCPEnabled<'_>) -> Result<(), sunset::Error> {
         uart_buf: s.uart_buf,
     };
     match ssh_enabled(socket_enabled_struct).await {
-        Ok(()) => (),
+        Ok(()) => {
+            debug!("SSH Server disabled");
+            Ok(())
+        }
         Err(e) => {
             error!("SSH server error: {e}");
+            Result::Err(e)
         }
     }
-
-    serve::ssh_disable();
-    // }
-    Ok(()) // todo!() return relevant value
 }
 
 pub struct SshEnabled<'a, 'b, CL>
@@ -383,10 +377,8 @@ where
 }
 
 async fn ssh_enabled(s: SocketEnabled<'_>) -> Result<(), sunset::Error> {
-    debug!("HSM: ssh_enabled");
-    // loop {
-    debug!("HSM: Starting channel pipe");
-    let chan_pipe = Channel::<NoopRawMutex, handle::SessionType, 1>::new();
+    debug!("HSM: ssh_enabled. Starting channel pipe");
+    let chan_pipe = Channel::<NoopRawMutex, serve::SessionType, 1>::new();
     debug!("HSM: Started channel pipe. Calling connection_loop from ssh_enabled");
     let connection = serve::connection_loop(&s.ssh_server, &chan_pipe, s.config);
     debug!("HSM: Started connection loop");
@@ -400,15 +392,15 @@ async fn ssh_enabled(s: SocketEnabled<'_>) -> Result<(), sunset::Error> {
         connection_loop: connection,
     };
     match client_connected(ssh_enabled_struct).await {
-        Ok(()) => (),
+        Ok(()) => {
+            debug!("Client connection disabled");
+            Ok(())
+        }
         Err(e) => {
             error!("Client connection error: {e}");
+            Result::Err(e)
         }
     }
-
-    serve::connection_disable();
-    // }
-    Ok(()) // todo!() return relevant value
 }
 
 pub struct ClientConnected<'a, 'b, CL, BR>
@@ -439,15 +431,15 @@ where
         tcp_socket: s.tcp_socket,
     };
     match bridge_connected(uart_enabled_struct).await {
-        Ok(()) => (),
+        Ok(()) => {
+            debug!("Bridge disabled");
+            Ok(())
+        }
         Err(e) => {
-            debug!("Bridge error: {e}");
+            error!("Bridge error: {e}");
+            Result::Err(e)
         }
     }
-
-    handle::bridge_disable();
-
-    Ok(())
 }
 
 async fn bridge_connected<'a, 'b, CL, BR>(
