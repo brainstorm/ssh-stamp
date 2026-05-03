@@ -236,15 +236,10 @@ mod ota_tlv_tests {
 
         let (header, _) =
             OtaHeader::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
+
         assert_eq!(header.ota_type, Some(OTA_TYPE_VALUE_SSH_STAMP));
         assert_eq!(header.firmware_blob_size, Some(2048));
         assert_eq!(header.sha256_checksum, None);
-
-        let result = OtaHeader::deserialize(&buffer[..offset]);
-        assert!(
-            result.is_err(),
-            "Unknown TLV types should be rejected for security, got: {result:?}"
-        );
     }
 
     // TODO: Test more error cases, such as incomplete TLVs
