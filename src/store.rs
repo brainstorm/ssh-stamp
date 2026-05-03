@@ -4,8 +4,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use embedded_storage::nor_flash::NorFlash;
 use embedded_storage::ReadStorage;
+use embedded_storage::nor_flash::NorFlash;
 use esp_bootloader_esp_idf::partitions;
 use esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN as PT_MAX_LEN;
 
@@ -77,14 +77,26 @@ fn config_hash(config: &SSHStampConfig) -> Result<[u8; 32], SunsetError> {
     Ok(h.finalize().into())
 }
 
-/// Loads a `SSHConfig` at startup. Good for persisting hostkeys.
+/// Loads a `SSHConfig` at startup, migrating insecure defaults from older firmware.
+///
+/// If an existing config was saved by older firmware that used the hardcoded
+/// `"ssh-stamp"` SSID, this function regenerates the SSID and password
+/// randomly and persists the updated config.
 ///
 /// # Errors
 /// Returns an error if config creation or flash write fails.
 pub fn load_or_create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
     match load(flash) {
-        Ok(c) => {
+        Ok(mut c) => {
             debug!("Good existing config");
+            if c.wifi_ssid.as_str() == "ssh-stamp" {
+                debug!("Migrating insecure default SSID, regenerating randomly");
+                c.wifi_ssid = SSHStampConfig::generate_wifi_ssid()?;
+                if c.wifi_pw.is_none() {
+                    c.wifi_pw = Some(SSHStampConfig::generate_wifi_password()?);
+                }
+                save(flash, &c)?;
+            }
             return Ok(c);
         }
         Err(e) => debug!("Existing config bad, making new. {e}"),

@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: 2026 Angus Gratton <gus@projectgus.com>
 // SPDX-FileCopyrightText: 2026 Sergio Gasquez <sergio.gasquez@gmail.com>
 // SPDX-FileCopyrightText: 2026 pancake <pancake@nopcode.org>
-// SPDX-FileCopyrightText: 2026 gabriel.ku <gabriel.ku@fsfe.org>
+// SPDX-FileCopyrightText: 2026 Gabriel Ku Wei Bin <gabriel.ku@fsfe.org>
 // SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -28,8 +28,7 @@ use crate::{HalError, WifiApConfigStatic};
 /// async fn start_wifi_ap<W: WifiHal>(wifi: &mut W) -> Result<(), HalError> {
 ///     let config = WifiApConfigStatic {
 ///         ssid: heapless::String::from("MyDevice"),
-///         password: Some(heapless::String::from("secretpass")),
-///         channel: 6,
+///         password: heapless::String::from("secretpass"),
 ///         mac: [0x02, 0x03, 0x04, 0x05, 0x06, 0x07],
 ///     };
 ///     wifi.start_ap(config).await
@@ -43,7 +42,7 @@ pub trait WifiHal {
     ///
     /// # Arguments
     ///
-    /// * `config` - `AP` configuration including `SSID`, password, channel, and `MAC`.
+    /// * `config` - `AP` configuration including `SSID`, password, and `MAC`.
     ///
     /// # Errors
     ///

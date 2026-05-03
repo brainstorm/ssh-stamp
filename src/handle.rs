@@ -58,6 +58,9 @@ pub mod env_parser {
         Some(trimmed)
     }
 
+    /// Parses and validates a `WiFi` SSID from an environment variable value.
+    ///
+    /// Returns `None` if the value contains non-ASCII-graphic characters.
     #[must_use]
     pub fn parse_wifi_ssid(value: &str) -> Option<String<32>> {
         if !env_sanitize(value) {
@@ -68,6 +71,10 @@ pub mod env_parser {
         Some(s)
     }
 
+    /// Parses and validates a `WiFi` PSK from an environment variable value.
+    ///
+    /// Returns `None` if the value is not between 8 and 63 characters
+    /// or contains non-ASCII-graphic characters.
     #[must_use]
     pub fn parse_wifi_psk(value: &str) -> Option<String<63>> {
         if value.len() < 8 || value.len() > 63 {
@@ -81,6 +88,10 @@ pub mod env_parser {
         Some(s)
     }
 
+    /// Parses a MAC address from an environment variable value in `XX:XX:XX:XX:XX:XX` format.
+    ///
+    /// Returns `None` if the value is not exactly 17 characters, contains
+    /// non-hex-colon characters, or does not produce exactly 6 octets.
     #[must_use]
     pub fn parse_mac_address(value: &str) -> Option<[u8; 6]> {
         if !env_sanitize(value) {
@@ -605,11 +616,4 @@ pub async fn ssh_client<'a, 'b>(
         }
     }
     Ok(())
-}
-
-pub fn bridge_disable() {
-    // TODO: Correctly disable/restart bridge and/or send message to user over SSH
-    debug!("Bridge disabled: WIP");
-    // TODO: Correctly disable/restart bridge and/or send message to user over SSH
-    debug!("Bridge disabled: WIP");
 }

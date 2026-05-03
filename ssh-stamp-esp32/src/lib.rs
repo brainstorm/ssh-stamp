@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: 2026 Angus Gratton <gus@projectgus.com>
 // SPDX-FileCopyrightText: 2026 Sergio Gasquez <sergio.gasquez@gmail.com>
 // SPDX-FileCopyrightText: 2026 pancake <pancake@nopcode.org>
-// SPDX-FileCopyrightText: 2026 gabriel.ku <gabriel.ku@fsfe.org>
+// SPDX-FileCopyrightText: 2026 Gabriel Ku Wei Bin <gabriel.ku@fsfe.org>
 // SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -21,9 +21,7 @@ mod uart;
 pub use config::*;
 pub use flash::{EspOtaWriter, FlashBuffer, get_flash_n_buffer, init as flash_init};
 pub use hash::EspHmac;
-pub use network::{
-    EspWifi, accept_requests, ap_stack_disable, tcp_socket_disable, wifi_controller_disable,
-};
+pub use network::{EspWifi, accept_requests};
 pub use rng::{EspRng, register_custom_rng};
 pub use timer::EspTimer;
 pub use uart::{

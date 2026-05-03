@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: 2026 Angus Gratton <gus@projectgus.com>
 // SPDX-FileCopyrightText: 2026 Sergio Gasquez <sergio.gasquez@gmail.com>
 // SPDX-FileCopyrightText: 2026 pancake <pancake@nopcode.org>
-// SPDX-FileCopyrightText: 2026 gabriel.ku <gabriel.ku@fsfe.org>
+// SPDX-FileCopyrightText: 2026 Gabriel Ku Wei Bin <gabriel.ku@fsfe.org>
 // SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -44,9 +44,7 @@ use alloc::string::String as AllocString;
 use crate::settings::WIFI_PASSWORD_CHARS;
 
 // Re-export functions from ssh-stamp-esp32
-pub use ssh_stamp_esp32::{
-    accept_requests, ap_stack_disable, tcp_socket_disable, wifi_controller_disable,
-};
+pub use ssh_stamp_esp32::accept_requests;
 
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {

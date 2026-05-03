@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: 2026 Angus Gratton <gus@projectgus.com>
 // SPDX-FileCopyrightText: 2026 Sergio Gasquez <sergio.gasquez@gmail.com>
 // SPDX-FileCopyrightText: 2026 pancake <pancake@nopcode.org>
-// SPDX-FileCopyrightText: 2026 gabriel.ku <gabriel.ku@fsfe.org>
+// SPDX-FileCopyrightText: 2026 Gabriel Ku Wei Bin <gabriel.ku@fsfe.org>
 // SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -61,19 +61,4 @@ pub async fn accept_requests<'a>(
     debug!("Connected, port 22");
 
     tcp_socket
-}
-
-/// Disable AP stack
-pub async fn ap_stack_disable() {
-    debug!("AP Stack disabled: WIP");
-}
-
-/// Disable TCP socket
-pub async fn tcp_socket_disable() {
-    debug!("TCP socket disabled: WIP");
-}
-
-/// Disable `WiFi` controller
-pub async fn wifi_controller_disable() {
-    debug!("Disabling wifi: WIP");
 }

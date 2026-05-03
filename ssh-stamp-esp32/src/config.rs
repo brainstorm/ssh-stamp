@@ -3,13 +3,45 @@
 // SPDX-FileCopyrightText: 2026 Angus Gratton <gus@projectgus.com>
 // SPDX-FileCopyrightText: 2026 Sergio Gasquez <sergio.gasquez@gmail.com>
 // SPDX-FileCopyrightText: 2026 pancake <pancake@nopcode.org>
-// SPDX-FileCopyrightText: 2026 gabriel.ku <gabriel.ku@fsfe.org>
+// SPDX-FileCopyrightText: 2026 Gabriel Ku Wei Bin <gabriel.ku@fsfe.org>
 // SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use heapless::String;
 use ssh_stamp_hal::{HardwareConfig, UartConfig, WifiApConfigStatic};
+
+/// Alphanumeric character set used for random `WiFi` SSID and password generation.
+const WIFI_ALPHANUM_CHARS: &[u8; 62] =
+    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+/// Generates a random `WiFi` SSID using cryptographically secure randomness.
+///
+/// # Panics
+/// Panics if the RNG source is unavailable.
+fn generate_wifi_ssid() -> String<32> {
+    let mut rnd = [0u8; 16];
+    getrandom::getrandom(&mut rnd).expect("RNG failed for SSID generation");
+    let mut ssid = String::<32>::new();
+    for &byte in &rnd {
+        let _ = ssid.push(WIFI_ALPHANUM_CHARS[(byte as usize) % 62] as char);
+    }
+    ssid
+}
+
+/// Generates a random `WiFi` password using cryptographically secure randomness.
+///
+/// # Panics
+/// Panics if the RNG source is unavailable.
+fn generate_wifi_password() -> String<63> {
+    let mut rnd = [0u8; 24];
+    getrandom::getrandom(&mut rnd).expect("RNG failed for password generation");
+    let mut pw = String::<63>::new();
+    for &byte in &rnd {
+        let _ = pw.push(WIFI_ALPHANUM_CHARS[(byte as usize) % 62] as char);
+    }
+    pw
+}
 
 /// Default peripheral configuration for ESP32-C6
 #[cfg(feature = "esp32c6")]
@@ -24,9 +56,8 @@ pub fn default_config() -> HardwareConfig {
             baud_rate: 115_200,
         },
         wifi: WifiApConfigStatic {
-            ssid: String::try_from("ssh-stamp").unwrap_or_default(),
-            password: None,
-            channel: 1,
+            ssid: generate_wifi_ssid(),
+            password: generate_wifi_password(),
             mac: [0; 6], // Will be set from eFuse
         },
     }
@@ -45,9 +76,8 @@ pub fn default_config() -> HardwareConfig {
             baud_rate: 115_200,
         },
         wifi: WifiApConfigStatic {
-            ssid: String::try_from("ssh-stamp").unwrap_or_default(),
-            password: None,
-            channel: 1,
+            ssid: generate_wifi_ssid(),
+            password: generate_wifi_password(),
             mac: [0; 6],
         },
     }
@@ -66,9 +96,8 @@ pub fn default_config() -> HardwareConfig {
             baud_rate: 115_200,
         },
         wifi: WifiApConfigStatic {
-            ssid: String::try_from("ssh-stamp").unwrap_or_default(),
-            password: None,
-            channel: 1,
+            ssid: generate_wifi_ssid(),
+            password: generate_wifi_password(),
             mac: [0; 6],
         },
     }
@@ -87,9 +116,8 @@ pub fn default_config() -> HardwareConfig {
             baud_rate: 115_200,
         },
         wifi: WifiApConfigStatic {
-            ssid: String::try_from("ssh-stamp").unwrap_or_default(),
-            password: None,
-            channel: 1,
+            ssid: generate_wifi_ssid(),
+            password: generate_wifi_password(),
             mac: [0; 6],
         },
     }
@@ -108,9 +136,8 @@ pub fn default_config() -> HardwareConfig {
             baud_rate: 115_200,
         },
         wifi: WifiApConfigStatic {
-            ssid: String::try_from("ssh-stamp").unwrap_or_default(),
-            password: None,
-            channel: 1,
+            ssid: generate_wifi_ssid(),
+            password: generate_wifi_password(),
             mac: [0; 6],
         },
     }
@@ -129,9 +156,8 @@ pub fn default_config() -> HardwareConfig {
             baud_rate: 115_200,
         },
         wifi: WifiApConfigStatic {
-            ssid: String::try_from("ssh-stamp").unwrap_or_default(),
-            password: None,
-            channel: 1,
+            ssid: generate_wifi_ssid(),
+            password: generate_wifi_password(),
             mac: [0; 6],
         },
     }

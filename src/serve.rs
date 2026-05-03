@@ -2,13 +2,12 @@
 // SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
 // SPDX-FileCopyrightText: 2026 Angus Gratton <gus@projectgus.com>
 // SPDX-FileCopyrightText: 2026 Sergio Gasquez <sergio.gasquez@gmail.com>
-// SPDX-FileCopyrightText: 2026 gabriel.ku <gabriel.ku@fsfe.org>
+// SPDX-FileCopyrightText: 2026 Gabriel Ku Wei Bin <gabriel.ku@fsfe.org>
 // SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use log::{debug, trace};
-use log::{debug, trace};
+use log::trace;
 
 use crate::config::SSHStampConfig;
 use crate::handle::{
@@ -133,19 +132,10 @@ pub async fn connection_loop(
     }
 }
 
-pub fn connection_disable() {
-    // TODO: Correctly disable/restart Connection loop and/or send message to user over SSH
-    debug!("Connection loop disabled: WIP");
-}
-
+/// Creates a new [`SSHServer`] with the provided I/O buffers.
 pub fn ssh_wait_for_initialisation<'server>(
     inbuf: &'server mut [u8; UART_BUFFER_SIZE],
     outbuf: &'server mut [u8; UART_BUFFER_SIZE],
 ) -> SSHServer<'server> {
     SSHServer::new(inbuf, outbuf)
-}
-
-pub fn ssh_disable() {
-    // TODO: Correctly disable/restart SSH Server and/or send message to user over SSH
-    debug!("SSH Server disabled: WIP");
 }

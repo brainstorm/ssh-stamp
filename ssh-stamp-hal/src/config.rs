@@ -53,25 +53,15 @@ impl Default for UartConfig {
 ///
 /// Contains settings for running the device as a `WiFi` access point.
 /// Uses `heapless::String` for `no_std` compatibility.
+///
+/// SSID and password should always be randomly generated — never use
+/// predictable or empty defaults.
 #[derive(Clone, Debug)]
 pub struct WifiApConfigStatic {
-    /// Network name (SSID), max 32 characters.
+    /// Network name (SSID), max 32 characters. Must be randomly generated.
     pub ssid: heapless::String<32>,
-    /// Optional WPA2 password, max 63 characters.
-    pub password: Option<heapless::String<63>>,
-    /// `WiFi` channel (1-14 for 2.4GHz).
-    pub channel: u8,
+    /// WPA2 password, max 63 characters. Must be randomly generated.
+    pub password: heapless::String<63>,
     /// MAC address for the access point interface.
     pub mac: [u8; 6],
-}
-
-impl Default for WifiApConfigStatic {
-    fn default() -> Self {
-        Self {
-            ssid: heapless::String::new(),
-            password: None,
-            channel: 1,
-            mac: [0; 6],
-        }
-    }
 }

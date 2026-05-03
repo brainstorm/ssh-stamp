@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: 2026 Angus Gratton <gus@projectgus.com>
 // SPDX-FileCopyrightText: 2026 Sergio Gasquez <sergio.gasquez@gmail.com>
 // SPDX-FileCopyrightText: 2026 pancake <pancake@nopcode.org>
-// SPDX-FileCopyrightText: 2026 gabriel.ku <gabriel.ku@fsfe.org>
+// SPDX-FileCopyrightText: 2026 Gabriel Ku Wei Bin <gabriel.ku@fsfe.org>
 // SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -11,7 +11,7 @@
 #![no_std]
 #![no_main]
 
-use log::{debug, error, warn};
+use log::{debug, error};
 use ssh_stamp::{
     config::SSHStampConfig,
     espressif::{
@@ -241,11 +241,9 @@ async fn peripherals_enabled(s: SshStampInit<'static>) -> Result<(), sunset::Err
         }
         Err(e) => {
             error!("Wifi controller error: {e}");
-            Result::Err(e)
+            Err(e)
         }
     }
-
-    net::wifi_controller_disable().await;
 }
 
 pub struct WifiControllerEnabled<'a> {
@@ -278,11 +276,9 @@ pub async fn wifi_controller_enabled(s: PeripheralsEnabled<'static>) -> Result<(
         }
         Err(e) => {
             error!("AP Stack error: {e}");
-            Result::Err(e)
+            Err(e)
         }
     }
-
-    net::ap_stack_disable().await;
 }
 
 pub struct TCPEnabled<'a> {
@@ -310,7 +306,6 @@ async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> 
                     .await
                 {
                     error!("connect error: {:?}", e);
-                    net::tcp_socket_disable().await;
                 }
                 debug!("Connected, port 22");
             } else {
@@ -332,7 +327,6 @@ async fn tcp_enabled(s: WifiControllerEnabled<'_>) -> Result<(), sunset::Error> 
                 error!("TCP socket error: {e}");
             }
         }
-        net::tcp_socket_disable().await;
     }
 }
 
@@ -365,11 +359,9 @@ async fn socket_enabled(s: TCPEnabled<'_>) -> Result<(), sunset::Error> {
         }
         Err(e) => {
             error!("SSH server error: {e}");
-            Result::Err(e)
+            Err(e)
         }
     }
-
-    serve::ssh_disable().await;
 }
 
 pub struct SshEnabled<'a, 'b, CL>
@@ -385,8 +377,7 @@ where
 }
 
 async fn ssh_enabled(s: SocketEnabled<'_>) -> Result<(), sunset::Error> {
-    debug!("HSM: ssh_enabled");
-    debug!("HSM: Starting channel pipe");
+    debug!("HSM: ssh_enabled. Starting channel pipe");
     let chan_pipe = Channel::<NoopRawMutex, handle::SessionType, 1>::new();
     debug!("HSM: Started channel pipe. Calling connection_loop from ssh_enabled");
     let connection = serve::connection_loop(&s.ssh_server, &chan_pipe, s.config);
@@ -407,11 +398,9 @@ async fn ssh_enabled(s: SocketEnabled<'_>) -> Result<(), sunset::Error> {
         }
         Err(e) => {
             error!("Client connection error: {e}");
-            Result::Err(e)
+            Err(e)
         }
     }
-
-    serve::connection_disable().await;
 }
 
 pub struct ClientConnected<'a, 'b, CL, BR>
@@ -448,11 +437,9 @@ where
         }
         Err(e) => {
             error!("Bridge error: {e}");
-            Result::Err(e)
+            Err(e)
         }
     }
-
-    handle::bridge_disable().await;
 }
 
 async fn bridge_connected<'a, 'b, CL, BR>(

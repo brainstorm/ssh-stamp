@@ -15,15 +15,15 @@ use embassy_net::{Ipv4Cidr, StaticConfigV4};
 use embassy_net::{Ipv6Cidr, StaticConfigV6};
 use esp_hal::efuse::Efuse;
 use heapless::String;
-use ssh_key::public::KeyData;
 use ssh_key::PublicKey;
+use ssh_key::public::KeyData;
 
 use sunset::packets::Ed25519PubKey;
-use sunset::{
-    sshwire::{Blob, SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
-    SignKey,
-};
 use sunset::{KeyType, Result};
+use sunset::{
+    SignKey,
+    sshwire::{Blob, SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
+};
 
 use crate::errors::Error;
 use crate::settings::{DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS, WIFI_PASSWORD_CHARS};
@@ -124,7 +124,7 @@ impl SSHStampConfig {
         })
     }
 
-    fn generate_wifi_ssid() -> Result<String<32>> {
+    pub(crate) fn generate_wifi_ssid() -> Result<String<32>> {
         let mut rnd = [0u8; 16];
         sunset::random::fill_random(&mut rnd)?;
         let mut ssid = String::<32>::new();
@@ -134,7 +134,7 @@ impl SSHStampConfig {
         Ok(ssid)
     }
 
-    fn generate_wifi_password() -> Result<String<63>> {
+    pub(crate) fn generate_wifi_password() -> Result<String<63>> {
         let mut rnd = [0u8; 24];
         sunset::random::fill_random(&mut rnd)?;
         let mut pw = String::<63>::new();
