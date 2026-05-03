@@ -36,6 +36,7 @@ use esp_radio::wifi::{
 use heapless::String;
 use log::{debug, error, info, warn};
 use ssh_stamp_esp32::flash;
+use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
 
 extern crate alloc;
@@ -289,4 +290,3 @@ pub async fn dhcp_server(stack: Stack<'static>, ip: Ipv4Addr) {
         Timer::after(Duration::from_millis(500)).await;
     }
 }
-

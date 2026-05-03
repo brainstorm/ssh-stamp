@@ -405,30 +405,6 @@ pub async fn pubkey_env(
         config_guard.first_login = false;
         *ctx.config_changed = true;
         *ctx.auth_checked = true;
-    } 
-    
-    if config_guard.first_login {
-        match env_parser::parse_pubkey(a.value()?) {
-            None => {
-                warn!("SSH_STAMP_PUBKEY contains invalid characters");
-                a.fail()?;
-            }
-            Some(trimmed) => {
-                if config_guard.add_pubkey(trimmed).is_ok() {
-                    debug!("Added new pubkey from ENV");
-                    a.succeed()?;
-                    config_guard.first_login = false;
-                    *ctx.config_changed = true;
-                    *ctx.auth_checked = true;
-                } else {
-                    warn!("Failed to add new pubkey from ENV");
-                    a.fail()?;
-                }
-            }
-        }
-    } else {
-        warn!("SSH_STAMP_PUBKEY env received but not first-login; rejecting");
-        a.fail()?;
     }
 
     Ok(())

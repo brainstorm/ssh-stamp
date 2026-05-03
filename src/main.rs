@@ -25,7 +25,6 @@ use ssh_stamp::{
 #[cfg(feature = "sftp-ota")]
 use ota::traits::OtaActions;
 use ssh_stamp_esp32::flash;
-use ssh_stamp_esp32::flash;
 
 extern crate alloc;
 
