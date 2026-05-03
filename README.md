@@ -36,8 +36,8 @@ Build/flash for your board using the short command pattern (replace `<target>` w
 | `esp32s2` | `xtensa-esp32s2-none-elf` |
 | `esp32s3` | `xtensa-esp32s3-none-elf` |
 
-<!--| `esp32c5` | `riscv32imac-unknown-none-elf` |-->
 <!--| `esp32c61` | `riscv32imac-unknown-none-elf` |-->
+<!--| `esp32c5` | `riscv32imac-unknown-none-elf` |-->
 
 ```
 rustup target add <rust-toolchain-target>
