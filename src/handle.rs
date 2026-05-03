@@ -407,7 +407,7 @@ pub async fn pubkey_env(
         *ctx.auth_checked = true;
     } 
     
-    if config_guaard.first_login {
+    if config_guard.first_login {
         match env_parser::parse_pubkey(a.value()?) {
             None => {
                 warn!("SSH_STAMP_PUBKEY contains invalid characters");
