@@ -5,10 +5,8 @@
 
 use core::hash::Hasher;
 
-use crate::{
-    handler::{OtaError, UpdateProcessor},
-    traits::OtaActions,
-};
+use crate::handler::{OtaError, UpdateProcessor};
+use ssh_stamp_hal::OtaActions;
 
 use sunset::sshwire::{BinString, WireError};
 use sunset_async::ChanInOut;

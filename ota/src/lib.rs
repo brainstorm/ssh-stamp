@@ -21,10 +21,6 @@ mod handler;
 /// Module implementing the OTA SFTP server
 #[cfg(target_os = "none")]
 mod sftpserver;
-/// Defining the target hardware abstraction for OTA updates
-///
-/// This module defines traits for platform specific implementations
-pub mod traits;
 
 /// Module defining TLV types and constants for OTA updates
 ///

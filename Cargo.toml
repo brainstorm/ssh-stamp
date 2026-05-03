@@ -13,6 +13,8 @@ authors = [
 edition = "2024"
 license = "MIT OR Apache-2.0"
 
+[lib]
+
 [workspace]
 members = ["ssh-stamp-hal", "ssh-stamp-esp32", "ota"]
 
@@ -87,6 +89,7 @@ embassy-embedded-hal = "0.3"
 
 [dependencies]
 ota = { path = "ota" }
+ssh-stamp-hal = { path = "ssh-stamp-hal" }
 
 sha2 = { workspace = true }
 rustc-hash = { workspace = true }
@@ -98,16 +101,8 @@ embassy-net = { workspace = true }
 smoltcp = { workspace = true }
 embassy-time = { workspace = true }
 embedded-io-async = { workspace = true }
-esp-alloc = { version = "0.9.0" }
-esp-backtrace = { version = "0.18", features = ["panic-handler", "println"] }
-esp-hal = { workspace = true }
-ssh-stamp-esp32 = { path = "ssh-stamp-esp32", default-features = false }
-esp-rtos = { version = "0.2.0", features = ["embassy", "log-04", "esp-radio"] }
-esp-radio = { version = "0.17.0", features = ["wifi", "log-04"] }
-esp-println = { version = "0.16", features = ["log-04"] }
 hex = { version = "0.4", default-features = false }
 log = { workspace = true }
-static_cell = { workspace = true }
 ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
 sunset = { workspace = true }
 sunset-async = { workspace = true }
@@ -117,19 +112,13 @@ getrandom = { version = "0.2.10", features = ["custom"] }
 embassy-sync = { workspace = true }
 heapless = { workspace = true }
 embassy-futures = { workspace = true }
-edge-dhcp = { workspace = true }
-edge-nal = { workspace = true }
-edge-nal-embassy = { workspace = true }
-esp-storage = { workspace = true }
 embedded-storage = { workspace = true }
-embassy-embedded-hal = { workspace = true }
 bcrypt = { workspace = true }
 subtle = { workspace = true }
 hmac = { workspace = true }
 digest = { workspace = true }
 embedded-storage-async = { workspace = true }
 portable-atomic = { workspace = true }
-esp-bootloader-esp-idf = { workspace = true }
 snafu = { workspace = true }
 pastey = { workspace = true }
 pretty-hex = { workspace = true }
@@ -163,71 +152,3 @@ ipv6 = []
 
 # Enables the SFTP OTA Subsystem. Use packer to pack a binary and PUT it over sftp
 sftp-ota = []
-
-# MCU options
-esp32 = [
-    "esp-hal/esp32",
-    "esp-alloc/esp32",
-    "esp-backtrace/esp32",
-    "esp-radio/esp32",
-    "esp-rtos/esp32",
-    "esp-println/esp32",
-    "esp-storage/esp32",
-    "esp-bootloader-esp-idf/esp32",
-    "ssh-stamp-esp32/esp32",
-]
-esp32c2 = [
-    "esp-hal/esp32c2",
-    "esp-alloc/esp32c2",
-    "esp-backtrace/esp32c2",
-    "esp-radio/esp32c2",
-    "esp-rtos/esp32c2",
-    "esp-println/esp32c2",
-    "esp-storage/esp32c2",
-    "esp-bootloader-esp-idf/esp32c2",
-    "ssh-stamp-esp32/esp32c2",
-]
-esp32c3 = [
-    "esp-hal/esp32c3",
-    "esp-alloc/esp32c3",
-    "esp-backtrace/esp32c3",
-    "esp-radio/esp32c3",
-    "esp-rtos/esp32c3",
-    "esp-println/esp32c3",
-    "esp-storage/esp32c3",
-    "esp-bootloader-esp-idf/esp32c3",
-    "ssh-stamp-esp32/esp32c3",
-]
-esp32c6 = [
-    "esp-hal/esp32c6",
-    "esp-alloc/esp32c6",
-    "esp-backtrace/esp32c6",
-    "esp-radio/esp32c6",
-    "esp-rtos/esp32c6",
-    "esp-println/esp32c6",
-    "esp-storage/esp32c6",
-    "esp-bootloader-esp-idf/esp32c6",
-    "ssh-stamp-esp32/esp32c6",
-]
-esp32s2 = [
-    "esp-hal/esp32s2",
-    "esp-alloc/esp32s2",
-    "esp-backtrace/esp32s2",
-    "esp-radio/esp32s2",
-    "esp-rtos/esp32s2",
-    "esp-println/esp32s2",
-    "esp-storage/esp32s2",
-    "esp-bootloader-esp-idf/esp32s2",
-    "ssh-stamp-esp32/esp32s2",
-]
-esp32s3 = [
-    "esp-hal/esp32s3",
-    "esp-alloc/esp32s3",
-    "esp-backtrace/esp32s3",
-    "esp-radio/esp32s3",
-    "esp-rtos/esp32s3",
-    "esp-println/esp32s3",
-    "esp-storage/esp32s3",
-    "esp-bootloader-esp-idf/esp32s3",
-    "ssh-stamp-esp32/esp32s3",
-]

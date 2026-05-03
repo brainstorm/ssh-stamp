@@ -512,41 +512,6 @@ checksum = "6207c84e9bc8df8ef3c155196df290f2a51f010bd60c2e78366e51979988bdb5"
 
 [[package]]
 name = "embassy-embedded-hal"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c62a3bf127e03832fb97d8b01a058775e617653bc89e2a12c256485a7fb54c1"
-dependencies = [
- "embassy-embedded-hal 0.4.0",
- "embassy-futures",
- "embassy-sync 0.6.2",
- "embassy-time 0.4.0",
- "embedded-hal 0.2.7",
- "embedded-hal 1.0.0",
- "embedded-hal-async",
- "embedded-storage",
- "embedded-storage-async",
- "nb 1.1.0",
-]
-
-[[package]]
-name = "embassy-embedded-hal"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1611b7a7ab5d1fbed84c338df26d56fd9bded58006ebb029075112ed2c5e039"
-dependencies = [
- "embassy-futures",
- "embassy-hal-internal",
- "embassy-sync 0.7.2",
- "embedded-hal 0.2.7",
- "embedded-hal 1.0.0",
- "embedded-hal-async",
- "embedded-storage",
- "embedded-storage-async",
- "nb 1.1.0",
-]
-
-[[package]]
-name = "embassy-embedded-hal"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "554e3e840696f54b4c9afcf28a0f24da431c927f4151040020416e7393d6d0d8"
@@ -945,7 +910,7 @@ dependencies = [
  "delegate",
  "digest",
  "document-features",
- "embassy-embedded-hal 0.5.0",
+ "embassy-embedded-hal",
  "embassy-futures",
  "embassy-sync 0.7.2",
  "embassy-usb-driver",
@@ -2000,10 +1965,6 @@ dependencies = [
  "cfg-if",
  "digest",
  "ed25519-dalek",
- "edge-dhcp",
- "edge-nal",
- "edge-nal-embassy",
- "embassy-embedded-hal 0.3.2",
  "embassy-executor",
  "embassy-futures",
  "embassy-net",
@@ -2012,14 +1973,6 @@ dependencies = [
  "embedded-io-async 0.6.1",
  "embedded-storage",
  "embedded-storage-async",
- "esp-alloc",
- "esp-backtrace",
- "esp-bootloader-esp-idf",
- "esp-hal",
- "esp-println",
- "esp-radio",
- "esp-rtos",
- "esp-storage",
  "getrandom",
  "heapless 0.8.0",
  "hex",
@@ -2034,8 +1987,7 @@ dependencies = [
  "smoltcp",
  "snafu",
  "ssh-key",
- "ssh-stamp-esp32",
- "static_cell",
+ "ssh-stamp-hal",
  "subtle",
  "sunset",
  "sunset-async",
@@ -2047,6 +1999,10 @@ dependencies = [
 name = "ssh-stamp-esp32"
 version = "0.2.0"
 dependencies = [
+ "cfg-if",
+ "edge-dhcp",
+ "edge-nal",
+ "edge-nal-embassy",
  "embassy-executor",
  "embassy-futures",
  "embassy-net",
@@ -2054,16 +2010,23 @@ dependencies = [
  "embassy-time 0.5.1",
  "embedded-storage",
  "embedded-storage-async",
+ "esp-alloc",
+ "esp-backtrace",
  "esp-bootloader-esp-idf",
  "esp-hal",
+ "esp-println",
+ "esp-radio",
+ "esp-rtos",
  "esp-storage",
  "getrandom",
  "heapless 0.8.0",
  "hmac",
  "log",
  "once_cell",
+ "ota",
  "portable-atomic",
  "sha2",
+ "ssh-stamp",
  "ssh-stamp-hal",
  "static_cell",
  "sunset-async",
@@ -2073,6 +2036,7 @@ dependencies = [
 name = "ssh-stamp-hal"
 version = "0.2.0"
 dependencies = [
+ "embassy-net",
  "embassy-sync 0.7.2",
  "heapless 0.8.0",
 ]

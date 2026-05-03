@@ -10,45 +10,44 @@
 
 //! `WiFi` hardware abstraction trait.
 
-use core::future::Future;
+use crate::{HalError, NetworkProviderHal, WifiApConfigStatic};
 
-use crate::{HalError, WifiApConfigStatic};
-
-/// `WiFi` hardware abstraction.
+/// `WiFi`-specific extension of [`NetworkProviderHal`].
 ///
-/// Provides configuration and control of `WiFi` hardware.
-/// Implementations manage the underlying `WiFi` radio and `TCP/IP` stack.
+/// Platforms with a `WiFi` radio implement this in addition to
+/// [`NetworkProviderHal`]. Consumers configure the access point (or, in
+/// the future, station) parameters with [`Self::configure_ap`], then call
+/// [`NetworkProviderHal::bring_up`] to start the stack.
 ///
-/// Currently supports access point (AP) mode. Station (STA) mode will be
-/// added when client connectivity to existing networks is needed.
+/// Currently only access-point mode is defined. Station mode will be added
+/// when client connectivity to existing networks is needed.
 ///
 /// # Example
 ///
 /// ```ignore
-/// async fn start_wifi_ap<W: WifiHal>(wifi: &mut W) -> Result<(), HalError> {
+/// async fn start_ap<W: WifiHal>(wifi: &mut W) -> Result<(), HalError> {
 ///     let config = WifiApConfigStatic {
 ///         ssid: heapless::String::from("MyDevice"),
-///         password: heapless::String::from("secretpass"),
+///         password: Some(heapless::String::from("secretpass")),
+///         channel: 6,
 ///         mac: [0x02, 0x03, 0x04, 0x05, 0x06, 0x07],
 ///     };
-///     wifi.start_ap(config).await
+///     wifi.configure_ap(config)?;
+///     let _stack = wifi.bring_up().await?;
+///     Ok(())
 /// }
 /// ```
-pub trait WifiHal {
-    /// Start `WiFi` access point with given configuration.
+pub trait WifiHal: NetworkProviderHal {
+    /// Supply access-point parameters to apply at [`NetworkProviderHal::bring_up`] time.
     ///
-    /// Initializes the `WiFi` radio and starts broadcasting an access point
-    /// with the specified `SSID`, password, and channel.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - `AP` configuration including `SSID`, password, and `MAC`.
+    /// Must be called before `bring_up`. Implementations store the config
+    /// and do not start the radio here; this keeps the trait
+    /// synchronous and side-effect-free, which fits the "configure then
+    /// bring up" pattern used by embassy-net drivers.
     ///
     /// # Errors
     ///
-    /// Returns `HalError::Wifi` on failure.
-    fn start_ap(
-        &mut self,
-        config: WifiApConfigStatic,
-    ) -> impl Future<Output = Result<(), HalError>>;
+    /// Returns [`HalError::Wifi`] if the configuration is rejected by the
+    /// driver (e.g. SSID too long after encoding, unsupported channel).
+    fn configure_ap(&mut self, config: WifiApConfigStatic) -> Result<(), HalError>;
 }

@@ -6,13 +6,11 @@ use heapless::String;
 use log::{debug, info, warn};
 
 use crate::config::SSHStampConfig;
-use crate::espressif::buffered_uart::UART_SIGNAL;
-use crate::serial::serial_bridge;
-use crate::store;
+use crate::platform::PlatformServices;
+use crate::serial::{BufferedSerial, serial_bridge};
+
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
-use esp_hal::system::software_reset;
-use ssh_stamp_esp32::flash;
 
 use core::fmt::Debug;
 use core::option::Option::None;
@@ -173,15 +171,12 @@ pub fn session_subsystem(
 /// # Errors
 ///
 /// Returns an error if SSH protocol operations fail.
-///
-/// # Panics
-///
-/// Panics if flash storage lock cannot be acquired.
-pub async fn session_shell(
+pub async fn session_shell<P: PlatformServices>(
     ev: ServEvent<'_, '_>,
     ctx: &mut EventContext<'_>,
     config: &SunsetMutex<SSHStampConfig>,
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
+    platform: &P,
 ) -> Result<(), sunset::Error> {
     if let ServEvent::SessionShell(a) = ev {
         debug!("ServEvent::SessionShell");
@@ -193,22 +188,21 @@ pub async fn session_shell(
             if *ctx.config_changed {
                 *ctx.config_changed = false;
                 let config_guard = config.lock().await;
-                let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
-                    panic!("Could not acquire flash storage lock");
-                };
-                let mut flash_storage = flash_storage_guard.lock().await;
-                store::save(&mut flash_storage, &config_guard)?;
+                platform
+                    .save_config(&config_guard)
+                    .await
+                    .map_err(|_| sunset::error::BadUsage.build())?;
                 drop(config_guard);
                 if *ctx.needs_reset {
                     info!("Configuration saved. Rebooting to apply WiFi changes...");
-                    software_reset();
+                    platform.reset();
                 }
             }
             debug_assert!(ch.num() == a.channel());
             a.succeed()?;
             debug!("We got shell");
-            UART_SIGNAL.signal(1);
-            debug!("Connection loop: UART_SIGNAL sent");
+            platform.activate_uart();
+            debug!("Connection loop: UART activated");
             match chan_pipe.try_send(SessionType::Bridge(ch)) {
                 Ok(()) => *ctx.auth_checked = false,
                 Err(e) => log::error!("Could not send the channel: {e:?}"),
@@ -567,11 +561,16 @@ pub fn defunct() -> Result<(), sunset::Error> {
 ///
 /// # Errors
 /// Returns an error if SSH protocol operations or I/O fail.
-pub async fn ssh_client<'a, 'b>(
-    uart_buff: &'a crate::espressif::buffered_uart::BufferedUart,
+pub async fn ssh_client<'a, 'b, U, P>(
+    uart_buff: &'a U,
     ssh_server: &'b SSHServer<'a>,
     chan_pipe: &'b Channel<NoopRawMutex, SessionType, 1>,
-) -> Result<(), sunset::Error> {
+    _platform: &'b P,
+) -> Result<(), sunset::Error>
+where
+    U: BufferedSerial,
+    P: PlatformServices,
+{
     debug!("Preparing bridge");
     let session_type = chan_pipe.receive().await;
     debug!("Checking bridge session type");
@@ -587,9 +586,13 @@ pub async fn ssh_client<'a, 'b>(
         SessionType::Sftp(ch) => {
             debug!("Handling SFTP session");
             let stdio = ssh_server.stdio(ch).await?;
-            let ota_writer = ssh_stamp_esp32::EspOtaWriter::new();
-            ota::run_ota_server::<ssh_stamp_esp32::EspOtaWriter>(stdio, ota_writer).await?;
+            let ota_writer = _platform.ota_writer();
+            ota::run_ota_server::<P::OtaWriter>(stdio, ota_writer).await?;
         }
     }
     Ok(())
+}
+
+pub fn bridge_disable() {
+    debug!("Bridge disabled: WIP");
 }

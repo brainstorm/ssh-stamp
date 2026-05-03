@@ -5,16 +5,25 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+//! Platform-agnostic core of `ssh-stamp`.
+//!
+//! Hosts the SSH state machine, configuration handling, and the
+//! [`platform::PlatformServices`] / [`serial::BufferedSerial`] traits that a
+//! per-MCU adapter crate (e.g. `ssh-stamp-esp32`) implements.
+
 #![no_std]
-#![no_main]
 // #![forbid(unsafe_code)]
-#[deny(clippy::mem_forget)] // avoids any UB, forces use of Drop impl instead
-#[deny(unused_imports)] // avoid accidentally leaving in debug imports
-#[deny(unused_variables)] // avoid accidentally leaving in debug variables
+#![deny(clippy::mem_forget)]
+#![deny(unused_imports)]
+#![deny(unused_variables)]
+
+extern crate alloc;
+
+pub mod app;
 pub mod config;
 pub mod errors;
-pub mod espressif;
 pub mod handle;
+pub mod platform;
 pub mod serial;
 pub mod serve;
 pub mod settings;

@@ -14,6 +14,7 @@ use crate::handle::{
     EventContext, SessionType, defunct, first_auth, hostkeys, open_session, password_auth,
     pubkey_auth, session_env, session_exec, session_pty, session_shell, session_subsystem,
 };
+use crate::platform::PlatformServices;
 use crate::settings::UART_BUFFER_SIZE;
 use sunset::{ChanHandle, ServEvent};
 use sunset_async::SunsetMutex;
@@ -32,10 +33,11 @@ use sunset_async::{ProgressHolder, SSHServer};
 ///
 /// # Panics
 /// Panics if flash storage lock cannot be acquired when saving configuration.
-pub async fn connection_loop(
+pub async fn connection_loop<P: PlatformServices>(
     serv: &SSHServer<'_>,
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
     config: &SunsetMutex<SSHStampConfig>,
+    platform: &P,
 ) -> Result<(), sunset::Error> {
     let mut session: Option<ChanHandle> = None;
     let mut config_changed = false;
@@ -63,7 +65,7 @@ pub async fn connection_loop(
                 session_subsystem(ev, &mut ctx)?;
             }
             ServEvent::SessionShell(_) => {
-                session_shell(ev, &mut ctx, config, chan_pipe).await?;
+                session_shell(ev, &mut ctx, config, chan_pipe, platform).await?;
             }
             ServEvent::FirstAuth(_) => {
                 first_auth(ev, config).await?;

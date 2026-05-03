@@ -9,9 +9,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 //! Peripheral trait definitions.
-//!
-//! This module re-exports all HAL trait definitions. Each trait provides
-//! an abstract interface for a specific hardware peripheral.
 
 mod flash;
 mod hash;
@@ -22,7 +19,7 @@ mod uart;
 
 pub use flash::OtaActions;
 pub use hash::HashHal;
-pub use network::WifiHal;
+pub use network::{NetworkProviderHal, WifiHal};
 pub use rng::RngHal;
 pub use timer::TimerHal;
 pub use uart::UartHal;

@@ -11,13 +11,14 @@
 //! # SSH-Stamp Hardware Abstraction Layer
 //!
 //! Platform-agnostic traits for ssh-stamp, following the embedded-hal pattern
-//! of fine-grained, composable traits. Each supported platform (ESP32, nRF52, etc.)
-//! implements these traits in separate crates (e.g., `ssh-stamp-esp32`).
+//! of fine-grained, composable traits. Each supported platform (ESP32, BAO1X,
+//! RP2350, etc.) implements these traits in separate crates.
 //!
 //! ## Overview
 //!
-//! - Peripheral traits: [`WifiHal`], [`RngHal`], [`HashHal`], [`TimerHal`], [`OtaActions`]
-//! - Configuration: [`HardwareConfig`], [`UartConfig`], [`WifiApConfigStatic`]
+//! - Peripheral traits: [`WifiHal`], [`NetworkProviderHal`], [`RngHal`],
+//!   [`HashHal`], [`TimerHal`], [`OtaActions`]
+//! - Configuration: [`WifiApConfigStatic`]
 //! - Error handling: [`HalError`] with variants per peripheral type
 //!
 //! For standard peripheral traits (`Read`, `Write`, flash storage), this crate
@@ -30,6 +31,6 @@ pub mod config;
 pub mod error;
 pub mod traits;
 
-pub use config::*;
+pub use config::{UartConfig, WifiApConfigStatic};
 pub use error::{FlashError, HalError, HashError, UartError, WifiError};
 pub use traits::*;

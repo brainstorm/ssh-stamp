@@ -10,4 +10,4 @@
 
 mod wifi;
 
-pub use wifi::{EspWifi, accept_requests};
+pub use wifi::{EspWifi, accept_requests, dhcp_server, net_up, wifi_up};

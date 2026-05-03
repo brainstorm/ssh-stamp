@@ -13,7 +13,6 @@ use core::str::FromStr;
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 #[cfg(feature = "ipv6")]
 use embassy_net::{Ipv6Cidr, StaticConfigV6};
-use esp_hal::efuse::Efuse;
 use heapless::String;
 use ssh_key::PublicKey;
 use ssh_key::public::KeyData;
@@ -95,13 +94,17 @@ impl SSHStampConfig {
 
     /// Creates a new config with default parameters.
     ///
+    /// `default_mac` is the MAC the platform wants the device to default to
+    /// (typically read from hardware OTP/eFuse). Stored as-is in the config;
+    /// may be overwritten later via the `SSH_STAMP_WIFI_MAC_*` env vars.
+    ///
     /// # Errors
     /// Will only fail on RNG failure.
-    pub fn new() -> Result<Self> {
+    pub fn new(default_mac: [u8; 6]) -> Result<Self> {
         let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
 
         let wifi_ssid = Self::generate_wifi_ssid()?;
-        let mac = Efuse::mac_address();
+        let mac = default_mac;
         let wifi_pw = Some(Self::generate_wifi_password()?);
 
         let uart_pins = UartPins::default();

@@ -8,9 +8,14 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! UART implementation for ESP32 family
+//! UART implementation for ESP32 family.
 //!
-//! Uses DMA-based buffered I/O for efficient serial communication.
+//! Provides [`BufferedUart`] — a software-buffered, async, full-duplex UART
+//! satisfying [`ssh_stamp::serial::BufferedSerial`]. The bridge can poll the
+//! same UART from two futures (TX and RX) concurrently because both sides
+//! take `&self`.
+
+use core::future::Future;
 
 use embassy_sync::pipe::TryWriteError;
 use embassy_sync::signal::Signal;
@@ -20,19 +25,18 @@ use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals::UART1;
 use esp_hal::uart::{Config, RxConfig, Uart};
 use portable_atomic::{AtomicUsize, Ordering};
-use ssh_stamp_hal::{HalError, UartConfig, UartHal};
+use ssh_stamp::serial::BufferedSerial;
 use static_cell::StaticCell;
 
 const INWARD_BUF_SZ: usize = 512;
 const OUTWARD_BUF_SZ: usize = 256;
 const UART_BUF_SZ: usize = 64;
 
-/// Bidirectional pipe buffer for UART communications
+/// Bidirectional pipe buffer for UART communications.
 pub struct BufferedUart {
     outward: Pipe<CriticalSectionRawMutex, OUTWARD_BUF_SZ>,
     inward: Pipe<CriticalSectionRawMutex, INWARD_BUF_SZ>,
     dropped_rx_bytes: AtomicUsize,
-    signal: Signal<CriticalSectionRawMutex, ()>,
 }
 
 impl BufferedUart {
@@ -42,7 +46,6 @@ impl BufferedUart {
             outward: Pipe::new(),
             inward: Pipe::new(),
             dropped_rx_bytes: AtomicUsize::from(0),
-            signal: Signal::new(),
         }
     }
 
@@ -106,14 +109,9 @@ impl BufferedUart {
         self.outward.write_all(buf).await;
     }
 
-    /// Return the number of dropped bytes since last check and reset counter
+    /// Number of bytes the RX side dropped since the last call. Resets the counter.
     pub fn check_dropped_bytes(&self) -> usize {
         self.dropped_rx_bytes.swap(0, Ordering::Relaxed)
-    }
-
-    /// Signal that UART should start
-    pub fn signal(&self) -> &Signal<CriticalSectionRawMutex, ()> {
-        &self.signal
     }
 }
 
@@ -123,85 +121,44 @@ impl Default for BufferedUart {
     }
 }
 
-/// UART pins configuration
+impl BufferedSerial for BufferedUart {
+    fn read(&self, buf: &mut [u8]) -> impl Future<Output = usize> {
+        BufferedUart::read(self, buf)
+    }
+
+    fn write(&self, buf: &[u8]) -> impl Future<Output = ()> {
+        BufferedUart::write(self, buf)
+    }
+
+    fn check_dropped_bytes(&self) -> usize {
+        BufferedUart::check_dropped_bytes(self)
+    }
+}
+
+/// UART pins configuration.
 pub struct EspUartPins<'a> {
     pub rx: AnyPin<'a>,
     pub tx: AnyPin<'a>,
 }
 
-/// ESP UART implementation
-pub struct EspUart {
-    buffered: &'static BufferedUart,
-    configured: bool,
-}
-
-impl EspUart {
-    /// Create a new ESP UART instance
-    #[must_use]
-    pub fn new(buffered: &'static BufferedUart) -> Self {
-        Self {
-            buffered,
-            configured: false,
-        }
-    }
-
-    /// Get the buffered UART for task spawning
-    #[must_use]
-    pub fn buffered(&self) -> &'static BufferedUart {
-        self.buffered
-    }
-}
-
-impl UartHal for EspUart {
-    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, HalError> {
-        Ok(self.buffered.read(buf).await)
-    }
-
-    async fn write(&mut self, buf: &[u8]) -> Result<usize, HalError> {
-        self.buffered.write(buf).await;
-        Ok(buf.len())
-    }
-
-    fn can_read(&self) -> bool {
-        // Check if there's data in the inward pipe
-        // This is a heuristic - actual implementation may need adjustment
-        self.buffered.check_dropped_bytes() > 0 || self.configured
-    }
-
-    fn signal(&self) -> &Signal<CriticalSectionRawMutex, ()> {
-        self.buffered.signal()
-    }
-
-    async fn reconfigure(&mut self, _config: UartConfig) -> Result<(), HalError> {
-        // TODO: Implement runtime reconfiguration
-        // Currently pins are configured at compile time
-        self.configured = true;
-        Ok(())
-    }
-}
-
-/// Static storage for buffered UART
+/// Static storage for the buffered UART singleton.
 pub static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();
 
-/// Signal for UART task synchronization  
+/// Signal raised by [`ssh_stamp::platform::PlatformServices::activate_uart`]
+/// to release [`uart_task`] from its initial wait.
 pub static UART_SIGNAL: Signal<CriticalSectionRawMutex, u8> = Signal::new();
 
-/// Initialize and get the buffered UART
-pub async fn uart_buffer_wait_for_initialisation() -> &'static BufferedUart {
-    UART_BUF.init_with(BufferedUart::new)
-}
-
-/// UART task for Embassy executor
+/// Embassy task that owns the hardware UART and pumps it through
+/// [`BufferedUart::run`]. Spawn from a higher-priority `InterruptExecutor`
+/// for lower latency.
 #[embassy_executor::task]
 pub async fn uart_task(
     uart_buf: &'static BufferedUart,
     uart1: UART1<'static>,
     pins: EspUartPins<'static>,
 ) {
-    // Wait until SSH shell is ready
     UART_SIGNAL.wait().await;
 
-    // Hardware UART setup
     let uart_config = Config::default().with_rx(
         RxConfig::default()
             .with_fifo_full_threshold(16)
@@ -213,6 +170,5 @@ pub async fn uart_task(
     };
     let uart = uart.with_rx(pins.rx).with_tx(pins.tx).into_async();
 
-    // Run buffered TX/RX loop
     uart_buf.run(uart).await;
 }

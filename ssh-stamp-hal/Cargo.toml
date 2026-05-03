@@ -9,6 +9,7 @@ repository = "https://github.com/brainstorm/ssh-stamp"
 
 [dependencies]
 embassy-sync = { workspace = true }
+embassy-net = { workspace = true }
 heapless = { workspace = true }
 
 [features]
