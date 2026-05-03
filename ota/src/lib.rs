@@ -1,7 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
 // SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
-// SPDX-FileCopyrightText: 2026 Sergio Gasquez <sergio.gasquez@gmail.com>
-// SPDX-FileCopyrightText: 2026 Gabriel Ku Wei Bin <gabriel.ku@fsfe.org>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -210,7 +207,7 @@ mod ota_tlv_tests {
     }
 
     #[test]
-    fn unknown_tlv_rejected() {
+    fn skipping_unknown_tlv() {
         let mut buffer = [0u8; 512];
         let mut offset = 0;
 
@@ -236,6 +233,12 @@ mod ota_tlv_tests {
         let used = sshwire::write_ssh(&mut buffer[offset..], &firmware_blob_tlv)
             .expect("Failed to write Firmware Blob TLV");
         offset += used;
+
+        let (header, _) =
+            OtaHeader::deserialize(&buffer[..offset]).expect("Failed to deserialize header");
+        assert_eq!(header.ota_type, Some(OTA_TYPE_VALUE_SSH_STAMP));
+        assert_eq!(header.firmware_blob_size, Some(2048));
+        assert_eq!(header.sha256_checksum, None);
 
         let result = OtaHeader::deserialize(&buffer[..offset]);
         assert!(

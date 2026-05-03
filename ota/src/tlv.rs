@@ -1,6 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
 // SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
-// SPDX-FileCopyrightText: 2026 pancake <pancake@nopcode.org>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
