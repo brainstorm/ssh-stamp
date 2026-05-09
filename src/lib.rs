@@ -12,7 +12,7 @@
 //! per-MCU adapter crate (e.g. `ssh-stamp-esp32`) implements.
 
 #![no_std]
-// #![forbid(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 #![deny(unused_imports)]
 #![deny(unused_variables)]
