@@ -118,7 +118,7 @@ impl NetworkProviderHal for EspWifi {
             .password
             .as_ref()
             .map(|p| AllocString::from(p.as_str()))
-            .unwrap_or_default();
+            .unwrap();
         let ap_radio_config = ModeConfig::AccessPoint(
             AccessPointConfig::default()
                 .with_ssid(AllocString::from(ap_config.ssid.as_str()))
