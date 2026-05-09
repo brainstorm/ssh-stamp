@@ -33,7 +33,13 @@ pub use timer::EspTimer;
 pub use uart::{BufferedUart, EspUartPins, UART_BUF, UART_SIGNAL, uart_task};
 
 /// Read the device's hardware MAC address from eFuse.
+///
+/// # Panics
+/// Panics if the MAC address is not 6 bytes (should never happen).
 #[must_use]
 pub fn mac_address() -> [u8; 6] {
-    esp_hal::efuse::Efuse::mac_address()
+    esp_hal::efuse::base_mac_address()
+        .as_bytes()
+        .try_into()
+        .unwrap()
 }

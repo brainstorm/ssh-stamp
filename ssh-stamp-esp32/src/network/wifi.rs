@@ -28,10 +28,9 @@ use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, Stack, StackResources, Sta
 use embassy_time::{Duration, Timer};
 use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
-use esp_radio::Controller;
 use esp_radio::wifi::{
-    AccessPointConfig, AuthMethod, Config as RadioConfig, ModeConfig, WifiApState, WifiController,
-    WifiDevice, WifiEvent,
+    AuthenticationMethod, Config as RadioConfig, ControllerConfig, Interface as WifiInterface,
+    WifiController, ap::AccessPointConfig,
 };
 use log::{debug, error, warn};
 use ssh_stamp_hal::{HalError, NetworkProviderHal, WifiApConfigStatic, WifiError, WifiHal};
@@ -47,7 +46,6 @@ extern crate alloc;
 /// tasks, and return a ready [`embassy_net::Stack`].
 pub struct EspWifi {
     spawner: Spawner,
-    controller: Option<Controller<'static>>,
     wifi_peri: Option<WIFI<'static>>,
     rng: Rng,
     ap_config: Option<WifiApConfigStatic>,
@@ -60,16 +58,9 @@ impl EspWifi {
     /// `gateway` is the static IPv4 address the device will serve as the
     /// access-point gateway (and DHCP server).
     #[must_use]
-    pub fn new(
-        spawner: Spawner,
-        controller: Controller<'static>,
-        wifi_peri: WIFI<'static>,
-        rng: Rng,
-        gateway: Ipv4Addr,
-    ) -> Self {
+    pub fn new(spawner: Spawner, wifi_peri: WIFI<'static>, rng: Rng, gateway: Ipv4Addr) -> Self {
         Self {
             spawner,
-            controller: Some(controller),
             wifi_peri: Some(wifi_peri),
             rng,
             ap_config: None,
@@ -87,7 +78,6 @@ impl WifiHal for EspWifi {
 
 impl NetworkProviderHal for EspWifi {
     async fn bring_up(&mut self) -> Result<Stack<'static>, HalError> {
-        static CONTROLLER_CELL: StaticCell<Controller<'static>> = StaticCell::new();
         static RESOURCES_CELL: StaticCell<StackResources<3>> = StaticCell::new();
         static SSID_CELL: StaticCell<heapless::String<32>> = StaticCell::new();
         static PASSWORD_CELL: StaticCell<heapless::String<63>> = StaticCell::new();
@@ -96,33 +86,26 @@ impl NetworkProviderHal for EspWifi {
             .ap_config
             .clone()
             .ok_or(HalError::Wifi(WifiError::Initialization))?;
-        let controller = self
-            .controller
-            .take()
-            .ok_or(HalError::Wifi(WifiError::Initialization))?;
         let wifi_peri = self
             .wifi_peri
             .take()
             .ok_or(HalError::Wifi(WifiError::Initialization))?;
 
         // MAC must be set on eFuse before bringing up the radio.
-        esp_hal::efuse::Efuse::set_mac_address(ap_config.mac)
+        esp_hal::efuse::override_mac_address(esp_hal::efuse::MacAddress::new_eui48(ap_config.mac))
             .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
 
-        let radio = &*CONTROLLER_CELL.init(controller);
-        let (mut wifi_controller, interfaces) =
-            esp_radio::wifi::new(radio, wifi_peri, RadioConfig::default())
-                .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
-
         let password = AllocString::from(ap_config.password.as_str());
-        let ap_radio_config = ModeConfig::AccessPoint(
+        let ap_radio_config = RadioConfig::AccessPoint(
             AccessPointConfig::default()
                 .with_ssid(AllocString::from(ap_config.ssid.as_str()))
-                .with_auth_method(AuthMethod::Wpa2Wpa3Personal)
+                .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
                 .with_password(password.clone()),
         );
-        let res = wifi_controller.set_config(&ap_radio_config);
-        debug!("wifi_set_configuration returned {res:?}");
+
+        let controller_config = ControllerConfig::default().with_initial_config(ap_radio_config);
+        let (wifi_controller, interfaces) = esp_radio::wifi::new(wifi_peri, controller_config)
+            .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
 
         let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
             address: Ipv4Cidr::new(self.gateway, 24),
@@ -133,7 +116,7 @@ impl NetworkProviderHal for EspWifi {
         let seed = u64::from(self.rng.random()) << 32 | u64::from(self.rng.random());
 
         let (ap_stack, runner) = embassy_net::new(
-            interfaces.ap,
+            interfaces.access_point,
             net_config,
             RESOURCES_CELL.init(StackResources::<3>::new()),
             seed,
@@ -142,15 +125,16 @@ impl NetworkProviderHal for EspWifi {
         let ssid_static: &'static str = SSID_CELL.init(ap_config.ssid.clone()).as_str();
         let password_static: &'static str = PASSWORD_CELL.init(ap_config.password.clone()).as_str();
 
+        self.spawner.spawn(
+            wifi_up(wifi_controller, ssid_static, password_static)
+                .map_err(|_| HalError::Wifi(WifiError::Initialization))?,
+        );
         self.spawner
-            .spawn(wifi_up(wifi_controller, ssid_static, password_static))
-            .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
-        self.spawner
-            .spawn(net_up(runner))
-            .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
-        self.spawner
-            .spawn(dhcp_server(ap_stack, self.gateway))
-            .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
+            .spawn(net_up(runner).map_err(|_| HalError::Wifi(WifiError::Initialization))?);
+        self.spawner.spawn(
+            dhcp_server(ap_stack, self.gateway)
+                .map_err(|_| HalError::Wifi(WifiError::Initialization))?,
+        );
 
         loop {
             debug!("Checking if link is up");
@@ -201,41 +185,28 @@ pub async fn wifi_up(
     ssid: &'static str,
     password: &'static str,
 ) {
-    debug!("Device capabilities: {:?}", wifi_controller.capabilities());
-
     loop {
-        let client_config = ModeConfig::AccessPoint(
+        let ap_config = RadioConfig::AccessPoint(
             AccessPointConfig::default()
                 .with_ssid(AllocString::from(ssid))
-                .with_auth_method(AuthMethod::Wpa2Wpa3Personal)
+                .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
                 .with_password(AllocString::from(password)),
         );
 
-        if esp_radio::wifi::ap_state() == WifiApState::Started {
-            wifi_controller.wait_for_event(WifiEvent::ApStop).await;
-            Timer::after(Duration::from_millis(5000)).await;
+        if let Err(e) = wifi_controller.set_config(&ap_config) {
+            debug!("Failed to set wifi config: {e:?}");
+            Timer::after(Duration::from_millis(1000)).await;
+            continue;
         }
-        if !matches!(wifi_controller.is_started(), Ok(true)) {
-            if let Err(e) = wifi_controller.set_config(&client_config) {
-                debug!("Failed to set wifi config: {e:?}");
-                Timer::after(Duration::from_millis(1000)).await;
-                continue;
-            }
-            debug!("Starting wifi");
-            if let Err(e) = wifi_controller.start_async().await {
-                debug!("Failed to start wifi: {e:?}");
-                Timer::after(Duration::from_millis(1000)).await;
-                continue;
-            }
-            debug!("Wifi started!");
-        }
+        debug!("Wifi started!");
+
         Timer::after(Duration::from_millis(10)).await;
     }
 }
 
 /// Network task for Embassy executor.
 #[embassy_executor::task]
-pub async fn net_up(mut runner: Runner<'static, WifiDevice<'static>>) {
+pub async fn net_up(mut runner: Runner<'static, WifiInterface<'static>>) {
     debug!("Bringing up network stack...");
     runner.run().await;
 }

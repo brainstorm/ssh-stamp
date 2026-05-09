@@ -154,11 +154,9 @@ async fn main(spawner: Spawner) -> ! {
         }
     }
     interrupt_spawner
-        .spawn(uart_task(uart_buf, peripherals.UART1, pins))
-        .unwrap();
+        .spawn(uart_task(uart_buf, peripherals.UART1, pins).expect("uart_task spawn failed"));
 
     debug!("Initialising radio");
-    let controller = esp_radio::init().expect("esp_radio init failed");
 
     let platform = EspPlatform::new();
     let ap_config = app::prepare_ap_config(config, &platform)
@@ -170,7 +168,7 @@ async fn main(spawner: Spawner) -> ! {
         DEFAULT_IP
     );
 
-    let mut wifi = EspWifi::new(spawner, controller, peripherals.WIFI, rng, DEFAULT_IP);
+    let mut wifi = EspWifi::new(spawner, peripherals.WIFI, rng, DEFAULT_IP);
     wifi.configure_ap(ap_config)
         .expect("Failed to configure AP");
     let stack = wifi.bring_up().await.expect("Failed to bring up WiFi");
