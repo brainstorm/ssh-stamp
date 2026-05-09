@@ -7,7 +7,7 @@ name = "ssh-stamp"
 version = "0.3.0"
 authors = [
     "Julio Beltran Ortega <jubeormk1@gmail.com>",
-    "Anthony Tambasco <anthony.github@fastmail.com>",
+    "Anthony Tambasco <anthony.tambasco@fastmail.com>",
     "Roman Valls Guimera <brainstorm@nopcode.org>",
 ]
 edition = "2024"

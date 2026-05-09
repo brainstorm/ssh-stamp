@@ -114,11 +114,7 @@ impl NetworkProviderHal for EspWifi {
             esp_radio::wifi::new(radio, wifi_peri, RadioConfig::default())
                 .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
 
-        let password = ap_config
-            .password
-            .as_ref()
-            .map(|p| AllocString::from(p.as_str()))
-            .unwrap();
+        let password = AllocString::from(ap_config.password.as_str());
         let ap_radio_config = ModeConfig::AccessPoint(
             AccessPointConfig::default()
                 .with_ssid(AllocString::from(ap_config.ssid.as_str()))
@@ -145,7 +141,7 @@ impl NetworkProviderHal for EspWifi {
 
         let ssid_static: &'static str = SSID_CELL.init(ap_config.ssid.clone()).as_str();
         let password_static: &'static str = PASSWORD_CELL
-            .init(ap_config.password.clone().unwrap_or_default())
+            .init(ap_config.password.clone())
             .as_str();
 
         self.spawner

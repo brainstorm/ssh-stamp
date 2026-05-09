@@ -165,9 +165,7 @@ pub async fn uart_task(
             .with_timeout(1),
     );
 
-    let Ok(uart) = Uart::new(uart1, uart_config) else {
-        return;
-    };
+    let uart = Uart::new(uart1, uart_config).expect("UART config error");
     let uart = uart.with_rx(pins.rx).with_tx(pins.tx).into_async();
 
     uart_buf.run(uart).await;

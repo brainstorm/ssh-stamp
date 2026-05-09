@@ -74,7 +74,7 @@ pub async fn prepare_ap_config<P: PlatformServices>(
 
     Ok(WifiApConfigStatic {
         ssid: guard.wifi_ssid.clone(),
-        password: guard.wifi_pw.clone(),
+        password: guard.wifi_pw.clone().expect("Empty password is not allowed"),
         channel: 1,
         mac,
     })

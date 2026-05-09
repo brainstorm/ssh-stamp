@@ -6,6 +6,8 @@
 
 //! Hardware configuration types.
 
+use heapless::String;
+
 /// UART peripheral configuration.
 #[derive(Clone, Debug)]
 pub struct UartConfig {
@@ -34,9 +36,11 @@ impl Default for UartConfig {
 #[derive(Clone, Debug)]
 pub struct WifiApConfigStatic {
     /// Network name (SSID), max 32 characters.
-    pub ssid: heapless::String<32>,
-    /// Optional WPA2 password, max 63 characters.
-    pub password: Option<heapless::String<63>>,
+    pub ssid: String<32>,
+    /// Mandatory WiFi password, max 63 characters.
+    /// We don't want None here as it would present an open network,
+    /// which is not something we want to support.
+    pub password: String<63>,
     /// `WiFi` channel (1-14 for 2.4GHz).
     pub channel: u8,
     /// MAC address for the access point interface.
@@ -46,8 +50,8 @@ pub struct WifiApConfigStatic {
 impl Default for WifiApConfigStatic {
     fn default() -> Self {
         Self {
-            ssid: heapless::String::new(),
-            password: None,
+            ssid: String::new(),
+            password: String::new(),
             channel: 1,
             mac: [0; 6],
         }
