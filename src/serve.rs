@@ -19,7 +19,6 @@ use crate::settings::UART_BUFFER_SIZE;
 use sunset::{ChanHandle, ServEvent};
 use sunset_async::SunsetMutex;
 
-use core::option::Option::None;
 use core::result::Result;
 
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;

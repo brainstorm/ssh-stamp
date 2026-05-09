@@ -12,8 +12,6 @@ use crate::serial::{BufferedSerial, serial_bridge};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 
-use core::fmt::Debug;
-use core::option::Option::None;
 use core::result::Result;
 
 use sunset::packets::PubKey;
