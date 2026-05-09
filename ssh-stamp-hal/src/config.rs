@@ -37,7 +37,7 @@ impl Default for UartConfig {
 pub struct WifiApConfigStatic {
     /// Network name (SSID), max 32 characters.
     pub ssid: String<32>,
-    /// Mandatory WiFi password, max 63 characters.
+    /// Mandatory `WiFi` password, max 63 characters.
     /// We don't want None here as it would present an open network,
     /// which is not something we want to support.
     pub password: String<63>,

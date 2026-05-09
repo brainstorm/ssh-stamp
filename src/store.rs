@@ -65,8 +65,8 @@ where
             if c.wifi_ssid.as_str() == "ssh-stamp" {
                 debug!("Migrating insecure default SSID, regenerating randomly");
                 c.wifi_ssid = SSHStampConfig::generate_wifi_ssid()?;
-                if c.wifi_pw.is_none() {
-                    c.wifi_pw = Some(SSHStampConfig::generate_wifi_password()?);
+                if c.wifi_pw.is_empty() {
+                    c.wifi_pw = SSHStampConfig::generate_wifi_password()?;
                 }
                 save(flash, buf, &c)?;
             }

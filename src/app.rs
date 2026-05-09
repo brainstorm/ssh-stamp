@@ -43,24 +43,24 @@ use crate::settings::{UART_BUFFER_SIZE, WIFI_PASSWORD_CHARS};
 ///
 /// # Panics
 ///
-/// Panics if `wifi_pw` is unexpectedly missing after the guard block above
-/// ensures it is `Some`. This is an internal invariant violation.
+/// Panics if `wifi_pw` is unexpectedly empty after the guard block above
+/// ensures it is populated. This is an internal invariant violation.
 pub async fn prepare_ap_config<P: PlatformServices>(
     config: &SunsetMutex<SSHStampConfig>,
     platform: &P,
 ) -> Result<WifiApConfigStatic, sunset::Error> {
     let mut guard = config.lock().await;
 
-    if guard.wifi_pw.is_none() {
+    if guard.wifi_pw.is_empty() {
         let pw = generate_wifi_password()?;
         warn!("wifi_pw missing from config, generated new password");
-        guard.wifi_pw = Some(pw);
+        guard.wifi_pw = pw;
         platform
             .save_config(&guard)
             .await
             .map_err(|_| sunset::error::BadUsage.build())?;
     }
-    info!("WIFI PSK: {}", guard.wifi_pw.as_ref().unwrap());
+    info!("WIFI PSK: {}", guard.wifi_pw);
 
     let mac = guard
         .resolve_mac()
@@ -74,7 +74,7 @@ pub async fn prepare_ap_config<P: PlatformServices>(
 
     Ok(WifiApConfigStatic {
         ssid: guard.wifi_ssid.clone(),
-        password: guard.wifi_pw.clone().expect("Empty password is not allowed"),
+        password: guard.wifi_pw.clone(),
         channel: 1,
         mac,
     })

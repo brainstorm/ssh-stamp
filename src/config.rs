@@ -36,7 +36,7 @@ pub struct SSHStampConfig {
 
     /// `WiFi`
     pub wifi_ssid: String<32>,
-    pub wifi_pw: Option<String<63>>, // Max 64 characters including null-terminator?
+    pub wifi_pw: String<63>,
 
     /// Networking
     /// MAC address. Special values:
@@ -73,7 +73,7 @@ const MAC_RANDOM_SENTINEL: [u8; 6] = [0xFF; 6];
 
 impl SSHStampConfig {
     /// Bump this when the format changes
-    pub const CURRENT_VERSION: u8 = 9;
+    pub const CURRENT_VERSION: u8 = 10;
 
     /// Check if configured for random MAC on each boot
     #[must_use]
@@ -105,7 +105,7 @@ impl SSHStampConfig {
 
         let wifi_ssid = Self::generate_wifi_ssid()?;
         let mac = default_mac;
-        let wifi_pw = Some(Self::generate_wifi_password()?);
+        let wifi_pw = Self::generate_wifi_password()?;
 
         let uart_pins = UartPins::default();
         debug!(
@@ -228,18 +228,6 @@ where
     bool::dec(s)?.then(|| SSHDecode::dec(s)).transpose()
 }
 
-// encode Option<heapless::String<N>> as a bool then the &str contents (heapless::String doesn't implement SSHEncode)
-pub(crate) fn enc_option_str<const N: usize>(
-    v: Option<&String<N>>,
-    s: &mut dyn SSHSink,
-) -> WireResult<()> {
-    v.is_some().enc(s)?;
-    if let Some(st) = v {
-        st.as_str().enc(s)?;
-    }
-    Ok(())
-}
-
 fn enc_ipv4_config(v: Option<&StaticConfigV4>, s: &mut dyn SSHSink) -> WireResult<()> {
     v.is_some().enc(s)?;
     if let Some(v) = v {
@@ -323,7 +311,7 @@ impl SSHEncode for SSHStampConfig {
         }
 
         self.wifi_ssid.as_str().enc(s)?;
-        enc_option_str::<63>(self.wifi_pw.as_ref(), s)?;
+        self.wifi_pw.as_str().enc(s)?;
         self.mac.enc(s)?;
 
         enc_ipv4_config(self.ipv4_static.as_ref(), s)?;
@@ -354,7 +342,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         }
 
         let wifi_ssid = SSHDecode::dec(s)?;
-        let wifi_pw = dec_option(s)?;
+        let wifi_pw = SSHDecode::dec(s)?;
 
         let mac = SSHDecode::dec(s)?;
 

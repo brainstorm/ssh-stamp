@@ -454,7 +454,7 @@ pub async fn wifi_psk_env(
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
         if let Some(s) = env_parser::parse_wifi_psk(a.value()?) {
-            config_guard.wifi_pw = Some(s);
+            config_guard.wifi_pw = s;
             debug!("Set WIFI PSK from ENV");
             a.succeed()?;
             *ctx.config_changed = true;

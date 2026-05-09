@@ -140,9 +140,7 @@ impl NetworkProviderHal for EspWifi {
         );
 
         let ssid_static: &'static str = SSID_CELL.init(ap_config.ssid.clone()).as_str();
-        let password_static: &'static str = PASSWORD_CELL
-            .init(ap_config.password.clone())
-            .as_str();
+        let password_static: &'static str = PASSWORD_CELL.init(ap_config.password.clone()).as_str();
 
         self.spawner
             .spawn(wifi_up(wifi_controller, ssid_static, password_static))
