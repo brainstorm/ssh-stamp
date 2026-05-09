@@ -20,7 +20,7 @@ extern crate alloc;
 
 use embassy_executor::Spawner;
 use esp_hal::interrupt::{Priority, software::SoftwareInterruptControl};
-use esp_hal::rng::{Rng, TrngSource};
+use esp_hal::rng::{Trng, TrngSource};
 use esp_println::logger;
 use esp_rtos::embassy::InterruptExecutor;
 use log::{debug, error, info, warn};
@@ -66,10 +66,10 @@ async fn main(spawner: Spawner) -> ! {
     // See: https://github.com/brainstorm/ssh-stamp/issues/10
     // See: https://github.com/esp-rs/esp-hal/pull/3829
     let trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
-    drop(trng_source);
-
-    let rng = Rng::new();
+    let trng = Trng::try_new().unwrap();
+    let rng = trng.downgrade();
     register_custom_rng(rng);
+    drop(trng_source);
 
     debug!("Initialising flash");
     flash::init(peripherals.FLASH);
