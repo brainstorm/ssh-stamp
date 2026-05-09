@@ -179,28 +179,36 @@ pub async fn accept_requests<'a>(
 }
 
 /// Manages the `WiFi` access point lifecycle.
+///
+/// In esp-radio 0.18+, `set_config` both configures and starts the radio.
+/// We call it once and retry only on error, preserving client connections.
 #[embassy_executor::task]
 pub async fn wifi_up(
     mut wifi_controller: WifiController<'static>,
     ssid: &'static str,
     password: &'static str,
 ) {
+    let ap_config = RadioConfig::AccessPoint(
+        AccessPointConfig::default()
+            .with_ssid(AllocString::from(ssid))
+            .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
+            .with_password(AllocString::from(password)),
+    );
+
     loop {
-        let ap_config = RadioConfig::AccessPoint(
-            AccessPointConfig::default()
-                .with_ssid(AllocString::from(ssid))
-                .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
-                .with_password(AllocString::from(password)),
-        );
-
-        if let Err(e) = wifi_controller.set_config(&ap_config) {
-            debug!("Failed to set wifi config: {e:?}");
-            Timer::after(Duration::from_millis(1000)).await;
-            continue;
+        match wifi_controller.set_config(&ap_config) {
+            Ok(()) => {
+                debug!("Wifi started!");
+                // AP is up — sleep forever. The controller keeps the radio alive.
+                // If the radio ever goes down (e.g. hardware fault), esp-radio
+                // currently has no public event API to detect it, so we just hold.
+                core::future::pending::<()>().await;
+            }
+            Err(e) => {
+                debug!("Failed to set wifi config: {e:?}");
+                Timer::after(Duration::from_millis(1000)).await;
+            }
         }
-        debug!("Wifi started!");
-
-        Timer::after(Duration::from_millis(10)).await;
     }
 }
 
