@@ -175,7 +175,7 @@ pub async fn accept_requests<'a>(
     tcp_stack: Stack<'a>,
     rx_buffer: &'a mut [u8],
     tx_buffer: &'a mut [u8],
-) -> TcpSocket<'a> {
+) -> Result<TcpSocket<'a>, HalError> {
     let mut tcp_socket = TcpSocket::new(tcp_stack, rx_buffer, tx_buffer);
 
     debug!("Waiting for SSH client...");
@@ -185,10 +185,13 @@ pub async fn accept_requests<'a>(
             port: 22,
         })
         .await
-    {}
+    {
+        error!("Failed to accept incoming TCP connection");
+        return Err(HalError::Wifi(WifiError::SocketAccept));
+    }
     debug!("Connected, port 22");
 
-    tcp_socket
+    Ok(tcp_socket)
 }
 
 /// Manages the `WiFi` access point lifecycle.
