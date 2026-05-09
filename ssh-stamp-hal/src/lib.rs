@@ -26,6 +26,10 @@
 //! ecosystem rather than redefining them.
 
 #![no_std]
+#![forbid(unsafe_code)]
+#![deny(clippy::mem_forget)]
+#![deny(unused_imports)]
+#![deny(unused_variables)]
 
 pub mod config;
 pub mod error;

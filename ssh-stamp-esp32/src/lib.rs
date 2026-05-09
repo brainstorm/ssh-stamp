@@ -9,6 +9,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![no_std]
+#![forbid(unsafe_code)]
+#![deny(clippy::mem_forget)]
+#![deny(unused_imports)]
+#![deny(unused_variables)]
 
 extern crate alloc;
 
