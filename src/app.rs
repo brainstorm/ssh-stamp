@@ -96,6 +96,7 @@ where
     U: BufferedSerial,
     P: PlatformServices,
 {
+    // TODO: Are the size of those buffers reasonable?
     let mut rx_buffer = [0u8; 1536];
     let mut tx_buffer = [0u8; 1536];
 

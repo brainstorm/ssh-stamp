@@ -96,7 +96,9 @@ async fn main(spawner: Spawner) -> ! {
     static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
     let config: &'static SunsetMutex<SSHStampConfig> = CONFIG.init(SunsetMutex::new(flash_config));
 
-    debug!("Initialising GPIO");
+    // TODO: This should be moved to the platform layer, but it needs the config for the AP password.
+    // So we need to load the config first.
+    // Refactor towards some kind of BSP (board-specific abstraction).
     cfg_if::cfg_if!(
         if #[cfg(feature = "esp32")] {
             let pins = EspUartPins {

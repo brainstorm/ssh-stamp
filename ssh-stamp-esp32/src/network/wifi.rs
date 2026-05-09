@@ -171,6 +171,12 @@ impl NetworkProviderHal for EspWifi {
 }
 
 /// Accept an incoming TCP connection on port 22.
+/// Returns a connected `TcpSocket` ready for SSH processing.
+///
+/// # Errors
+/// Returns an error if the socket cannot be accepted.
+/// Note that this function will block until a connection is accepted, and will
+/// only return an error if there is a failure in the underlying socket operations.
 pub async fn accept_requests<'a>(
     tcp_stack: Stack<'a>,
     rx_buffer: &'a mut [u8],
