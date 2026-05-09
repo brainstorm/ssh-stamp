@@ -130,12 +130,12 @@ async fn main(spawner: Spawner) -> ! {
        if #[cfg(feature = "esp32")] {
             // TODO: Test this feature configuration
             let timg1 = TimerGroup::new(peripherals.TIMG1);
-            esp_rtos::start(timg1.timer0);
+             esp_rtos::start(timg1.timer0, sw_int.software_interrupt0);
        } else if #[cfg(any(feature = "esp32s2", feature = "esp32s3"))] {
             // TODO: Test this feature configuration
            use esp_hal::timer::systimer::SystemTimer;
            let systimer = SystemTimer::new(peripherals.SYSTIMER);
-           esp_rtos::start(systimer.alarm0);
+            esp_rtos::start(systimer.alarm0, sw_int.software_interrupt0);
        } else {
            use esp_hal::timer::systimer::SystemTimer;
            let systimer = SystemTimer::new(peripherals.SYSTIMER);
