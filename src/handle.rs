@@ -395,9 +395,11 @@ pub async fn pubkey_env(
                 if config_guard.add_pubkey(trimmed).is_ok() {
                     debug!("Added new pubkey from ENV");
                     a.succeed()?;
-                    config_guard.first_login = false;
-                    *ctx.config_changed = true;
-                    *ctx.auth_checked = true;
+                    if config_guard.first_login {
+                        config_guard.first_login = false;
+                        *ctx.config_changed = true;
+                        *ctx.auth_checked = true;
+                    }
                 } else {
                     warn!("Failed to add new pubkey from ENV");
                     a.fail()?;
