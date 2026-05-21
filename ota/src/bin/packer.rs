@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use ota::{OtaHeader, tlv};
 
 use clap::{ArgAction, Command};
@@ -10,7 +14,7 @@ use std::{
 const OTA_PACKER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() {
-    let matches = Command::new("ota-packer")
+    let matches = Command::new("packer")
         .about(format!("SSH-Stamp utility {} to pack (unpack) OTA update files adding the required metadata.", OTA_PACKER_VERSION))
         .arg(clap::arg!(<FILE> "The file to process").required(true))
         .arg(

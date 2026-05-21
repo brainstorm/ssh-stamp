@@ -1,17 +1,20 @@
+// SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+// SPDX-FileCopyrightText: 2026 pancake <pancake@nopcode.org>
+// SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use embedded_storage::ReadStorage;
 use embedded_storage::nor_flash::NorFlash;
-use esp_bootloader_esp_idf::partitions;
 
 use pretty_hex::PrettyHex;
 use sha2::Digest;
 
 use log::{debug, error};
 
-use crate::errors::Error as SSHStampError;
 use sunset::error::Error as SunsetError;
 
 use crate::config::SSHStampConfig;
-use storage::flash::FlashBuffer;
 
 use sunset::sshwire::{self, OwnOrBorrow};
 use sunset_sshwire_derive::{SSHDecode, SSHEncode};
@@ -33,38 +36,6 @@ struct FlashConfig<'a> {
 
 impl FlashConfig<'_> {
     const BUF_SIZE: usize = 460; // Must be enough to hold the whole config
-
-    // TODO: Rework Error mapping with esp_storage errors
-    /// Finds the NVS partitions and retrieves information about it.
-    pub fn find_config_partition(fb: &mut FlashBuffer) -> Result<(), SSHStampError> {
-        debug!("Flash size = {} Mb", fb.flash.capacity() / (1024 * 1024));
-        debug!("Flash storage : {:?}", fb.flash);
-        let pt = partitions::read_partition_table(
-            &mut fb.flash,
-            &mut fb.buf[..esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN],
-        )
-        .map_err(|e| {
-            error!("Failed to read partition table: {e:?}");
-            SSHStampError::FlashStorageError
-        })?;
-
-        let Some(nvs) = pt
-            .find_partition(partitions::PartitionType::Data(
-                partitions::DataPartitionSubType::Nvs,
-            ))
-            .map_err(|_| SSHStampError::FlashStorageError)?
-        else {
-            error!("Failed to find NVS partition in partition table");
-            return Err(SSHStampError::FlashStorageError);
-        };
-
-        let nvs_partition = nvs.as_embedded_storage(&mut fb.flash);
-
-        debug!("NVS partition size = {}", nvs_partition.capacity());
-        debug!("NVS partition offset = 0x{:x}", nvs.offset());
-
-        Ok(())
-    }
 }
 
 fn config_hash(config: &SSHStampConfig) -> Result<[u8; 32], SunsetError> {
@@ -73,29 +44,54 @@ fn config_hash(config: &SSHStampConfig) -> Result<[u8; 32], SunsetError> {
     Ok(h.finalize().into())
 }
 
-/// Loads a `SSHConfig` at startup. Good for persisting hostkeys.
+/// Loads a `SSHStampConfig` from flash, or creates a new one if none exists.
+///
+/// `default_mac` is used only when a new config has to be minted (e.g. first
+/// boot); the platform reads this from hardware and passes it in.
 ///
 /// # Errors
 /// Returns an error if config creation or flash write fails.
-pub fn load_or_create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
-    match load(flash) {
-        Ok(c) => {
+pub fn load_or_create<F>(
+    flash: &mut F,
+    buf: &mut [u8],
+    default_mac: [u8; 6],
+) -> Result<SSHStampConfig, SunsetError>
+where
+    F: NorFlash + ReadStorage,
+{
+    match load(flash, buf) {
+        Ok(mut c) => {
             debug!("Good existing config");
+            if c.wifi_ssid.as_str() == "ssh-stamp" {
+                debug!("Migrating insecure default SSID, regenerating randomly");
+                c.wifi_ssid = SSHStampConfig::generate_wifi_ssid()?;
+                if c.wifi_pw.is_empty() {
+                    c.wifi_pw = SSHStampConfig::generate_wifi_password()?;
+                }
+                save(flash, buf, &c)?;
+            }
             return Ok(c);
         }
         Err(e) => debug!("Existing config bad, making new. {e}"),
     }
 
-    create(flash)
+    create(flash, buf, default_mac)
 }
 
 /// Creates a new `SSHStampConfig` and saves it to flash.
 ///
 /// # Errors
 /// Returns an error if config creation or flash write fails.
-pub fn create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
-    let c = SSHStampConfig::new()?;
-    save(flash, &c)?;
+pub fn create<F>(
+    flash: &mut F,
+    buf: &mut [u8],
+    default_mac: [u8; 6],
+) -> Result<SSHStampConfig, SunsetError>
+where
+    F: NorFlash,
+{
+    let c = SSHStampConfig::new(default_mac)?;
+    save(flash, buf, &c)?;
     debug!("Created new config: {:?}", &c);
 
     Ok(c)
@@ -105,18 +101,21 @@ pub fn create(flash: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError
 ///
 /// # Errors
 /// Returns an error if flash read fails, config is invalid, or hash mismatch.
-pub fn load(fl: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
+pub fn load<F>(flash: &mut F, buf: &mut [u8]) -> Result<SSHStampConfig, SunsetError>
+where
+    F: ReadStorage,
+{
     // If at some point you target a 64bit arch these can truncate and cause
     // corruption of the bootloader or the ota partition.
     let offset =
         u32::try_from(CONFIG_OFFSET).map_err(|_| SunsetError::msg("CONFIG_OFFSET overflow"))?;
 
-    fl.flash.read(offset, &mut fl.buf).map_err(|e| {
-        error!("flash read error 0x{CONFIG_OFFSET:x} {e:?}");
+    flash.read(offset, buf).map_err(|_e| {
+        error!("flash read error 0x{CONFIG_OFFSET:x}");
         SunsetError::msg("flash error")
     })?;
 
-    let flash_config: FlashConfig = sshwire::read_ssh(&fl.buf, None)
+    let flash_config: FlashConfig = sshwire::read_ssh(buf, None)
         .map_err(|_| SunsetError::msg("failed to decode flash config"))?;
 
     if flash_config.version != SSHStampConfig::CURRENT_VERSION {
@@ -143,24 +142,19 @@ pub fn load(fl: &mut FlashBuffer<'_>) -> Result<SSHStampConfig, SunsetError> {
 ///
 /// # Errors
 /// Returns an error if flash write fails or config serialization fails.
-pub fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(), SunsetError> {
+pub fn save<F>(flash: &mut F, buf: &mut [u8], config: &SSHStampConfig) -> Result<(), SunsetError>
+where
+    F: NorFlash,
+{
     let sc = FlashConfig {
         version: SSHStampConfig::CURRENT_VERSION,
         config: OwnOrBorrow::Borrow(config),
         hash: config_hash(config)?,
     };
 
-    let Ok(()) = FlashConfig::find_config_partition(fl) else {
-        error!("Failed to find NVS partition");
-        return Err(SunsetError::Custom {
-            msg: "Failde to find NVS partition",
-        });
-    };
-
     debug!("Before write_ssh, with hash: {}", &sc.hash.hex_dump());
-    let l = sshwire::write_ssh(&mut fl.buf, &sc)?;
-    let buf = &fl.buf[..l];
-    debug!("Saved flash (after write_ssh): {}", &buf.hex_dump());
+    let l = sshwire::write_ssh(buf, &sc)?;
+    debug!("Saved flash (after write_ssh): {}", &buf[..l].hex_dump());
 
     debug!(
         "CONFIG_OFFSET + FlashConfig::BUF_SIZE = {}",
@@ -176,13 +170,13 @@ pub fn save(fl: &mut FlashBuffer<'_>, config: &SSHStampConfig) -> Result<(), Sun
     let area_size = u32::try_from(CONFIG_AREA_SIZE)
         .map_err(|_| SunsetError::msg("CONFIG_AREA_SIZE overflow"))?;
 
-    fl.flash.erase(offset, offset + area_size).map_err(|e| {
-        error!("flash erase error: {e:?}");
+    flash.erase(offset, offset + area_size).map_err(|_e| {
+        error!("flash erase error");
         SunsetError::msg("flash erase error")
     })?;
 
-    fl.flash.write(offset, &fl.buf).map_err(|e| {
-        error!("flash write error: {e:?}");
+    flash.write(offset, buf).map_err(|_e| {
+        error!("flash write error");
         SunsetError::msg("flash write error")
     })?;
 

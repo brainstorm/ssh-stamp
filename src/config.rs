@@ -1,3 +1,9 @@
+// SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+// SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
+// SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use log::{debug, warn};
 
 use core::net::Ipv4Addr;
@@ -7,14 +13,15 @@ use core::str::FromStr;
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 #[cfg(feature = "ipv6")]
 use embassy_net::{Ipv6Cidr, StaticConfigV6};
-use esp_hal::efuse::Efuse;
 use heapless::String;
+use ssh_key::PublicKey;
+use ssh_key::public::KeyData;
 
 use sunset::packets::Ed25519PubKey;
 use sunset::{KeyType, Result};
 use sunset::{
     SignKey,
-    sshwire::{SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
+    sshwire::{Blob, SSHDecode, SSHEncode, SSHSink, SSHSource, WireError, WireResult},
 };
 
 use crate::errors::Error;
@@ -29,7 +36,7 @@ pub struct SSHStampConfig {
 
     /// `WiFi`
     pub wifi_ssid: String<32>,
-    pub wifi_pw: Option<String<63>>, // Max 64 characters including null-terminator?
+    pub wifi_pw: String<63>,
 
     /// Networking
     /// MAC address. Special values:
@@ -66,7 +73,7 @@ const MAC_RANDOM_SENTINEL: [u8; 6] = [0xFF; 6];
 
 impl SSHStampConfig {
     /// Bump this when the format changes
-    pub const CURRENT_VERSION: u8 = 9;
+    pub const CURRENT_VERSION: u8 = 10;
 
     /// Check if configured for random MAC on each boot
     #[must_use]
@@ -87,14 +94,18 @@ impl SSHStampConfig {
 
     /// Creates a new config with default parameters.
     ///
+    /// `default_mac` is the MAC the platform wants the device to default to
+    /// (typically read from hardware OTP/eFuse). Stored as-is in the config;
+    /// may be overwritten later via the `SSH_STAMP_WIFI_MAC_*` env vars.
+    ///
     /// # Errors
     /// Will only fail on RNG failure.
-    pub fn new() -> Result<Self> {
+    pub fn new(default_mac: [u8; 6]) -> Result<Self> {
         let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
 
         let wifi_ssid = Self::generate_wifi_ssid()?;
-        let mac = Efuse::mac_address();
-        let wifi_pw = Some(Self::generate_wifi_password()?);
+        let mac = default_mac;
+        let wifi_pw = Self::generate_wifi_password()?;
 
         let uart_pins = UartPins::default();
         debug!(
@@ -116,7 +127,7 @@ impl SSHStampConfig {
         })
     }
 
-    fn generate_wifi_ssid() -> Result<String<32>> {
+    pub(crate) fn generate_wifi_ssid() -> Result<String<32>> {
         let mut rnd = [0u8; 16];
         sunset::random::fill_random(&mut rnd)?;
         let mut ssid = String::<32>::new();
@@ -126,7 +137,7 @@ impl SSHStampConfig {
         Ok(ssid)
     }
 
-    fn generate_wifi_password() -> Result<String<63>> {
+    pub(crate) fn generate_wifi_password() -> Result<String<63>> {
         let mut rnd = [0u8; 24];
         sunset::random::fill_random(&mut rnd)?;
         let mut pw = String::<63>::new();
@@ -148,16 +159,14 @@ impl SSHStampConfig {
             key_str.trim()
         );
 
-        let openssh = ssh_key::PublicKey::from_str(key_str.trim())?;
+        let openssh = PublicKey::from_str(key_str.trim())?;
 
         debug!("Public key format valid, continuing to parse");
 
         match openssh.key_data() {
-            ssh_key::public::KeyData::Ed25519(k) => {
+            KeyData::Ed25519(k) => {
                 let bytes = k.0; // [u8; 32]
-                let newk = Ed25519PubKey {
-                    key: sunset::sshwire::Blob(bytes),
-                };
+                let newk = Ed25519PubKey { key: Blob(bytes) };
 
                 debug!("Parsed Ed25519 public key, adding to config");
                 for slot in &mut self.pubkeys {
@@ -217,18 +226,6 @@ where
     S: SSHSource<'de>,
 {
     bool::dec(s)?.then(|| SSHDecode::dec(s)).transpose()
-}
-
-// encode Option<heapless::String<N>> as a bool then the &str contents (heapless::String doesn't implement SSHEncode)
-pub(crate) fn enc_option_str<const N: usize>(
-    v: Option<&String<N>>,
-    s: &mut dyn SSHSink,
-) -> WireResult<()> {
-    v.is_some().enc(s)?;
-    if let Some(st) = v {
-        st.as_str().enc(s)?;
-    }
-    Ok(())
 }
 
 fn enc_ipv4_config(v: Option<&StaticConfigV4>, s: &mut dyn SSHSink) -> WireResult<()> {
@@ -314,7 +311,7 @@ impl SSHEncode for SSHStampConfig {
         }
 
         self.wifi_ssid.as_str().enc(s)?;
-        enc_option_str::<63>(self.wifi_pw.as_ref(), s)?;
+        self.wifi_pw.as_str().enc(s)?;
         self.mac.enc(s)?;
 
         enc_ipv4_config(self.ipv4_static.as_ref(), s)?;
@@ -345,7 +342,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         }
 
         let wifi_ssid = SSHDecode::dec(s)?;
-        let wifi_pw = dec_option(s)?;
+        let wifi_pw = SSHDecode::dec(s)?;
 
         let mac = SSHDecode::dec(s)?;
 

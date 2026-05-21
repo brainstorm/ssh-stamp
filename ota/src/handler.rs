@@ -1,10 +1,11 @@
-// SPDX-FileCopyrightText: 2025 Roman Valls, 2025
+// SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use sunset::sshwire::{SSHDecode, SSHSource, WireError};
 
-use crate::{OtaHeader, otatraits::OtaActions, tlv};
+use crate::{OtaHeader, tlv};
+use ssh_stamp_hal::OtaActions;
 
 use log::{debug, error, info, warn};
 use sha2::{Digest, Sha256};
