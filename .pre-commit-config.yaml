@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: CC0-1.0
+
 repos:
   - repo: local
     hooks:

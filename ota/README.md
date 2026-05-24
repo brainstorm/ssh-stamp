@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
+
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 # Intro
 
 Over The Air updates (OTA) is a convenient way to upload the firmware of your target device. In many devices out there you will find that the process is done using a side channel rather rather than the core functionality of the application. 

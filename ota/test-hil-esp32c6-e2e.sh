@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 # build and test OTA on ESP32-C6 HIL It requires that the user has set up the HIL environment
 # the target must be reachable via espflash

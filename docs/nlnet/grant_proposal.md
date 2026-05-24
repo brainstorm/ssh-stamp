@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 # Motivation
 
 This project aims to have a secure SSH-to-UART bridge (independent co-processor) for any device with a serial port. This will be implemented as an minimalistic, low maintenance and robust microcontroller firmware.
