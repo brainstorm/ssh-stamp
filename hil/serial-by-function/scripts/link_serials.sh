@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 set -euo pipefail
 
 BY_ID_DIR="/dev/serial/by-id"

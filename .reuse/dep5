@@ -1,0 +1,29 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+
+Files: Cargo.lock
+Copyright: 2025 Roman Valls Guimera <brainstorm@nopcode.org>
+License: CC0-1.0
+
+Files: docs/img/connecting_to_ssh_stamp.png
+       docs/img/openwrt_ssh_helloworld.png
+       docs/img/ssh_stamp_openwrt_setup.png
+Copyright: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+License: GPL-3.0-or-later
+
+Files: docs/nlnet/zero_commons_logo.svg
+Copyright: NLnet Foundation
+License: CC-BY-4.0
+
+Files: docs/svd/esp32c6.svd
+Copyright: 2024 Espressif Systems (Shanghai) PTE LTD
+License: Apache-2.0
+
+Files: ota/ota.cdx.json
+       ota/ota.cdx.xml
+       ssh-stamp.cdx.json
+       ssh-stamp.cdx.xml
+       storage/storage.cdx.json
+       storage/storage.cdx.xml
+       REUSE_ERRORS.txt
+Copyright: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+License: CC0-1.0

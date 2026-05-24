@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
+
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 # Purpose of packer
 
 The content of this file is provided for illustrative purposes. For a complete understanding of what this utility does read `packer.rs`.
