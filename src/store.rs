@@ -14,7 +14,7 @@ use log::{debug, error};
 
 use sunset::error::Error as SunsetError;
 
-use crate::config::SSHStampConfig;
+use crate::config::{SSHStampConfig, UartPins};
 
 use sunset::sshwire::{self, OwnOrBorrow};
 use sunset_sshwire_derive::{SSHDecode, SSHEncode};
@@ -49,12 +49,16 @@ fn config_hash(config: &SSHStampConfig) -> Result<[u8; 32], SunsetError> {
 /// `default_mac` is used only when a new config has to be minted (e.g. first
 /// boot); the platform reads this from hardware and passes it in.
 ///
+/// `default_uart_pins` is the target-specific UART pin assignment, used when
+/// creating a new config. On subsequent boots the pins are loaded from flash.
+///
 /// # Errors
 /// Returns an error if config creation or flash write fails.
 pub fn load_or_create<F>(
     flash: &mut F,
     buf: &mut [u8],
     default_mac: [u8; 6],
+    default_uart_pins: UartPins,
 ) -> Result<SSHStampConfig, SunsetError>
 where
     F: NorFlash + ReadStorage,
@@ -75,7 +79,7 @@ where
         Err(e) => debug!("Existing config bad, making new. {e}"),
     }
 
-    create(flash, buf, default_mac)
+    create(flash, buf, default_mac, default_uart_pins)
 }
 
 /// Creates a new `SSHStampConfig` and saves it to flash.
@@ -86,11 +90,12 @@ pub fn create<F>(
     flash: &mut F,
     buf: &mut [u8],
     default_mac: [u8; 6],
+    default_uart_pins: UartPins,
 ) -> Result<SSHStampConfig, SunsetError>
 where
     F: NorFlash,
 {
-    let c = SSHStampConfig::new(default_mac)?;
+    let c = SSHStampConfig::new(default_mac, default_uart_pins)?;
     save(flash, buf, &c)?;
     debug!("Created new config: {:?}", &c);
 

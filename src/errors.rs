@@ -3,6 +3,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+//! Application-level error types.
+
 use core::result;
 use snafu::Snafu;
 

@@ -7,6 +7,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+//! SSH connection loop orchestration.
+//!
+//! [`connection_loop`] processes `ServEvent` enums from the `sunset` SSH library
+//! and dispatches to the appropriate handler in [`handle`](crate::handle).
+
 use log::trace;
 
 use crate::config::SSHStampConfig;

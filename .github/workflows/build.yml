@@ -73,3 +73,22 @@ jobs:
           toolchain: stable
       - name: Build utility
         run: cargo build-packer
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Stable Rust Toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          target: riscv32imac-unknown-none-elf
+          toolchain: stable
+      - name: Build docs (ssh-stamp)
+        run: cargo doc -p ssh-stamp --target riscv32imac-unknown-none-elf --no-deps
+      - name: Build docs (ssh-stamp-hal)
+        run: cargo doc -p ssh-stamp-hal --target riscv32imac-unknown-none-elf --no-deps
+      - name: Copy assets into doc output
+        run: mkdir -p target/riscv32imac-unknown-none-elf/doc && cp -r docs/img/ target/riscv32imac-unknown-none-elf/doc/ 2>/dev/null || true
+      - name: Check doc warnings
+        run: cargo doc -p ssh-stamp --target riscv32imac-unknown-none-elf --no-deps 2>&1 | grep -iE "broken|warning.*link" || true

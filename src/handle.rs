@@ -2,6 +2,17 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+//! SSH event handlers: authentication, channels, environment variables.
+//!
+//! Every incoming SSH event is dispatched here by the connection loop in
+//! [`serve`](crate::serve). The main entry point is [`session_env`], which
+//! routes environment variable requests to handlers like [`pubkey_env`] and
+//! [`wifi_ssid_env`].
+//!
+//! First-boot provisioning also flows through here: when `first_login` is true,
+//! the device accepts any SSH connection (empty password) and allows the
+//! client to set `SSH_STAMP_PUBKEY`. Subsequent connections require that key.
+
 use heapless::String;
 use log::{debug, info, warn};
 

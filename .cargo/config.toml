@@ -27,6 +27,10 @@ test-ota = "test --package ota --target x86_64-unknown-linux-gnu"
 build-packer = "build --package ota --bin packer --target x86_64-unknown-linux-gnu"
 packer = "run --package ota --bin packer --target x86_64-unknown-linux-gnu"
 
+# doc aliases (cannot use "doc" — shadows cargo's built-in command)
+build-doc = "doc --target riscv32imac-unknown-none-elf --no-deps -p ssh-stamp -p ssh-stamp-hal -p ssh-stamp-esp32 --no-default-features --features esp32c6"
+build-doc-ota = "doc --target x86_64-unknown-linux-gnu --no-deps -p ota"
+
 [target.xtensa-esp32-none-elf] # ESP32
 runner = "espflash flash --baud=921600 --monitor --chip esp32"
 rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32"']

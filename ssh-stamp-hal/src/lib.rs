@@ -22,8 +22,40 @@
 //! - Error handling: [`HalError`] with variants per peripheral type
 //!
 //! For standard peripheral traits (`Read`, `Write`, flash storage), this crate
-//! defers to `embedded-io-async` and `embedded-storage-async` from the embedded-hal
-//! ecosystem rather than redefining them.
+//! defers to `embedded-io-async` and `embedded-storage-async` from the
+//! embedded-hal ecosystem rather than redefining them.
+//!
+//! ## HAL trait map
+//!
+//! | Trait                    | Required?    | ESP32 impl     | BAO1X impl      |
+//! |-------------------------|--------------|----------------|-----------------|
+//! | [`NetworkProviderHal`]   | always       | `EspWifi`       | `Wiz630Ethernet` |
+//! | [`WifiHal`]              | `WiFi` ports   | `EspWifi`       | -- (Ethernet)   |
+//! | `BufferedSerial`          | always       | `BufferedUart`  | `BufferedUart`   |
+//! | [`OtaActions`]           | sftp-ota     | `EspOtaWriter`   | todo!()         |
+//! | `PlatformServices`        | always       | `EspPlatform`   | `Bao1xPlatform`  |
+//!
+//! [`WifiHal`] is required only for WiFi-based ports. Ethernet ports implement
+//! [`NetworkProviderHal`] directly.
+//!
+//! ## Adding a new port
+//!
+//! To port ssh-stamp to a new microcontroller family:
+//!
+//! 1. Create `ssh-stamp-yourplatform/` with both a lib and
+//!    `src/bin/ssh-stamp-yourplatform.rs`.
+//! 2. Implement the needed traits from `ssh-stamp-hal/src/traits/`. At a
+//!    minimum: a [`NetworkProviderHal`] (or [`WifiHal`]), [`OtaActions`], and
+//!    a UART type implementing the `BufferedSerial` trait from the `ssh-stamp`
+//!    crate.
+//! 3. Implement the `PlatformServices` trait from `ssh-stamp::platform` for
+//!    the platform.
+//! 4. In the binary, mirror the ESP32 boot flow: bring up peripherals, load
+//!    config via `ssh-stamp::store::load_or_create`, spawn the UART task,
+//!    bring up the network, call `ssh-stamp::app::run_app`.
+//! 5. Add a `cargo build-yourplatform` alias in `.cargo/config.toml`.
+//!
+//! No changes are needed in `ssh-stamp` or `ssh-stamp-hal`.
 
 #![no_std]
 #![forbid(unsafe_code)]

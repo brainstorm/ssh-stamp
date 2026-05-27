@@ -9,6 +9,11 @@
 use heapless::String;
 
 /// UART peripheral configuration.
+///
+/// Pin numbers (`tx_pin`, `rx_pin`) are target-specific and must be set by
+/// the port binary before use. There are no cross-platform default values;
+/// each port crate defines pin assignments in its `src/bin/` entry point.
+/// See the `ssh-stamp-esp32` binary's module documentation for ESP32 defaults.
 #[derive(Clone, Debug)]
 pub struct UartConfig {
     pub tx_pin: u8,
