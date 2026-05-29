@@ -11,8 +11,8 @@
 //! # SSH-Stamp Hardware Abstraction Layer
 //!
 //! Platform-agnostic traits for ssh-stamp, following the embedded-hal pattern
-//! of fine-grained, composable traits. Each supported platform (ESP32, BAO1X,
-//! RP2350, etc.) implements these traits in separate crates.
+//! of fine-grained, composable traits. Each supported platform implements
+//! these traits in a separate port crate (e.g. `ssh-stamp-esp32`).
 //!
 //! ## Overview
 //!
@@ -27,16 +27,16 @@
 //!
 //! ## HAL trait map
 //!
-//! | Trait                    | Required?    | ESP32 impl     | BAO1X impl      |
-//! |-------------------------|--------------|----------------|-----------------|
-//! | [`NetworkProviderHal`]   | always       | `EspWifi`       | `Wiz630Ethernet` |
-//! | [`WifiHal`]              | `WiFi` ports   | `EspWifi`       | -- (Ethernet)   |
-//! | `BufferedSerial`          | always       | `BufferedUart`  | `BufferedUart`   |
-//! | [`OtaActions`]           | sftp-ota     | `EspOtaWriter`   | todo!()         |
-//! | `PlatformServices`        | always       | `EspPlatform`   | `Bao1xPlatform`  |
+//! | Trait                    | Required?    | ESP32 impl      |
+//! |-------------------------|--------------|------------------|
+//! | [`NetworkProviderHal`]   | always       | `EspWifi`         |
+//! | [`WifiHal`]              | `WiFi` ports | `EspWifi`         |
+//! | `BufferedSerial`          | always       | `BufferedUart`    |
+//! | [`OtaActions`]           | sftp-ota     | `EspOtaWriter`      |
+//! | `PlatformServices`        | always       | `EspPlatform`      |
 //!
-//! [`WifiHal`] is required only for WiFi-based ports. Ethernet ports implement
-//! [`NetworkProviderHal`] directly.
+//! [`WifiHal`] is required only for WiFi-based ports. Ethernet ports would
+//! implement [`NetworkProviderHal`] directly.
 //!
 //! ## Adding a new port
 //!

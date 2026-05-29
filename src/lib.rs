@@ -28,9 +28,6 @@
 //! ssh-stamp-hal/       Trait definitions only (no implementations)
 //! ssh-stamp/           Platform-agnostic application core
 //! ssh-stamp-esp32/     ESP32 implementation + bootable binary
-//! ssh-stamp-bao1x/     BAO1X implementation (scaffold)
-//! ssh-stamp-rp2350/    RP2350 implementation (scaffold)
-//! ```
 //!
 //! `ota` depends on `ssh-stamp-hal` for [`OtaActions`](ssh_stamp_hal::OtaActions)
 //! and is in turn depended on by `ssh-stamp` for SFTP-based updates.
