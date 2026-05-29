@@ -145,13 +145,16 @@ fn pack_bin(file_path: PathBuf) -> i32 {
     println!("Packing {} as OTA...", file_path.display());
 
     let firmware_size = match file_path.metadata() {
-        Ok(metadata) => u32::try_from(metadata.len()).unwrap_or_else(|_| {
-            eprintln!(
-                "Error: File '{}' is too large (max 4GB supported)",
-                file_path.display()
-            );
-            return FILE_TOO_LARGE;
-        }),
+        Ok(metadata) => match u32::try_from(metadata.len()) {
+            Ok(size) => size,
+            Err(_) => {
+                eprintln!(
+                    "Error: File '{}' is too large (max 4GB supported)",
+                    file_path.display()
+                );
+                return FILE_TOO_LARGE;
+            }
+        },
         Err(e) => {
             eprintln!(
                 "Error: Could not retrieve metadata for file '{}': {}",
