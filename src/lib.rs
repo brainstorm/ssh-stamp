@@ -24,10 +24,13 @@
 //!
 //! ## Crate structure
 //!
-//! ```text
-//! ssh-stamp-hal/       Trait definitions only (no implementations)
-//! ssh-stamp/           Platform-agnostic application core
-//! ssh-stamp-esp32/     ESP32 implementation + bootable binary
+//! - [`ssh_stamp_hal`] — hardware abstraction traits (`WifiHal`,
+//!   `NetworkProviderHal`, `OtaActions`, etc.)
+//! - `ssh_stamp_esp32` — ESP32 port: trait implementations, bootable
+//!   binary, per-target UART pin assignments
+//! - [`ota`] — SFTP-based OTA update server (TLV header parsing,
+//!   chunked flash writes, device reset; includes the `packer` host
+//!   utility)
 //!
 //! `ota` depends on `ssh-stamp-hal` for [`OtaActions`](ssh_stamp_hal::OtaActions)
 //! and is in turn depended on by `ssh-stamp` for SFTP-based updates.

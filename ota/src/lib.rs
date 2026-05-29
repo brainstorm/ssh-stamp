@@ -2,12 +2,28 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+//! SFTP-based OTA update server for ssh-stamp.
+//!
+//! Receives firmware images over SFTP, validates the TLV header, writes
+//! chunks to the OTA partition via [`OtaActions`](ssh_stamp_hal::OtaActions),
+//! marks the partition bootable, and resets the device into the new image.
+//!
+//! The [`tlv`] module defines the TLV record format used by the `packer`
+//! host utility and the on-device parser. The `packer` binary
+//! (`ota/src/bin/packer.rs`) wraps a raw app binary into an `.otap` blob
+//! with the required TLV header (OTA type, SHA-256 checksum, firmware size).
+//!
+//! This crate is `no_std` on embedded targets. The `std` feature gate and
+//! `cfg(target_os = "none")` keep the SFTP server and handler modules
+//! compiled out on the host, while the [`tlv`] module and [`OtaHeader`]
+//! remain usable from both host and device code.
+
 #![cfg_attr(not(test), no_std)]
 
-/// Runs the ota server taking care of reading ota file metadata,
-/// internal state, storage and target reset
+/// Runs the OTA server taking care of reading OTA file metadata,
+/// internal state, storage and target reset.
 ///
-/// Entry point for this crate when used as an OTA server
+/// Entry point for this crate when used as an OTA server on the device.
 #[cfg(target_os = "none")]
 pub use sftpserver::run_ota_server;
 /// Module handling OTA update metadata and header parsing

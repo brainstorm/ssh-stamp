@@ -114,7 +114,7 @@ Default UART RX/TX pins vary by target and are defined in the port binary (`ssh-
 cargo build-doc
 ```
 
-Then open `target/riscv32imac-unknown-none-elf/doc/ssh_stamp_esp32/index.html` and navigate to the module documentation for the binary, which contains a per-target pin assignment table.
+Then open `target/riscv32imac-unknown-none-elf/doc/ssh_stamp/index.html` and navigate to the `ssh_stamp_esp32` crate documentation, which contains a per-target pin assignment table.
 
 # Example usecases
 

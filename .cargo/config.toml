@@ -28,8 +28,7 @@ build-packer = "build --package ota --bin packer --target x86_64-unknown-linux-g
 packer = "run --package ota --bin packer --target x86_64-unknown-linux-gnu"
 
 # doc aliases (cannot use "doc" — shadows cargo's built-in command)
-build-doc = "doc --target riscv32imac-unknown-none-elf --no-deps -p ssh-stamp -p ssh-stamp-hal -p ssh-stamp-esp32 --no-default-features --features esp32c6"
-build-doc-ota = "doc --target x86_64-unknown-linux-gnu --no-deps -p ota"
+build-doc = "doc --target riscv32imac-unknown-none-elf --no-deps --lib -p ssh-stamp -p ssh-stamp-hal -p ssh-stamp-esp32 -p ota --no-default-features --features ssh-stamp-esp32/esp32c6"
 
 [target.xtensa-esp32-none-elf] # ESP32
 runner = "espflash flash --baud=921600 --monitor --chip esp32"
