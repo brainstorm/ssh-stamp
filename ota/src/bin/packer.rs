@@ -13,6 +13,18 @@ use std::{
 
 const OTA_PACKER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+const OK: i32 = 0;
+const USAGE: i32 = 1;
+const FILE_NOT_FOUND: i32 = 2;
+const NOT_A_FILE: i32 = 3;
+const OPEN_FAILED: i32 = 4;
+const READ_FAILED: i32 = 5;
+const CREATE_FAILED: i32 = 6;
+const WRITE_FAILED: i32 = 7;
+const SEEK_FAILED: i32 = 8;
+const CHECKSUM_MISMATCH: i32 = 9;
+const FILE_TOO_LARGE: i32 = 10;
+
 fn main() {
     let matches = Command::new("packer")
         .about(format!("SSH-Stamp utility {} to pack (unpack) OTA update files adding the required metadata.", OTA_PACKER_VERSION))
@@ -30,20 +42,20 @@ fn main() {
         .get_matches();
     let Some(file_path) = matches.get_one::<String>("FILE") else {
         eprintln!("Error: No file provided");
-        std::process::exit(1);
+        std::process::exit(USAGE);
     };
 
     let file_path = PathBuf::from(file_path);
     if !file_path.exists() {
         eprintln!("Error: File '{}' does not exist", file_path.display());
-        std::process::exit(2);
+        std::process::exit(FILE_NOT_FOUND);
     }
     if !file_path.is_file() {
         eprintln!(
             "Error: File '{}' is not a regular file",
             file_path.display()
         );
-        std::process::exit(3);
+        std::process::exit(NOT_A_FILE);
     }
 
     if matches.get_flag("unpack") {
@@ -57,20 +69,20 @@ fn unpack_ota(file_path: PathBuf) -> i32 {
     println!("Unpacking BIN from OTA file {}...", file_path.display());
     let Ok(file) = std::fs::File::open(&file_path) else {
         eprintln!("Error: Could not open file '{}'", file_path.display(),);
-        return 4;
+        return OPEN_FAILED;
     };
     let mut reader = std::io::BufReader::new(file);
     let mut buffer = [0u8; 512];
     let Ok(_) = reader.read(&mut buffer) else {
         eprintln!("Error: Could not read from file '{}'", file_path.display(),);
-        return 5;
+        return READ_FAILED;
     };
     let Ok((header, seek_to_bin)) = OtaHeader::deserialize(&buffer) else {
         eprintln!(
             "Error: Could not parse OTA header from file '{}'",
             file_path.display(),
         );
-        return 5;
+        return READ_FAILED;
     };
 
     println!("Found OTA header: {:?}", header);
@@ -84,10 +96,13 @@ fn unpack_ota(file_path: PathBuf) -> i32 {
             "Error: Could not create BIN file '{}'",
             file_path_bin.display(),
         );
-        return 6;
+        return CREATE_FAILED;
     };
 
-    reader.seek(SeekFrom::Start(seek_to_bin as u64)).unwrap();
+    if let Err(e) = reader.seek(SeekFrom::Start(seek_to_bin as u64)) {
+        eprintln!("Error: Could not seek to binary data: {e}");
+        return SEEK_FAILED;
+    }
 
     let mut recover_ota_bin_hasher = Sha256::new();
 
@@ -102,28 +117,27 @@ fn unpack_ota(file_path: PathBuf) -> i32 {
                 "Error: Could not write to BIN file '{}'",
                 file_path_bin.display(),
             );
-            return 7;
+            return WRITE_FAILED;
         };
         recover_ota_bin_hasher.update(&buffer[..r]);
     }
 
-    if let Some(recovered_firmware_sha256) = recover_ota_bin_hasher.finalize().as_array() {
-        if recovered_firmware_sha256 != &header.sha256_checksum.unwrap_or_default() {
-            eprintln!(
-                "Error: Recovered firmware SHA-256 does not match expected value!\nExpected: {:x?}\nRecovered: {:x?}",
-                header.sha256_checksum.unwrap_or_default(),
-                recovered_firmware_sha256
-            );
-            return 9;
-        } else {
-            println!("Recovered firmware SHA-256 matches expected value.");
-        }
-    } else {
-        eprintln!("Error: Could not finalize SHA-256 hash of recovered firmware");
-        return 8;
+    let recovered_firmware_sha256 = recover_ota_bin_hasher.finalize();
+
+    let Some(expected_sha256) = header.sha256_checksum else {
+        eprintln!("Error: OTA header has no SHA-256 checksum to verify against");
+        return CHECKSUM_MISMATCH;
     };
 
-    return 0;
+    if recovered_firmware_sha256.as_slice() != expected_sha256 {
+        eprintln!(
+            "Error: Recovered firmware SHA-256 does not match expected value!\nExpected: {expected_sha256:x?}\nRecovered: {recovered_firmware_sha256:x?}"
+        );
+        return CHECKSUM_MISMATCH;
+    }
+    println!("Recovered firmware SHA-256 matches expected value.");
+
+    OK
 }
 
 // TODO: Optimize memory usage by streaming the file instead of reading it all at once
@@ -136,7 +150,7 @@ fn pack_bin(file_path: PathBuf) -> i32 {
                 "Error: File '{}' is too large (max 4GB supported)",
                 file_path.display()
             );
-            return 5;
+            return FILE_TOO_LARGE;
         }),
         Err(e) => {
             eprintln!(
@@ -144,7 +158,7 @@ fn pack_bin(file_path: PathBuf) -> i32 {
                 file_path.display(),
                 e
             );
-            return 4;
+            return OPEN_FAILED;
         }
     };
     println!("Bin file size: {} bytes", firmware_size);
@@ -152,7 +166,7 @@ fn pack_bin(file_path: PathBuf) -> i32 {
     let mut hasher = Sha256::new();
     let Ok(read) = std::fs::read(&file_path) else {
         eprintln!("Error: Could not read file '{}'", file_path.display(),);
-        return 5;
+        return READ_FAILED;
     };
     hasher.update(&read);
 
@@ -173,7 +187,7 @@ fn pack_bin(file_path: PathBuf) -> i32 {
             "Error: Could not create OTA file '{}'",
             ota_file_path.display(),
         );
-        return 6;
+        return CREATE_FAILED;
     };
 
     // More than enough for the header
@@ -189,7 +203,7 @@ fn pack_bin(file_path: PathBuf) -> i32 {
             "Error: Could not write to OTA file '{}'",
             ota_file_path.display(),
         );
-        return 5;
+        return WRITE_FAILED;
     };
     println!("Wrote {} bytes of OTA header", bytes);
 
@@ -198,9 +212,9 @@ fn pack_bin(file_path: PathBuf) -> i32 {
             "Error: Could not write firmware data to OTA file '{}'",
             ota_file_path.display(),
         );
-        return 5;
+        return WRITE_FAILED;
     };
     println!("Wrote {} bytes of firmware data", bytes);
 
-    0
+    OK
 }
