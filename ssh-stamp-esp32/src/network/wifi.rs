@@ -126,7 +126,7 @@ impl NetworkProviderHal for EspWifi {
                 StationConfig::default()
                     .with_ssid(AllocString::from(ap_config.sta_ssid.as_str()))
                     .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
-                    .with_password(sta_password ),
+                    .with_password(sta_password),
             );
         }
 
