@@ -51,16 +51,16 @@ pub async fn prepare_ap_config<P: PlatformServices>(
 ) -> Result<WifiApConfigStatic, sunset::Error> {
     let mut guard = config.lock().await;
 
-    if guard.wifi_pw.is_empty() {
+    if guard.wifi_ap_pw.is_empty() {
         let pw = generate_wifi_password()?;
         warn!("wifi_pw missing from config, generated new password");
-        guard.wifi_pw = pw;
+        guard.wifi_ap_pw = pw;
         platform
             .save_config(&guard)
             .await
             .map_err(|_| sunset::error::BadUsage.build())?;
     }
-    info!("WIFI PSK: {}", guard.wifi_pw);
+    info!("WIFI PSK: {}", guard.wifi_ap_pw);
 
     let mac = guard
         .resolve_mac()
@@ -73,8 +73,10 @@ pub async fn prepare_ap_config<P: PlatformServices>(
     print_hostkey_fingerprint(&guard.hostkey);
 
     Ok(WifiApConfigStatic {
-        ssid: guard.wifi_ssid.clone(),
-        password: guard.wifi_pw.clone(),
+        ap_ssid: guard.wifi_ap_ssid.clone(),
+        ap_password: guard.wifi_ap_pw.clone(),
+        sta_ssid: guard.wifi_sta_ssid.clone(),
+        sta_password: guard.wifi_sta_pw.clone(),
         channel: 1,
         mac,
     })

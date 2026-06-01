@@ -162,11 +162,19 @@ async fn main(spawner: Spawner) -> ! {
     let ap_config = app::prepare_ap_config(config, &platform)
         .await
         .expect("Failed to prepare AP config");
-    info!(
-        "Connect to the AP `{}` as a DHCP client with IP: {}",
-        ap_config.ssid.as_str(),
-        DEFAULT_IP
-    );
+    if ap_config.sta_ssid.as_str() != "" {
+        info!(
+            "SSH Stamp has connected to Access Point {}. Connect to the same Access Point as a DHCP client with IP: {}",
+            ap_config.sta_ssid.as_str(),
+            DEFAULT_IP
+        );
+    } else {
+        info!(
+            "Connect to the AP `{}` as a DHCP client with IP: {}",
+            ap_config.ap_ssid.as_str(),
+            DEFAULT_IP
+        );
+    }
 
     let mut wifi = EspWifi::new(spawner, peripherals.WIFI, rng, DEFAULT_IP);
     wifi.configure_ap(ap_config)

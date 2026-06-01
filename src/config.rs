@@ -35,8 +35,12 @@ pub struct SSHStampConfig {
     pub pubkeys: [Option<Ed25519PubKey>; KEY_SLOTS],
 
     /// `WiFi`
-    pub wifi_ssid: String<32>,
-    pub wifi_pw: String<63>,
+    /// Access Point Mode
+    pub wifi_ap_ssid: String<32>,
+    pub wifi_ap_pw: String<63>,
+    /// Station Mode
+    pub wifi_sta_ssid: String<32>,
+    pub wifi_sta_pw: String<63>,
 
     /// Networking
     /// MAC address. Special values:
@@ -103,9 +107,14 @@ impl SSHStampConfig {
     pub fn new(default_mac: [u8; 6]) -> Result<Self> {
         let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
 
-        let wifi_ssid = Self::generate_wifi_ssid()?;
+        // Wifi Access Point Mode
+        let wifi_ap_ssid = Self::generate_wifi_ssid()?;
+        let wifi_ap_pw = Self::generate_wifi_password()?;
+        // Wifi Station Mode
+        let wifi_sta_ssid = Self::generate_wifi_ssid()?;
+        let wifi_sta_pw = Self::generate_wifi_password()?;
+
         let mac = default_mac;
-        let wifi_pw = Self::generate_wifi_password()?;
 
         let uart_pins = UartPins::default();
         debug!(
@@ -116,8 +125,10 @@ impl SSHStampConfig {
         Ok(SSHStampConfig {
             hostkey,
             pubkeys: Default::default(),
-            wifi_ssid,
-            wifi_pw,
+            wifi_ap_ssid,
+            wifi_ap_pw,
+            wifi_sta_ssid,
+            wifi_sta_pw,
             mac,
             ipv4_static: None,
             #[cfg(feature = "ipv6")]
@@ -310,8 +321,12 @@ impl SSHEncode for SSHStampConfig {
             enc_option(k.as_ref(), s)?;
         }
 
-        self.wifi_ssid.as_str().enc(s)?;
-        self.wifi_pw.as_str().enc(s)?;
+        // Wifi Access Point Mode
+        self.wifi_ap_ssid.as_str().enc(s)?;
+        self.wifi_ap_pw.as_str().enc(s)?;
+        // Wifi Station Mode
+        self.wifi_sta_ssid.as_str().enc(s)?;
+        self.wifi_sta_pw.as_str().enc(s)?;
         self.mac.enc(s)?;
 
         enc_ipv4_config(self.ipv4_static.as_ref(), s)?;
@@ -341,8 +356,12 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
             *k = dec_option(s)?;
         }
 
-        let wifi_ssid = SSHDecode::dec(s)?;
-        let wifi_pw = SSHDecode::dec(s)?;
+        // Wifi Access Point Mode
+        let wifi_ap_ssid = SSHDecode::dec(s)?;
+        let wifi_ap_pw = SSHDecode::dec(s)?;
+        // Wifi Station Mode
+        let wifi_sta_ssid = SSHDecode::dec(s)?;
+        let wifi_sta_pw = SSHDecode::dec(s)?;
 
         let mac = SSHDecode::dec(s)?;
 
@@ -361,8 +380,10 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         Ok(Self {
             hostkey,
             pubkeys,
-            wifi_ssid,
-            wifi_pw,
+            wifi_ap_ssid,
+            wifi_ap_pw,
+            wifi_sta_ssid,
+            wifi_sta_pw,
             mac,
             ipv4_static,
             #[cfg(feature = "ipv6")]

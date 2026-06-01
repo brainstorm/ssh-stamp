@@ -30,7 +30,7 @@ use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_radio::wifi::{
     AuthenticationMethod, Config as RadioConfig, ControllerConfig, Interface as WifiInterface,
-    WifiController, ap::AccessPointConfig,
+    WifiController, ap::AccessPointConfig, sta::StationConfig,
 };
 use log::{debug, error, warn};
 use ssh_stamp_hal::{HalError, NetworkProviderHal, WifiApConfigStatic, WifiError, WifiHal};
@@ -79,8 +79,10 @@ impl WifiHal for EspWifi {
 impl NetworkProviderHal for EspWifi {
     async fn bring_up(&mut self) -> Result<Stack<'static>, HalError> {
         static RESOURCES_CELL: StaticCell<StackResources<3>> = StaticCell::new();
-        static SSID_CELL: StaticCell<heapless::String<32>> = StaticCell::new();
-        static PASSWORD_CELL: StaticCell<heapless::String<63>> = StaticCell::new();
+        static AP_SSID_CELL: StaticCell<heapless::String<32>> = StaticCell::new();
+        static AP_PASSWORD_CELL: StaticCell<heapless::String<63>> = StaticCell::new();
+        static STA_SSID_CELL: StaticCell<heapless::String<32>> = StaticCell::new();
+        static STA_PASSWORD_CELL: StaticCell<heapless::String<63>> = StaticCell::new();
 
         let ap_config = self
             .ap_config
@@ -95,13 +97,38 @@ impl NetworkProviderHal for EspWifi {
         esp_hal::efuse::override_mac_address(esp_hal::efuse::MacAddress::new_eui48(ap_config.mac))
             .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
 
-        let password = AllocString::from(ap_config.password.as_str());
-        let ap_radio_config = RadioConfig::AccessPoint(
-            AccessPointConfig::default()
-                .with_ssid(AllocString::from(ap_config.ssid.as_str()))
-                .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
-                .with_password(password.clone()),
-        );
+        let ap_ssid_static: &'static str = AP_SSID_CELL.init(ap_config.ap_ssid.clone()).as_str();
+        let ap_password_static: &'static str = AP_PASSWORD_CELL
+            .init(ap_config.ap_password.clone())
+            .as_str();
+        let sta_ssid_static: &'static str = STA_SSID_CELL.init(ap_config.sta_ssid.clone()).as_str();
+        let sta_password_static: &'static str = STA_PASSWORD_CELL
+            .init(ap_config.sta_password.clone())
+            .as_str();
+
+        let ap_radio_config;
+        let ap_password;
+        let sta_password;
+
+        if sta_ssid_static != "" {
+            // Client/Station Mode
+            sta_password = AllocString::from(ap_config.sta_password.as_str());
+            ap_radio_config = RadioConfig::Station(
+                StationConfig::default()
+                    .with_ssid(AllocString::from(ap_config.sta_ssid.as_str()))
+                    .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
+                    .with_password(AllocString::from(sta_password)),
+            );
+        } else {
+            // Default to Access Point mode
+            ap_password = AllocString::from(ap_config.ap_password.as_str());
+            ap_radio_config = RadioConfig::AccessPoint(
+                AccessPointConfig::default()
+                    .with_ssid(AllocString::from(ap_config.ap_ssid.as_str()))
+                    .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
+                    .with_password(AllocString::from(ap_password)),
+            );
+        }
 
         let controller_config = ControllerConfig::default().with_initial_config(ap_radio_config);
         let (wifi_controller, interfaces) = esp_radio::wifi::new(wifi_peri, controller_config)
@@ -122,12 +149,15 @@ impl NetworkProviderHal for EspWifi {
             seed,
         );
 
-        let ssid_static: &'static str = SSID_CELL.init(ap_config.ssid.clone()).as_str();
-        let password_static: &'static str = PASSWORD_CELL.init(ap_config.password.clone()).as_str();
-
         self.spawner.spawn(
-            wifi_up(wifi_controller, ssid_static, password_static)
-                .map_err(|_| HalError::Wifi(WifiError::Initialization))?,
+            wifi_up(
+                wifi_controller,
+                ap_ssid_static,
+                ap_password_static,
+                sta_ssid_static,
+                sta_password_static,
+            )
+            .map_err(|_| HalError::Wifi(WifiError::Initialization))?,
         );
         self.spawner
             .spawn(net_up(runner).map_err(|_| HalError::Wifi(WifiError::Initialization))?);
@@ -185,15 +215,29 @@ pub async fn accept_requests<'a>(
 #[embassy_executor::task]
 pub async fn wifi_up(
     mut wifi_controller: WifiController<'static>,
-    ssid: &'static str,
-    password: &'static str,
+    ap_ssid: &'static str,
+    ap_password: &'static str,
+    sta_ssid: &'static str,
+    sta_password: &'static str,
 ) {
-    let ap_config = RadioConfig::AccessPoint(
-        AccessPointConfig::default()
-            .with_ssid(AllocString::from(ssid))
-            .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
-            .with_password(AllocString::from(password)),
-    );
+    let ap_config;
+    if sta_ssid != "" {
+        // Client/Station Mode
+        ap_config = RadioConfig::Station(
+            StationConfig::default()
+                .with_ssid(AllocString::from(sta_ssid))
+                .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
+                .with_password(AllocString::from(sta_password)),
+        );
+    } else {
+        // Default to Access Point mode
+        ap_config = RadioConfig::AccessPoint(
+            AccessPointConfig::default()
+                .with_ssid(AllocString::from(ap_ssid))
+                .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
+                .with_password(AllocString::from(ap_password)),
+        );
+    }
 
     loop {
         match wifi_controller.set_config(&ap_config) {
