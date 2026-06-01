@@ -110,23 +110,23 @@ impl NetworkProviderHal for EspWifi {
         let ap_password;
         let sta_password;
 
-        if sta_ssid_static != "" {
-            // Client/Station Mode
-            sta_password = AllocString::from(ap_config.sta_password.as_str());
-            ap_radio_config = RadioConfig::Station(
-                StationConfig::default()
-                    .with_ssid(AllocString::from(ap_config.sta_ssid.as_str()))
-                    .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
-                    .with_password(AllocString::from(sta_password)),
-            );
-        } else {
+        if sta_ssid_static.is_empty() {
             // Default to Access Point mode
             ap_password = AllocString::from(ap_config.ap_password.as_str());
             ap_radio_config = RadioConfig::AccessPoint(
                 AccessPointConfig::default()
                     .with_ssid(AllocString::from(ap_config.ap_ssid.as_str()))
                     .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
-                    .with_password(AllocString::from(ap_password)),
+                    .with_password(ap_password),
+            );
+        } else {
+            // Client/Station Mode
+            sta_password = AllocString::from(ap_config.sta_password.as_str());
+            ap_radio_config = RadioConfig::Station(
+                StationConfig::default()
+                    .with_ssid(AllocString::from(ap_config.sta_ssid.as_str()))
+                    .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
+                    .with_password(sta_password ),
             );
         }
 
@@ -220,24 +220,23 @@ pub async fn wifi_up(
     sta_ssid: &'static str,
     sta_password: &'static str,
 ) {
-    let ap_config;
-    if sta_ssid != "" {
-        // Client/Station Mode
-        ap_config = RadioConfig::Station(
-            StationConfig::default()
-                .with_ssid(AllocString::from(sta_ssid))
-                .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
-                .with_password(AllocString::from(sta_password)),
-        );
-    } else {
+    let ap_config = if sta_ssid.is_empty() {
         // Default to Access Point mode
-        ap_config = RadioConfig::AccessPoint(
+        RadioConfig::AccessPoint(
             AccessPointConfig::default()
                 .with_ssid(AllocString::from(ap_ssid))
                 .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
                 .with_password(AllocString::from(ap_password)),
-        );
-    }
+        )
+    } else {
+        // Client/Station Mode
+        RadioConfig::Station(
+            StationConfig::default()
+                .with_ssid(AllocString::from(sta_ssid))
+                .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
+                .with_password(AllocString::from(sta_password)),
+        )
+    };
 
     loop {
         match wifi_controller.set_config(&ap_config) {
