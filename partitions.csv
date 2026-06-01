@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: CC0-1.0
+
 # ESP-IDF Partition Table (wont fit in 4MB targets)
 # Name,   Type, SubType, Offset,   Size,     Flags
 app_config,   data,  nvs,    0x9000,   0x2000,

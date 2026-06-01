@@ -1,8 +1,13 @@
 <!--
-SPDX-FileCopyrightText: 2025 Roman Valls, 2025
+SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
+SPDX-FileCopyrightText: 2026 Angus Gratton <gus@projectgus.com>
+SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
 
 SPDX-License-Identifier: GPL-3.0-or-later
 -->
+
+[![REUSE status](https://api.reuse.software/badge/github.com/brainstorm/ssh-stamp)](https://api.reuse.software/info/github.com/brainstorm/ssh-stamp)
 
 # SSH Stamp
 
@@ -32,11 +37,12 @@ Build/flash for your board using the short command pattern (replace `<target>` w
 | `esp32` | `xtensa-esp32-none-elf` |
 | `esp32c2` | `riscv32imc-unknown-none-elf` |
 | `esp32c3` | `riscv32imc-unknown-none-elf` |
-<!--| `esp32c5` | `riscv32imac-unknown-none-elf` |-->
 | `esp32c6` | `riscv32imac-unknown-none-elf` |
-<!--| `esp32c61` | `riscv32imac-unknown-none-elf` |-->
 | `esp32s2` | `xtensa-esp32s2-none-elf` |
 | `esp32s3` | `xtensa-esp32s3-none-elf` |
+
+<!--| `esp32c61` | `riscv32imac-unknown-none-elf` |-->
+<!--| `esp32c5` | `riscv32imac-unknown-none-elf` |-->
 
 ```
 rustup target add <rust-toolchain-target>

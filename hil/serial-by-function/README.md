@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 # Serial Port Function Linker
 
 Create stable function-based symlinks (for example, `program_esp32`, `com_esp32`) from `/dev/serial/by-id` entries to '/dev/serial/by-function' using a map file.

@@ -19,7 +19,7 @@
       },
       {
         "name": "Anthony Tambasco",
-        "email": "anthony.github@fastmail.com"
+        "email": "anthony.tambasco@fastmail.com"
       },
       {
         "name": "Roman Valls Guimera",
@@ -29,7 +29,7 @@
     "component": {
       "type": "application",
       "bom-ref": "path+file:///home/rvalls/dev/personal/ssh-stamp#0.2.0",
-      "author": "Julio Beltran Ortega <jubeormk1@gmail.com>, Anthony Tambasco <anthony.github@fastmail.com>, Roman Valls Guimera <brainstorm@nopcode.org>",
+      "author": "Julio Beltran Ortega <jubeormk1@gmail.com>, Anthony Tambasco <anthony.tambasco@fastmail.com>, Roman Valls Guimera <brainstorm@nopcode.org>",
       "name": "ssh-stamp",
       "version": "0.2.0",
       "scope": "required",

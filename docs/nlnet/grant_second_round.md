@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 Dear Michiel, NLNet team,
 
 I hope this (unasked for?) email finds you and your team well amid the tsunami of proposals and requests you are tackling right now. Please, bear with me with this one.

@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 ```mermaid
 gantt
     title SSH Stamp (a.k.a esp-ssh-rs) development plan under NLNet grant

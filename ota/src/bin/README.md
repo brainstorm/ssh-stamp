@@ -1,6 +1,12 @@
-# Purpose of ota-packer
+<!--
+SPDX-FileCopyrightText: 2026 Julio Beltran Ortega <jubeormk1@gmail.com>
 
-The content of this file is provided for illustrative purposes. For a complete understanding of what this utility does read `ota-packer.rs`.
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
+# Purpose of packer
+
+The content of this file is provided for illustrative purposes. For a complete understanding of what this utility does read `packer.rs`.
 
 This binary is a helper cli application to pack binary files together with a header to allow for the sftp-ota procedure to validate the binary before applying the OTA.
 
@@ -29,7 +35,7 @@ It takes one binary file and adds the following Type Length Value fields (TLV):
 For updated information on how to use this tool build and run the binary from the `ssh-stamp/ota` directory
 
 ```sh
-ssh-stamp/ota$ cargo run --bin ota-packer -- --help
+ssh-stamp/ota$ cargo run --bin packer -- --help
 ```
 
 At the moment of redaction, this command outputs:
@@ -37,7 +43,7 @@ At the moment of redaction, this command outputs:
 ```sh
 SSH-Stamp utility 0.1.0 to pack (unpack) OTA update files adding the required metadata.
 
-Usage: ota-packer [OPTIONS] <FILE>
+Usage: packer [OPTIONS] <FILE>
 
 Arguments:
   <FILE>  The file to process
