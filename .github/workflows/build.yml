@@ -45,10 +45,10 @@ jobs:
           components: rust-src, clippy, rustfmt
       - name: Setup Rust toolchain for Xtensa
         if: ${{ contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.device.soc) }}
-        uses: esp-rs/xtensa-toolchain@v1.5
+        uses: esp-rs/xtensa-toolchain@v1.7.0
         with:
           ldproxy: false
-          version: 1.88.0.0  # bumped from 1.86.0.0 since darling, esp-hal, etc require >=1.88
+          version: 1.95.0.0
 
       - name: Build project
         run: cargo +${{ matrix.device.toolchain }} build-${{ matrix.device.soc }}

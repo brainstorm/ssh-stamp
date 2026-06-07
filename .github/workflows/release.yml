@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Generate SPDX SBOM with Syft
         uses: anchore/sbom-action@v0
@@ -85,10 +85,10 @@ jobs:
             profile: release
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache
-        uses: mozilla-actions/sccache-action@v0.0.7
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Setup Rust toolchain for RISC-V
         if: ${{ !contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.target.soc) }}
@@ -100,10 +100,10 @@ jobs:
 
       - name: Setup Rust toolchain for Xtensa
         if: ${{ contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.target.soc) }}
-        uses: esp-rs/xtensa-toolchain@v1.5
+        uses: esp-rs/xtensa-toolchain@v1.7.0
         with:
           ldproxy: false
-          version: 1.88.0.0
+          version: 1.95.0.0
 
       - name: Build firmware
         run: cargo +${{ matrix.target.toolchain }} build-${{ matrix.target.soc }}
