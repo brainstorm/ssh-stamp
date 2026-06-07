@@ -129,14 +129,6 @@ Here are some PoC shots:
 ![connection](./docs/img/connecting_to_ssh_stamp.png)
 ![openwrt_hello](./docs/img/openwrt_ssh_helloworld.png)
 
-# Generate SBOM
-
-```
-cargo install cargo-cyclonedx
-cargo cyclonedx  # Generates XML by default
-cargo cyclonedx -f json
-```
-
 Sponsored by:
 
 ![nlnet_zero_commons][nlnet_zero_commons]
