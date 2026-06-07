@@ -17,7 +17,8 @@
 # SBOM tooling: anchore/sbom-action runs Syft on the source tree (Cargo.lock
 # + Cargo.toml) to produce an SPDX JSON SBOM covering all Rust dependencies.
 # The resulting sbom.spdx.json can be fed into bootlin/sbom-cve-check for
-# downstream CVE analysis.
+# downstream CVE analysis, which this workflow runs automatically on every
+# release.
 
 name: Release
 
@@ -32,12 +33,14 @@ on:
         required: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   generate-sbom:
     name: Generate SBOM
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -55,6 +58,8 @@ jobs:
   build-firmware:
     name: Build ${{ matrix.target.soc }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -127,9 +132,33 @@ jobs:
           path: release-assets/
           retention-days: 1
 
+  cve-check:
+    name: CVE check
+    needs: [generate-sbom]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Download SBOM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom.spdx.json
+
+      - name: Install sbom-cve-check
+        run: pip install "sbom-cve-check[extra]"
+
+      - name: Run CVE analysis
+        run: sbom-cve-check --sbom-path sbom.spdx.json --export-type spdx --export-path cve-report.spdx.json
+
+      - name: Upload CVE report
+        uses: actions/upload-artifact@v4
+        with:
+          name: cve-report
+          path: cve-report.spdx.json
+
   publish-release:
     name: Publish GitHub Release
-    needs: [generate-sbom, build-firmware]
+    needs: [generate-sbom, build-firmware, cve-check]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -148,6 +177,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: sbom.spdx.json
+          path: release-assets/
+
+      - name: Download CVE report artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cve-report
           path: release-assets/
 
       - name: Download all firmware artifacts

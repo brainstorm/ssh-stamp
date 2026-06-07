@@ -19,3 +19,6 @@ heapless = { workspace = true }
 [features]
 default = []
 sftp-ota = []
+
+[lints]
+workspace = true

@@ -18,6 +18,15 @@ license = "GPL-3.0-or-later"
 [workspace]
 members = ["ssh-stamp-hal", "ssh-stamp-esp32", "ota"]
 
+[workspace.lints.clippy]
+mem_forget = "warn"
+await_holding_lock = "warn"
+large_futures = "warn"
+pedantic = "warn"
+
+[lints]
+workspace = true
+
 [workspace.dependencies]
 # Async runtime
 embassy-sync = "0.8"
