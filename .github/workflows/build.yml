@@ -33,9 +33,9 @@ jobs:
         ]
     steps:
       - name: Cache
-        uses: mozilla-actions/sccache-action@v0.0.7
+        uses: mozilla-actions/sccache-action@v0.0.10
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Rust toolchain for RISC-V
         if: ${{ !contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.device.soc) }}
         uses: dtolnay/rust-toolchain@v1
@@ -48,7 +48,7 @@ jobs:
         uses: esp-rs/xtensa-toolchain@v1.7.0
         with:
           ldproxy: false
-          version: 1.95.0.0
+          version: 1.96.0
 
       - name: Build project
         run: cargo +${{ matrix.device.toolchain }} build-${{ matrix.device.soc }}
@@ -65,7 +65,7 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Stable Rust Toolchain
         uses: dtolnay/rust-toolchain@v1
         with:

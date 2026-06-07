@@ -29,8 +29,8 @@ use embassy_time::{Duration, Timer};
 use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_radio::wifi::{
-    AuthenticationMethod, Config as RadioConfig, ControllerConfig, Interface as WifiInterface,
-    WifiController, ap::AccessPointConfig,
+    AuthenticationMethod, Config as RadioConfig, ControllerConfig, Interface, WifiController,
+    ap::AccessPointConfig,
 };
 use log::{debug, error, warn};
 use ssh_stamp_hal::{HalError, NetworkProviderHal, WifiApConfigStatic, WifiError, WifiHal};
@@ -103,8 +103,10 @@ impl NetworkProviderHal for EspWifi {
                 .with_password(password.clone()),
         );
 
+        let ap_interface = Interface::access_point();
+
         let controller_config = ControllerConfig::default().with_initial_config(ap_radio_config);
-        let (wifi_controller, interfaces) = esp_radio::wifi::new(wifi_peri, controller_config)
+        let wifi_controller = WifiController::new(wifi_peri, controller_config)
             .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
 
         let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
@@ -116,7 +118,7 @@ impl NetworkProviderHal for EspWifi {
         let seed = u64::from(self.rng.random()) << 32 | u64::from(self.rng.random());
 
         let (ap_stack, runner) = embassy_net::new(
-            interfaces.access_point,
+            ap_interface,
             net_config,
             RESOURCES_CELL.init(StackResources::<3>::new()),
             seed,
@@ -180,7 +182,7 @@ pub async fn accept_requests<'a>(
 
 /// Manages the `WiFi` access point lifecycle.
 ///
-/// In esp-radio 0.18+, `set_config` both configures and starts the radio.
+/// In esp-radio 1.0+, `set_config` both configures and starts the radio.
 /// We call it once and retry only on error, preserving client connections.
 #[embassy_executor::task]
 pub async fn wifi_up(
@@ -214,7 +216,7 @@ pub async fn wifi_up(
 
 /// Network task for Embassy executor.
 #[embassy_executor::task]
-pub async fn net_up(mut runner: Runner<'static, WifiInterface<'static>>) {
+pub async fn net_up(mut runner: Runner<'static, Interface>) {
     debug!("Bringing up network stack...");
     runner.run().await;
 }

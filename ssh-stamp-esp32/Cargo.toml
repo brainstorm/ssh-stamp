@@ -29,7 +29,7 @@ edge-nal-embassy = { workspace = true }
 heapless = { workspace = true }
 
 esp-hal = { workspace = true }
-esp-radio = { version = "0.18", features = ["wifi", "log-04"] }
+esp-radio = { version = "1.0.0-beta.0", features = ["wifi", "log-04"] }
 esp-storage = { version = "0.9" }
 esp-bootloader-esp-idf = { version = "0.5" }
 esp-alloc = { version = "0.10" }
