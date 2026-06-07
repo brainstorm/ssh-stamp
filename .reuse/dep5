@@ -18,12 +18,6 @@ Files: docs/svd/esp32c6.svd
 Copyright: 2024 Espressif Systems (Shanghai) PTE LTD
 License: Apache-2.0
 
-Files: ota/ota.cdx.json
-       ota/ota.cdx.xml
-       ssh-stamp.cdx.json
-       ssh-stamp.cdx.xml
-       storage/storage.cdx.json
-       storage/storage.cdx.xml
-       REUSE_ERRORS.txt
+Files: REUSE_ERRORS.txt
 Copyright: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
 License: CC0-1.0

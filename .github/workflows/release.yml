@@ -1,0 +1,168 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Release workflow: builds pre-compiled firmware binaries for all ports/targets,
+# generates an SBOM (SPDX) using Anchore Syft, and attaches everything to a
+# GitHub Release.
+#
+# Triggered by pushing a version tag (e.g. v0.3.0).
+#
+# NOTE on release-plz: release-plz is designed for publishing Rust *crates* to
+# crates.io (version bumping, changelogs, cargo publish). Since ssh-stamp is a
+# no_std firmware project whose artifacts are flashable .bin/.elf images rather
+# than library crates, release-plz is not a good fit. Instead this workflow uses
+# a tag-driven approach with softprops/action-gh-release.
+#
+# SBOM tooling: anchore/sbom-action runs Syft on the source tree (Cargo.lock
+# + Cargo.toml) to produce an SPDX JSON SBOM covering all Rust dependencies.
+# The resulting sbom.spdx.json can be fed into bootlin/sbom-cve-check for
+# downstream CVE analysis.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for the release (e.g. v0.3.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  generate-sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Generate SPDX SBOM with Syft
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          artifact-name: sbom.spdx.json
+          output-file: sbom.spdx.json
+          upload-artifact: true
+          upload-release-assets: false
+
+  build-firmware:
+    name: Build ${{ matrix.target.soc }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - soc: esp32c6
+            toolchain: stable
+            triple: riscv32imac-unknown-none-elf
+            profile: release
+          - soc: esp32c2
+            toolchain: stable
+            triple: riscv32imc-unknown-none-elf
+            profile: release
+          - soc: esp32c3
+            toolchain: stable
+            triple: riscv32imc-unknown-none-elf
+            profile: release
+          - soc: esp32
+            toolchain: esp
+            triple: xtensa-esp32-none-elf
+            profile: release
+          - soc: esp32s2
+            toolchain: esp
+            triple: xtensa-esp32s2-none-elf
+            profile: esp32s2
+          - soc: esp32s3
+            toolchain: esp
+            triple: xtensa-esp32s3-none-elf
+            profile: release
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Cache
+        uses: mozilla-actions/sccache-action@v0.0.10
+
+      - name: Setup Rust toolchain for RISC-V
+        if: ${{ !contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.target.soc) }}
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          target: ${{ matrix.target.triple }}
+          toolchain: stable
+          components: rust-src
+
+      - name: Setup Rust toolchain for Xtensa
+        if: ${{ contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.target.soc) }}
+        uses: esp-rs/xtensa-toolchain@v1.7.0
+        with:
+          ldproxy: false
+          version: 1.95.0.0
+
+      - name: Build firmware
+        run: cargo +${{ matrix.target.toolchain }} build-${{ matrix.target.soc }}
+
+      - name: Install espflash
+        uses: taiki-e/install-action@v2
+        with:
+          tool: espflash
+
+      - name: Generate .bin image from ELF
+        run: |
+          mkdir -p release-assets
+          ELF_PATH="target/${{ matrix.target.triple }}/${{ matrix.target.profile }}/ssh-stamp-esp32"
+          espflash save-image --chip ${{ matrix.target.soc }} --partition-table ssh-stamp-esp32/partitions.csv "$ELF_PATH" "release-assets/ssh-stamp-${{ matrix.target.soc }}.bin"
+          cp "$ELF_PATH" "release-assets/ssh-stamp-${{ matrix.target.soc }}.elf"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.target.soc }}
+          path: release-assets/
+          retention-days: 1
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [generate-sbom, build-firmware]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Determine tag name
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download SBOM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom.spdx.json
+          path: release-assets/
+
+      - name: Download all firmware artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: firmware-*
+          path: release-assets/
+          merge-multiple: true
+
+      - name: List release assets
+        run: ls -la release-assets/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          files: release-assets/*
+          generate_release_notes: true
