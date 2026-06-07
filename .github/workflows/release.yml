@@ -63,32 +63,26 @@ jobs:
             toolchain: stable
             triple: riscv32imac-unknown-none-elf
             profile: release
-            partition_table: partitions.csv
           - soc: esp32c2
             toolchain: stable
             triple: riscv32imc-unknown-none-elf
             profile: release
-            partition_table: ""
           - soc: esp32c3
             toolchain: stable
             triple: riscv32imc-unknown-none-elf
             profile: release
-            partition_table: ""
           - soc: esp32
             toolchain: esp
             triple: xtensa-esp32-none-elf
             profile: release
-            partition_table: ""
           - soc: esp32s2
             toolchain: esp
             triple: xtensa-esp32s2-none-elf
             profile: esp32s2
-            partition_table: ""
           - soc: esp32s3
             toolchain: esp
             triple: xtensa-esp32s3-none-elf
             profile: release
-            partition_table: ""
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -123,11 +117,7 @@ jobs:
         run: |
           mkdir -p release-assets
           ELF_PATH="target/${{ matrix.target.triple }}/${{ matrix.target.profile }}/ssh-stamp-esp32"
-          PART_TABLE_ARGS=""
-          if [ -n "${{ matrix.target.partition_table }}" ]; then
-            PART_TABLE_ARGS="--partition-table ${{ matrix.target.partition_table }}"
-          fi
-          espflash save-image --chip ${{ matrix.target.soc }} $PART_TABLE_ARGS "$ELF_PATH" "release-assets/ssh-stamp-${{ matrix.target.soc }}.bin"
+          espflash save-image --chip ${{ matrix.target.soc }} --partition-table ssh-stamp-esp32/partitions.csv "$ELF_PATH" "release-assets/ssh-stamp-${{ matrix.target.soc }}.bin"
           cp "$ELF_PATH" "release-assets/ssh-stamp-${{ matrix.target.soc }}.elf"
 
       - name: Upload build artifacts
