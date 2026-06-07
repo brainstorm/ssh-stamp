@@ -32,12 +32,14 @@ on:
         required: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   generate-sbom:
     name: Generate SBOM
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -55,6 +57,8 @@ jobs:
   build-firmware:
     name: Build ${{ matrix.target.soc }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
