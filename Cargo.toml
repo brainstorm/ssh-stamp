@@ -17,15 +17,16 @@ license = "MIT OR Apache-2.0"
 members = ["storage", "ota"]
 
 [workspace.dependencies]
-sunset = { git = "https://github.com/jubeormk1/sunset.git", rev = "19f63d489ecc67ff8666205aaf2fdc069495908f", default-features = false, features = [
+sunset = { git = "https://github.com/mkj/sunset.git", rev = "49f278bcda24859df979088a20e173a79e1bd62e", default-features = false, features = [
     "openssh-key",
     "embedded-io",
+    "mlkem"
 ] }
-sunset-async = { git = "https://github.com/jubeormk1/sunset.git", rev = "19f63d489ecc67ff8666205aaf2fdc069495908f", default-features = false, features = [
+sunset-async = { git = "https://github.com/mkj/sunset.git", rev = "49f278bcda24859df979088a20e173a79e1bd62e", default-features = false, features = [
     "multi-thread",
 ] }
-sunset-sshwire-derive = { git = "https://github.com/jubeormk1/sunset.git", rev = "19f63d489ecc67ff8666205aaf2fdc069495908f", default-features = false }
-sunset-sftp = { git = "https://github.com/jubeormk1/sunset.git", rev = "19f63d489ecc67ff8666205aaf2fdc069495908f", default-features = false }
+sunset-sshwire-derive = { git = "https://github.com/mkj/sunset.git", rev = "49f278bcda24859df979088a20e173a79e1bd62e", default-features = false }
+sunset-sftp = { git = "https://github.com/mkj/sunset.git", rev = "49f278bcda24859df979088a20e173a79e1bd62e", default-features = false }
 
 sha2 = { version = "0.10", default-features = false }
 rustc-hash = { version = "2.1", default-features = false } # For hash in the OTA SFTP server TODO: For the optimisation task: Remove this dependency and use sha2 instead?
@@ -52,7 +53,7 @@ rustc-hash = { workspace = true }
 cfg-if = "1"
 ed25519-dalek = { version = "2", default-features = false }
 embassy-executor = { version = "0.9.0" }
-embassy-net = { version = "0.7", features = [
+embassy-net = { version = "0.8", features = [
     "tcp",
     "udp",
     "dhcpv4",
@@ -63,7 +64,7 @@ smoltcp = { version = "0.12", default-features = false, features = [
     "socket-raw",
 ] }
 embassy-time = { version = "0.5.0" }
-embedded-io-async = "0.6.1"
+embedded-io-async = "0.7"
 esp-alloc = { version = "0.9.0" }
 esp-backtrace = { version = "0.18.0", features = ["panic-handler", "println"] }
 esp-hal = { workspace = true }
@@ -80,11 +81,11 @@ sunset-sshwire-derive = { workspace = true }
 sunset-sftp = { workspace = true }
 getrandom = { version = "0.2.10", features = ["custom"] }
 embassy-sync = "0.7"
-heapless = "0.8"
+heapless = "0.9"
 embassy-futures = "0.1.2"
-edge-dhcp = "0.6"
-edge-nal = "0.5"
-edge-nal-embassy = "0.7"
+edge-dhcp = "0.7"
+edge-nal = "0.6"
+edge-nal-embassy = "0.8"
 #sequential-storage = { version = "4", features = ["heapless"] }
 esp-storage = { workspace = true }
 embedded-storage = { workspace = true }
