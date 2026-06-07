@@ -11,3 +11,9 @@ repos:
         entry: cargo fmt --all -- --check --color always
         language: system
         pass_filenames: false
+      - id: clippy
+        name: clippy
+        description: Run clippy with project lint rules
+        entry: cargo clippy --workspace -- -D warnings
+        language: system
+        pass_filenames: false

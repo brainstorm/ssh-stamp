@@ -25,6 +25,9 @@ rustc-hash.workspace = true
 [target.'cfg(not(target_os = "none"))'.dependencies]
 clap = "4.5"
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "packer"
 path = "src/bin/packer.rs"
