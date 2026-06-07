@@ -11,7 +11,7 @@ authors = [
     "Roman Valls Guimera <brainstorm@nopcode.org>",
 ]
 edition = "2024"
-license = "MIT OR Apache-2.0"
+license = "GPL-3.0-or-later"
 
 [lib]
 
