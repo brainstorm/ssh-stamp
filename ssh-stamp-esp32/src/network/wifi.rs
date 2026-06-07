@@ -29,8 +29,8 @@ use embassy_time::{Duration, Timer};
 use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_radio::wifi::{
-    AuthenticationMethod, Config as RadioConfig, ControllerConfig, Interface,
-    WifiController, ap::AccessPointConfig,
+    AuthenticationMethod, Config as RadioConfig, ControllerConfig, Interface, WifiController,
+    ap::AccessPointConfig,
 };
 use log::{debug, error, warn};
 use ssh_stamp_hal::{HalError, NetworkProviderHal, WifiApConfigStatic, WifiError, WifiHal};
