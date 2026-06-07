@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+warn-lints = [
+    "clippy::mem_forget",
+    "clippy::await_holding_lock",
+    "clippy::large_futures",
+    "clippy::pedantic",
+]
