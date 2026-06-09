@@ -271,6 +271,8 @@ where
         Ok(StaticConfigV4 {
             address: Ipv4Cidr::new(ad, prefix),
             gateway,
+            // The embassy-net heapless version is different so `Default::default()` must be
+            // used here.
             dns_servers: Default::default(),
         })
     })

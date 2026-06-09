@@ -22,8 +22,9 @@ members = ["ssh-stamp-hal", "ssh-stamp-esp32", "ota"]
 [workspace.lints.clippy]
 mem_forget = "warn"
 await_holding_lock = "warn"
-large_futures = "warn"
 pedantic = "warn"
+large_futures = { level = "allow", priority = 1 }
+default_trait_access = { level = "allow", priority = 1 }
 
 [lints]
 workspace = true
