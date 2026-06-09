@@ -1996,9 +1996,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.8.10"
+version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
+checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "riscv"
@@ -2461,7 +2461,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sunset"
 version = "0.4.0"
-source = "git+https://github.com/mkj/sunset?rev=f6722357a5e7d047336e8d2089b5b2853b45fb9d#f6722357a5e7d047336e8d2089b5b2853b45fb9d"
+source = "git+https://github.com/mkj/sunset?rev=fd3f8284ebca704f3c3789faf80487af18a50114#fd3f8284ebca704f3c3789faf80487af18a50114"
 dependencies = [
  "aes",
  "ascii",
@@ -2491,7 +2491,7 @@ dependencies = [
 [[package]]
 name = "sunset-async"
 version = "0.4.0"
-source = "git+https://github.com/mkj/sunset?rev=f6722357a5e7d047336e8d2089b5b2853b45fb9d#f6722357a5e7d047336e8d2089b5b2853b45fb9d"
+source = "git+https://github.com/mkj/sunset?rev=fd3f8284ebca704f3c3789faf80487af18a50114#fd3f8284ebca704f3c3789faf80487af18a50114"
 dependencies = [
  "embassy-futures",
  "embassy-sync 0.8.0",
@@ -2504,7 +2504,7 @@ dependencies = [
 [[package]]
 name = "sunset-sftp"
 version = "0.1.2"
-source = "git+https://github.com/mkj/sunset?rev=f6722357a5e7d047336e8d2089b5b2853b45fb9d#f6722357a5e7d047336e8d2089b5b2853b45fb9d"
+source = "git+https://github.com/mkj/sunset?rev=fd3f8284ebca704f3c3789faf80487af18a50114#fd3f8284ebca704f3c3789faf80487af18a50114"
 dependencies = [
  "embassy-futures",
  "embassy-sync 0.8.0",
@@ -2520,7 +2520,7 @@ dependencies = [
 [[package]]
 name = "sunset-sshwire-derive"
 version = "0.2.1"
-source = "git+https://github.com/mkj/sunset?rev=f6722357a5e7d047336e8d2089b5b2853b45fb9d#f6722357a5e7d047336e8d2089b5b2853b45fb9d"
+source = "git+https://github.com/mkj/sunset?rev=fd3f8284ebca704f3c3789faf80487af18a50114#fd3f8284ebca704f3c3789faf80487af18a50114"
 dependencies = [
  "virtue",
 ]

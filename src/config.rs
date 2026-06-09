@@ -129,7 +129,7 @@ impl SSHStampConfig {
 
     pub(crate) fn generate_wifi_ssid() -> Result<String<32>> {
         let mut rnd = [0u8; 16];
-        sunset::random::fill_random(&mut rnd)?;
+        getrandom::getrandom(&mut rnd).map_err(|_| sunset::Error::msg("RNG failed"))?;
         let mut ssid = String::<32>::new();
         for &byte in &rnd {
             let _ = ssid.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
@@ -139,7 +139,7 @@ impl SSHStampConfig {
 
     pub(crate) fn generate_wifi_password() -> Result<String<63>> {
         let mut rnd = [0u8; 24];
-        sunset::random::fill_random(&mut rnd)?;
+        getrandom::getrandom(&mut rnd).map_err(|_| sunset::Error::msg("RNG failed"))?;
         let mut pw = String::<63>::new();
         for &byte in &rnd {
             let _ = pw.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
@@ -188,7 +188,7 @@ impl SSHStampConfig {
 
 fn random_mac() -> Result<[u8; 6]> {
     let mut mac = [0u8; 6];
-    sunset::random::fill_random(&mut mac)?;
+    getrandom::getrandom(&mut mac).map_err(|_| sunset::Error::msg("RNG failed"))?;
     // unicast, locally administered
     mac[0] = (mac[0] & 0xfc) | 0x02;
     Ok(mac)
@@ -245,9 +245,9 @@ fn enc_ipv4_config(v: Option<&StaticConfigV4>, s: &mut dyn SSHSink) -> WireResul
 fn enc_ipv6_config(v: Option<&StaticConfigV6>, s: &mut dyn SSHSink) -> WireResult<()> {
     v.is_some().enc(s)?;
     if let Some(v) = v {
-        v.address.address().to_bits().enc(s)?;
+        v.address.address().octets().enc(s)?;
         v.address.prefix_len().enc(s)?;
-        let gw = v.gateway.as_ref().map(|g| g.to_bits());
+        let gw = v.gateway.as_ref().map(core::net::Ipv6Addr::octets);
         enc_option(gw.as_ref(), s)?;
     }
     Ok(())
@@ -271,7 +271,7 @@ where
         Ok(StaticConfigV4 {
             address: Ipv4Cidr::new(ad, prefix),
             gateway,
-            dns_servers: heapless::Vec::new(),
+            dns_servers: Default::default(),
         })
     })
     .transpose()
@@ -284,15 +284,15 @@ where
 {
     let opt = bool::dec(s)?;
     opt.then(|| {
-        let ad: u128 = SSHDecode::dec(s)?;
-        let ad = Ipv6Addr::from_bits(ad);
+        let ad: [u8; 16] = SSHDecode::dec(s)?;
+        let ad = Ipv6Addr::from(ad);
         let prefix = SSHDecode::dec(s)?;
         if prefix > 32 {
             // embassy panics, so test it here
             return Err(WireError::PacketWrong);
         }
-        let gw: Option<u128> = dec_option(s)?;
-        let gateway = gw.map(|gw| Ipv6Addr::from_bits(gw));
+        let gw: Option<[u8; 16]> = dec_option(s)?;
+        let gateway = gw.map(Ipv6Addr::from);
         Ok(StaticConfigV6 {
             address: Ipv6Cidr::new(ad, prefix),
             gateway,
@@ -341,8 +341,10 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
             *k = dec_option(s)?;
         }
 
-        let wifi_ssid = SSHDecode::dec(s)?;
-        let wifi_pw = SSHDecode::dec(s)?;
+        let wifi_ssid_str: &str = SSHDecode::dec(s)?;
+        let wifi_ssid = String::try_from(wifi_ssid_str).map_err(|_| WireError::BadString)?;
+        let wifi_pw_str: &str = SSHDecode::dec(s)?;
+        let wifi_pw = String::try_from(wifi_pw_str).map_err(|_| WireError::BadString)?;
 
         let mac = SSHDecode::dec(s)?;
 

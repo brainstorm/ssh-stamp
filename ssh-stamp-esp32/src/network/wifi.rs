@@ -112,7 +112,7 @@ impl NetworkProviderHal for EspWifi {
         let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
             address: Ipv4Cidr::new(self.gateway, 24),
             gateway: Some(self.gateway),
-            dns_servers: heapless::Vec::new(),
+            dns_servers: Default::default(),
         });
 
         let seed = u64::from(self.rng.random()) << 32 | u64::from(self.rng.random());
