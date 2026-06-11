@@ -12,9 +12,9 @@ use sunset::sshwire::{BinString, WireError};
 use sunset_async::ChanInOut;
 use sunset_sftp::{
     SftpHandler,
-    handles::{InitWithSeed, OpaqueFileHandle},
+    handles::OpaqueFileHandle,
     protocol::{FileHandle, Filename, NameEntry, PFlags, StatusCode},
-    server::{MAX_REQUEST_LEN, SftpServer},
+    server::{DirReadHeaderReply, DirReadReplyFinished, MAX_REQUEST_LEN, SftpServer},
 };
 
 use log::{debug, error, info, warn};
@@ -33,11 +33,13 @@ pub async fn run_ota_server<W: OtaActions>(
 
     let mut file_server = SftpOtaServer::new(ota_writer);
 
+    let (chan_in, chan_out) = stdio.split();
+
     match SftpHandler::<OtaOpaqueFileHandle, SftpOtaServer<OtaOpaqueFileHandle, W>, 512>::new(
         &mut file_server,
         &mut request_buffer,
     )
-    .process_loop(stdio, &mut buffer_in)
+    .process_loop(chan_in, chan_out, &mut buffer_in)
     .await
     {
         Ok(()) => {
@@ -86,10 +88,17 @@ impl OpaqueFileHandle for OtaOpaqueFileHandle {
     }
 }
 
-impl InitWithSeed for OtaOpaqueFileHandle {
+/// Derive the file handle from a path seed.
+trait InitFromSeed: Sized {
+    type Err;
+
+    fn init_from_seed(seed: &str) -> Result<Self, Self::Err>;
+}
+
+impl InitFromSeed for OtaOpaqueFileHandle {
     type Err = WireError;
 
-    fn init_with_seed(seed: &str) -> Result<Self, Self::Err> {
+    fn init_from_seed(seed: &str) -> Result<Self, Self::Err> {
         let mut hasher = FxHasher::default();
         hasher.write(seed.as_bytes());
         let hash_bytes = u32::try_from(hasher.finish()).unwrap_or(0).to_be_bytes();
@@ -121,7 +130,7 @@ impl<T, W: OtaActions> SftpOtaServer<T, W> {
     }
 }
 
-impl<T: OpaqueFileHandle + InitWithSeed, W: OtaActions> SftpServer<'_, T> for SftpOtaServer<T, W> {
+impl<T: OpaqueFileHandle + InitFromSeed, W: OtaActions> SftpServer<T> for SftpOtaServer<T, W> {
     async fn open(&'_ mut self, path: &str, mode: &PFlags) -> sunset_sftp::server::SftpOpResult<T> {
         if self.file_handle.is_none() {
             let num_mode = u32::from(mode);
@@ -130,7 +139,7 @@ impl<T: OpaqueFileHandle + InitWithSeed, W: OtaActions> SftpServer<'_, T> for Sf
                 || num_mode & u32::from(&PFlags::SSH_FXF_APPEND) > 0
                 || num_mode & u32::from(&PFlags::SSH_FXF_CREAT) > 0;
 
-            let handle = T::init_with_seed(path).map_err(|_| StatusCode::SSH_FX_FAILURE)?;
+            let handle = T::init_from_seed(path).map_err(|_| StatusCode::SSH_FX_FAILURE)?;
             self.file_handle = Some(handle.clone());
             info!(
                 "SftpServer Open operation: path = {:?}, write_permission = {:?}, handle = {:?}",
@@ -175,21 +184,6 @@ impl<T: OpaqueFileHandle + InitWithSeed, W: OtaActions> SftpServer<'_, T> for Sf
             warn!("SftpServer Close operation granted on untracked handle: {handle:?}");
             Ok(())
         }
-    }
-
-    async fn read<const N: usize>(
-        &mut self,
-        opaque_file_handle: &T,
-        offset: u64,
-        len: u32,
-        _reply: &mut sunset_sftp::server::ReadReply<'_, N>,
-    ) -> sunset_sftp::error::SftpResult<()> {
-        error!(
-            "SftpServer Read operation not defined: handle = {opaque_file_handle:?}, offset = {offset:?}, len = {len:?}"
-        );
-        Err(sunset_sftp::error::SftpError::FileServerError(
-            StatusCode::SSH_FX_OP_UNSUPPORTED,
-        ))
     }
 
     async fn write(
@@ -244,7 +238,7 @@ impl<T: OpaqueFileHandle + InitWithSeed, W: OtaActions> SftpServer<'_, T> for Sf
     }
 
     async fn opendir(&mut self, dir: &str) -> sunset_sftp::server::SftpOpResult<T> {
-        let handle = T::init_with_seed(dir).map_err(|_| StatusCode::SSH_FX_FAILURE)?;
+        let handle = T::init_from_seed(dir).map_err(|_| StatusCode::SSH_FX_FAILURE)?;
         info!("SftpServer OpenDir: dir = {dir:?}. Returning {handle:?}");
         Ok(handle)
     }
@@ -252,8 +246,8 @@ impl<T: OpaqueFileHandle + InitWithSeed, W: OtaActions> SftpServer<'_, T> for Sf
     async fn readdir<const N: usize>(
         &mut self,
         opaque_dir_handle: &T,
-        _reply: &mut sunset_sftp::server::DirReply<'_, N>,
-    ) -> sunset_sftp::server::SftpOpResult<()> {
+        _reply: DirReadHeaderReply<'_, N>,
+    ) -> sunset_sftp::server::SftpOpResult<DirReadReplyFinished> {
         info!("SftpServer ReadDir called for OTA SFTP server on handle: {opaque_dir_handle:?}");
         Err(StatusCode::SSH_FX_EOF)
     }
@@ -265,17 +259,5 @@ impl<T: OpaqueFileHandle + InitWithSeed, W: OtaActions> SftpServer<'_, T> for Sf
             _longname: Filename::from("/"),
             attrs: sunset_sftp::protocol::Attrs::default(),
         })
-    }
-
-    async fn attrs(
-        &mut self,
-        follow_links: bool,
-        file_path: &str,
-    ) -> sunset_sftp::server::SftpOpResult<sunset_sftp::protocol::Attrs> {
-        error!(
-            "SftpServer Stats operation not defined: follow_link = {follow_links:?}, \
-            file_path = {file_path:?}"
-        );
-        Err(StatusCode::SSH_FX_OP_UNSUPPORTED)
     }
 }

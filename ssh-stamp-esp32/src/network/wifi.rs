@@ -115,7 +115,8 @@ impl NetworkProviderHal for EspWifi {
             net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
                 address: Ipv4Cidr::new(self.gateway, 24),
                 gateway: Some(self.gateway),
-                dns_servers: heapless::Vec::new(),
+                // The embassy-net heapless version is different so `Default::default()` must be used here.
+                dns_servers: Default::default(),
             });
             wifi_interface = Interface::access_point();
         } else {
