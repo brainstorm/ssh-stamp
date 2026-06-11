@@ -58,8 +58,21 @@ pub mod env_parser {
     ///
     /// Returns `None` if the value contains non-ASCII-graphic characters.
     #[must_use]
-    pub fn parse_wifi_ssid(value: &str) -> Option<String<32>> {
+    pub fn parse_wifi_ap_ssid(value: &str) -> Option<String<32>> {
         if !env_sanitize(value) {
+            return None;
+        }
+        let mut s = String::new();
+        s.push_str(value).ok()?;
+        Some(s)
+    }
+
+    /// Parses and validates a `WiFi` SSID from an environment variable value.
+    ///
+    /// Returns `None` if the value contains non-ASCII-graphic characters.
+    #[must_use]
+    pub fn parse_wifi_station_ssid(value: &str) -> Option<String<32>> {
+        if !value.is_empty() && !env_sanitize(value) {
             return None;
         }
         let mut s = String::new();
@@ -431,7 +444,7 @@ pub async fn wifi_ap_ssid_env(
 ) -> Result<(), sunset::Error> {
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
-        if let Some(s) = env_parser::parse_wifi_ssid(a.value()?) {
+        if let Some(s) = env_parser::parse_wifi_ap_ssid(a.value()?) {
             config_guard.wifi_ap_ssid = s;
             debug!("Set wifi Access Point SSID from ENV");
             a.succeed()?;
@@ -487,7 +500,7 @@ pub async fn wifi_sta_ssid_env(
 ) -> Result<(), sunset::Error> {
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
-        if let Some(s) = env_parser::parse_wifi_ssid(a.value()?) {
+        if let Some(s) = env_parser::parse_wifi_station_ssid(a.value()?) {
             config_guard.wifi_sta_ssid = s;
             debug!("Set wifi STATION SSID from ENV");
             a.succeed()?;

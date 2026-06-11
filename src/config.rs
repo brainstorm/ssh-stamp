@@ -41,7 +41,6 @@ pub struct SSHStampConfig {
     /// Station Mode
     pub wifi_sta_ssid: String<32>,
     pub wifi_sta_pw: String<63>,
-
     /// Networking
     /// MAC address. Special values:
     /// - `[0xFF; 6]`: Generate random MAC on each boot
@@ -111,9 +110,8 @@ impl SSHStampConfig {
         let wifi_ap_ssid = Self::generate_wifi_ssid()?;
         let wifi_ap_pw = Self::generate_wifi_password()?;
         // Wifi Station Mode
-        let wifi_sta_ssid = Self::generate_wifi_ssid()?;
-        let wifi_sta_pw = Self::generate_wifi_password()?;
-
+        let wifi_sta_ssid = String::<32>::new();
+        let wifi_sta_pw = String::<63>::new();
         let mac = default_mac;
 
         let uart_pins = UartPins::default();

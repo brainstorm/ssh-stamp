@@ -23,20 +23,24 @@ use edge_dhcp::server::{Server, ServerOptions};
 use edge_nal::UdpBind;
 use edge_nal_embassy::{Udp, UdpBuffers};
 use embassy_executor::Spawner;
+use embassy_net::DhcpConfig;
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, Stack, StackResources, StaticConfigV4};
 use embassy_time::{Duration, Timer};
 use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_radio::wifi::{
-    AuthenticationMethod, Config as RadioConfig, ControllerConfig, Interface as WifiInterface,
-    WifiController, ap::AccessPointConfig, sta::StationConfig,
+    AuthenticationMethod, Config as RadioConfig, ControllerConfig, Interface, WifiController,
+    ap::AccessPointConfig, ap::EventInfo, sta::StationConfig,
 };
+use log::info;
 use log::{debug, error, warn};
 use ssh_stamp_hal::{HalError, NetworkProviderHal, WifiApConfigStatic, WifiError, WifiHal};
 use static_cell::StaticCell;
 
 extern crate alloc;
+
+const STATION_MODE_MAX_RETRY_SECONDS: u8 = 10;
 
 /// Handle for bringing up ESP32-family `WiFi` as an access point.
 ///
@@ -79,10 +83,7 @@ impl WifiHal for EspWifi {
 impl NetworkProviderHal for EspWifi {
     async fn bring_up(&mut self) -> Result<Stack<'static>, HalError> {
         static RESOURCES_CELL: StaticCell<StackResources<3>> = StaticCell::new();
-        static AP_SSID_CELL: StaticCell<heapless::String<32>> = StaticCell::new();
-        static AP_PASSWORD_CELL: StaticCell<heapless::String<63>> = StaticCell::new();
         static STA_SSID_CELL: StaticCell<heapless::String<32>> = StaticCell::new();
-        static STA_PASSWORD_CELL: StaticCell<heapless::String<63>> = StaticCell::new();
 
         let ap_config = self
             .ap_config
@@ -97,81 +98,96 @@ impl NetworkProviderHal for EspWifi {
         esp_hal::efuse::override_mac_address(esp_hal::efuse::MacAddress::new_eui48(ap_config.mac))
             .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
 
-        let ap_ssid_static: &'static str = AP_SSID_CELL.init(ap_config.ap_ssid.clone()).as_str();
-        let ap_password_static: &'static str = AP_PASSWORD_CELL
-            .init(ap_config.ap_password.clone())
-            .as_str();
         let sta_ssid_static: &'static str = STA_SSID_CELL.init(ap_config.sta_ssid.clone()).as_str();
-        let sta_password_static: &'static str = STA_PASSWORD_CELL
-            .init(ap_config.sta_password.clone())
-            .as_str();
-
         let ap_radio_config;
-        let ap_password;
-        let sta_password;
+        let net_config;
+        let wifi_interface;
 
         if sta_ssid_static.is_empty() {
-            // Default to Access Point mode
-            ap_password = AllocString::from(ap_config.ap_password.as_str());
+            info!("Wifi configuring Access Point Mode");
+            let password = AllocString::from(ap_config.ap_password.as_str());
             ap_radio_config = RadioConfig::AccessPoint(
                 AccessPointConfig::default()
                     .with_ssid(AllocString::from(ap_config.ap_ssid.as_str()))
                     .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
-                    .with_password(ap_password),
+                    .with_password(password.clone()),
             );
+            net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
+                address: Ipv4Cidr::new(self.gateway, 24),
+                gateway: Some(self.gateway),
+                dns_servers: heapless::Vec::new(),
+            });
+            wifi_interface = Interface::access_point();
         } else {
-            // Client/Station Mode
-            sta_password = AllocString::from(ap_config.sta_password.as_str());
+            info!("Wifi configuring Station Mode");
+            let password = AllocString::from(ap_config.sta_password.as_str());
             ap_radio_config = RadioConfig::Station(
                 StationConfig::default()
                     .with_ssid(AllocString::from(ap_config.sta_ssid.as_str()))
-                    .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
-                    .with_password(sta_password),
+                    .with_password(password.clone()),
             );
+            net_config = embassy_net::Config::dhcpv4(DhcpConfig::default());
+            wifi_interface = Interface::station();
         }
 
         let controller_config = ControllerConfig::default().with_initial_config(ap_radio_config);
-        let (wifi_controller, interfaces) = esp_radio::wifi::new(wifi_peri, controller_config)
+        let wifi_controller = WifiController::new(wifi_peri, controller_config)
             .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
-
-        let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
-            address: Ipv4Cidr::new(self.gateway, 24),
-            gateway: Some(self.gateway),
-            dns_servers: heapless::Vec::new(),
-        });
 
         let seed = u64::from(self.rng.random()) << 32 | u64::from(self.rng.random());
 
         let (ap_stack, runner) = embassy_net::new(
-            interfaces.access_point,
+            wifi_interface,
             net_config,
             RESOURCES_CELL.init(StackResources::<3>::new()),
             seed,
         );
 
         self.spawner.spawn(
-            wifi_up(
-                wifi_controller,
-                ap_ssid_static,
-                ap_password_static,
-                sta_ssid_static,
-                sta_password_static,
-            )
-            .map_err(|_| HalError::Wifi(WifiError::Initialization))?,
+            wifi_up(wifi_controller, sta_ssid_static)
+                .map_err(|_| HalError::Wifi(WifiError::Initialization))?,
         );
         self.spawner
             .spawn(net_up(runner).map_err(|_| HalError::Wifi(WifiError::Initialization))?);
-        self.spawner.spawn(
-            dhcp_server(ap_stack, self.gateway)
-                .map_err(|_| HalError::Wifi(WifiError::Initialization))?,
-        );
 
-        loop {
-            debug!("Checking if link is up");
-            if ap_stack.is_link_up() {
-                break;
+        if sta_ssid_static.is_empty() {
+            self.spawner.spawn(
+                dhcp_server(ap_stack, self.gateway)
+                    .map_err(|_| HalError::Wifi(WifiError::Initialization))?,
+            );
+            loop {
+                debug!("Checking if link is up");
+                if ap_stack.is_link_up() {
+                    if let Some(config) = ap_stack.config_v4() {
+                        info!(
+                            "Connect to the AP `{}` with IP {}",
+                            ap_config.ap_ssid.as_str(),
+                            config.address,
+                        );
+                    }
+                    break;
+                }
+                Timer::after(Duration::from_millis(500)).await;
             }
-            Timer::after(Duration::from_millis(500)).await;
+        } else {
+            let mut retry_count = 0;
+            loop {
+                debug!("Checking if station has received IP address");
+                if ap_stack.is_config_up() {
+                    if let Some(config) = ap_stack.config_v4() {
+                        info!(
+                            "Connect to the AP `{}` with IP {}",
+                            sta_ssid_static, config.address,
+                        );
+                    }
+                    break;
+                }
+                retry_count += 1;
+                if retry_count > STATION_MODE_MAX_RETRY_SECONDS {
+                    return Err(HalError::Wifi(WifiError::StationMode));
+                }
+                Timer::after(Duration::from_millis(1000)).await;
+            }
         }
 
         Ok(ap_stack)
@@ -209,55 +225,55 @@ pub async fn accept_requests<'a>(
 }
 
 /// Manages the `WiFi` access point lifecycle.
-///
-/// In esp-radio 0.18+, `set_config` both configures and starts the radio.
-/// We call it once and retry only on error, preserving client connections.
 #[embassy_executor::task]
-pub async fn wifi_up(
-    mut wifi_controller: WifiController<'static>,
-    ap_ssid: &'static str,
-    ap_password: &'static str,
-    sta_ssid: &'static str,
-    sta_password: &'static str,
-) {
-    let ap_config = if sta_ssid.is_empty() {
-        // Default to Access Point mode
-        RadioConfig::AccessPoint(
-            AccessPointConfig::default()
-                .with_ssid(AllocString::from(ap_ssid))
-                .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
-                .with_password(AllocString::from(ap_password)),
-        )
+pub async fn wifi_up(mut wifi_controller: WifiController<'static>, sta_ssid: &'static str) {
+    // The controller keeps the radio alive.
+    if sta_ssid.is_empty() {
+        // Access Point Mode
+        debug!("Wifi AP starting...");
+        // If the radio ever goes down (e.g. hardware fault), esp-radio
+        // currently has no public event API to detect it.
+        loop {
+            let ev = wifi_controller
+                .wait_for_access_point_connected_event_async()
+                .await;
+            match ev {
+                Ok(EventInfo::Connected(info)) => {
+                    info!("Station connected: {info:?}");
+                }
+                Ok(EventInfo::Disconnected(info)) => {
+                    info!("Station disconnected: {info:?}");
+                }
+                _ => (),
+            }
+            Timer::after(Duration::from_millis(5000)).await;
+        }
     } else {
-        // Client/Station Mode
-        RadioConfig::Station(
-            StationConfig::default()
-                .with_ssid(AllocString::from(sta_ssid))
-                .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
-                .with_password(AllocString::from(sta_password)),
-        )
-    };
+        // Station Mode
+        // If the connection is lost it will attempt to reconnect.
+        loop {
+            debug!("Connecting to access point...");
 
-    loop {
-        match wifi_controller.set_config(&ap_config) {
-            Ok(()) => {
-                debug!("Wifi started!");
-                // AP is up — sleep forever. The controller keeps the radio alive.
-                // If the radio ever goes down (e.g. hardware fault), esp-radio
-                // currently has no public event API to detect it, so we just hold.
-                core::future::pending::<()>().await;
+            match wifi_controller.connect_async().await {
+                Ok(info) => {
+                    info!("Wifi connected to {info:?}");
+
+                    // Wait until we're no longer connected
+                    let info = wifi_controller.wait_for_disconnect_async().await.ok();
+                    info!("Disconnected: {info:?}");
+                }
+                Err(e) => {
+                    info!("Failed to connect to wifi: {e:?}");
+                }
             }
-            Err(e) => {
-                debug!("Failed to set wifi config: {e:?}");
-                Timer::after(Duration::from_millis(1000)).await;
-            }
+            Timer::after(Duration::from_millis(1000)).await;
         }
     }
 }
 
 /// Network task for Embassy executor.
 #[embassy_executor::task]
-pub async fn net_up(mut runner: Runner<'static, WifiInterface<'static>>) {
+pub async fn net_up(mut runner: Runner<'static, Interface>) {
     debug!("Bringing up network stack...");
     runner.run().await;
 }
