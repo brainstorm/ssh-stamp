@@ -23,13 +23,16 @@ use esp_hal::interrupt::{Priority, software::SoftwareInterruptControl};
 use esp_hal::rng::{Trng, TrngSource};
 use esp_println::logger;
 use esp_rtos::embassy::InterruptExecutor;
-use log::{debug, error, info, warn};
+use heapless::String;
+use log::{debug, error, warn};
 use ssh_stamp::config::SSHStampConfig;
+use ssh_stamp::platform::PlatformServices;
 use ssh_stamp::{app, settings::DEFAULT_IP};
 use ssh_stamp_esp32::{
     BufferedUart, EspPlatform, EspUartPins, EspWifi, UART_BUF, flash, mac_address,
     register_custom_rng, uart_task,
 };
+use ssh_stamp_hal::{HalError, WifiError};
 use ssh_stamp_hal::{NetworkProviderHal, WifiHal};
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
@@ -162,18 +165,27 @@ async fn main(spawner: Spawner) -> ! {
     let ap_config = app::prepare_ap_config(config, &platform)
         .await
         .expect("Failed to prepare AP config");
-    info!(
-        "Connect to the AP `{}` as a DHCP client with IP: {}",
-        ap_config.ssid.as_str(),
-        DEFAULT_IP
-    );
 
     let mut wifi = EspWifi::new(spawner, peripherals.WIFI, rng, DEFAULT_IP);
     wifi.configure_ap(ap_config)
         .expect("Failed to configure AP");
-    let stack = wifi.bring_up().await.expect("Failed to bring up WiFi");
 
-    if let Err(e) = app::run_app(stack, uart_buf, config, &platform).await {
+    let stack = wifi.bring_up().await;
+    match stack {
+        Ok(_) => (),
+        Err(ref e) => {
+            warn!("Failed to bring up WiFi");
+            if let HalError::Wifi(WifiError::StationMode) = e {
+                let mut config_guard = config.lock().await;
+                config_guard.wifi_sta_ssid = String::<32>::new();
+                let _ = platform.save_config(&config_guard).await;
+                warn!("Station Mode failed to connect. Rebooting into Access Point mode...");
+                platform.reset();
+            }
+        }
+    }
+
+    if let Err(e) = app::run_app(stack.unwrap(), uart_buf, config, &platform).await {
         error!("run_app exited with error: {e}");
     }
 
