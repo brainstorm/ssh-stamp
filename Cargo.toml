@@ -24,7 +24,7 @@ mem_forget = "warn"
 await_holding_lock = "warn"
 pedantic = "warn"
 large_futures = { level = "allow", priority = 1 }
-#default_trait_access = { level = "allow", priority = 1 }
+default_trait_access = { level = "allow", priority = 1 }
 
 [lints]
 workspace = true

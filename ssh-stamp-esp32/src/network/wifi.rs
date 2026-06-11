@@ -131,6 +131,8 @@ impl NetworkProviderHal for EspWifi {
             wifi_interface = Interface::station();
         }
 
+        let ap_interface = Interface::access_point();
+
         let controller_config = ControllerConfig::default().with_initial_config(ap_radio_config);
         let wifi_controller = WifiController::new(wifi_peri, controller_config)
             .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
