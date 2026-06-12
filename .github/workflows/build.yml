@@ -4,6 +4,9 @@
 
 name: Build
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:
@@ -76,3 +79,18 @@ jobs:
           toolchain: stable
       - name: Build utility
         run: cargo build-packer
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Stable Rust Toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          target: riscv32imac-unknown-none-elf
+          toolchain: stable
+      - name: Build all docs
+        run: cargo build-doc
+      - name: Check doc warnings
+        run: cargo build-doc 2>&1 | grep -iE "broken|warning.*link" || true

@@ -6,7 +6,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Static settings
+//! Compile-time constants: default IP, `WiFi` character set, buffer sizes.
 
 use core::net::Ipv4Addr;
 
@@ -24,12 +24,4 @@ pub(crate) const WIFI_PASSWORD_CHARS: &[u8; 62] =
 pub const STATION_MODE_MAX_RETRY_SECONDS: u8 = 10;
 
 // UART settings
-//pub(crate) const BAUD_RATE: u32 = 115200;
-//pub(crate) const UART_SETTINGS: &str = "8N1";
 pub const UART_BUFFER_SIZE: usize = 4096;
-
-// UART pins are configured at compile time in the per-MCU binary — these
-// defaults are used when `UartPins::default()` is called before the real
-// binary takes over. Keep them reasonable for the most common ESP32-C6 setup.
-pub(crate) const DEFAULT_UART_TX_PIN: u8 = 10;
-pub(crate) const DEFAULT_UART_RX_PIN: u8 = 11;

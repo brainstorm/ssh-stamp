@@ -55,7 +55,7 @@ At the end of the bootloader log look for the app offset (At this point Factory)
 
 #### 4. Start the OTA
 
-Keep the debug session and connect your system to the wifi "ssh-stamp" (Using a cheap WiFi dongle helps).
+Keep the debug session and connect your system to the device's WiFi AP (the SSID and PSK are printed to the serial console on first boot).
 
 In a separate bash session within the project root folder run:
 
@@ -93,4 +93,4 @@ We have put together an end to end test to be run into a MCU development board. 
 
 Some of you will prefer to read this file rather than follow a step by step tutorial.
 
-Mind that the script has some prerequisites (see `check_tools()` in the file) and requires your computer to automatically connect to ssid "ssh-stamp".
+Mind that the script has some prerequisites (see `check_tools()` in the file) and requires your computer to automatically connect to the device's WiFi AP (check the serial console for the randomly generated SSID).

@@ -4,6 +4,17 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+//! Configuration types and serialization.
+//!
+//! [`SSHStampConfig`] holds all persistent device state: host key, public keys,
+//! `WiFi` credentials, MAC address, UART pin assignment, and the first-login
+//! flag. It is serialized to flash via the `sunset` SSH wire format and
+//! deserialized on boot by [`store::load_or_create`](crate::store::load_or_create).
+//!
+//! On first boot, [`SSHStampConfig::new`] generates a random SSID and WPA2
+//! PSK (printed to the serial console). The old hardcoded `"ssh-stamp"` SSID is
+//! automatically migrated to a random one if found in existing flash config.
+
 use log::{debug, warn};
 
 use core::net::Ipv4Addr;
@@ -25,7 +36,7 @@ use sunset::{
 };
 
 use crate::errors::Error;
-use crate::settings::{DEFAULT_UART_RX_PIN, DEFAULT_UART_TX_PIN, KEY_SLOTS, WIFI_PASSWORD_CHARS};
+use crate::settings::{KEY_SLOTS, WIFI_PASSWORD_CHARS};
 
 #[derive(Debug, PartialEq)]
 pub struct SSHStampConfig {
@@ -56,20 +67,16 @@ pub struct SSHStampConfig {
     pub first_login: bool,
 }
 
+/// UART pin assignment.
+///
+/// UART TX and RX pin numbers are target-specific and must be provided
+/// by the port binary (e.g. `ssh-stamp-esp32`). There is no sensible
+/// cross-platform default; `UartPins` is constructed explicitly by the
+/// binary and passed to [`SSHStampConfig::new`].
 #[derive(Debug, PartialEq)]
 pub struct UartPins {
     pub rx: u8,
     pub tx: u8,
-}
-
-impl Default for UartPins {
-    fn default() -> Self {
-        // sensible defaults for UART pins; adjust if your board uses different pins
-        UartPins {
-            rx: DEFAULT_UART_RX_PIN,
-            tx: DEFAULT_UART_TX_PIN,
-        }
-    }
 }
 
 const MAC_RANDOM_SENTINEL: [u8; 6] = [0xFF; 6];
@@ -101,9 +108,12 @@ impl SSHStampConfig {
     /// (typically read from hardware OTP/eFuse). Stored as-is in the config;
     /// may be overwritten later via the `SSH_STAMP_WIFI_MAC_*` env vars.
     ///
+    /// `uart_pins` is the TX/RX pin assignment, which is target-specific and
+    /// must be provided by the port binary.
+    ///
     /// # Errors
     /// Will only fail on RNG failure.
-    pub fn new(default_mac: [u8; 6]) -> Result<Self> {
+    pub fn new(default_mac: [u8; 6], uart_pins: UartPins) -> Result<Self> {
         let hostkey = SignKey::generate(KeyType::Ed25519, None)?;
 
         // Wifi Access Point Mode
@@ -114,7 +124,6 @@ impl SSHStampConfig {
         let wifi_sta_pw = String::<63>::new();
         let mac = default_mac;
 
-        let uart_pins = UartPins::default();
         debug!(
             "SSH Stamp Config new() - RX Pin: {}  TX Pin: {}",
             uart_pins.rx, uart_pins.tx
