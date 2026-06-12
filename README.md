@@ -94,14 +94,27 @@ ssh -o SendEnv=SSH_STAMP_PUBKEY root@192.168.4.1
 - Set a custom SSID and WPA2 PSK (allowed on first-boot or any authenticated session):
 
 ```
-export SSH_STAMP_WIFI_SSID="MyHomeSSID"
-export SSH_STAMP_WIFI_PSK="my-super-secret-psk"
-ssh -o SendEnv=SSH_STAMP_WIFI_SSID -o SendEnv=SSH_STAMP_WIFI_PSK root@192.168.4.1
+export SSH_STAMP_WIFI_AP_SSID="SshStampSSID"
+export SSH_STAMP_WIFI_AP_PSK="my-super-secret-psk"
+ssh -o SendEnv=SSH_STAMP_WIFI_AP_SSID -o SendEnv=SSH_STAMP_WIFI_AP_PSK root@192.168.4.1
+```
+
+- To connect the SSH Stamp to an existing access point with DHCP (Station Mode):
+```
+export SSH_STAMP_WIFI_STA_SSID="MyHomeSSID"
+export SSH_STAMP_WIFI_STA_PSK="my-super-secret-psk"
+ssh -o SendEnv=SSH_STAMP_WIFI_STA_SSID -o SendEnv=SSH_STAMP_WIFI_STA_PSK root@192.168.4.1
+```
+
+- To return to the default Access Point mode, clear the Station SSID:
+```
+export SSH_STAMP_WIFI_STA_SSID=""
+ssh -o SendEnv=SSH_STAMP_WIFI_STA_SSID root@192.168.4.1
 ```
 
 Notes:
 - `SSH_STAMP_PUBKEY` is accepted on first-boot to add the initial admin key.
-- `SSH_STAMP_WIFI_SSID` and `SSH_STAMP_WIFI_PSK` may be applied while authenticated via pubkey (or on first-boot). After a successful change the device persists the settings and performs a software reset so the new WiFi settings take effect.
+- `SSH_STAMP_WIFI_AP_SSID` and `SSH_STAMP_WIFI_AP_PSK` may be applied while authenticated via pubkey (or on first-boot). After a successful change the device persists the settings and performs a software reset so the new WiFi settings take effect.
 - If you prefer a single-step provisioning, export all three env vars locally and forward them with `SendEnv` in the same SSH invocation.
 
 If your SSH client doesn't forward environment variables by default, use the `-o SendEnv=VAR` option as shown above or configure `SendEnv` in your SSH client config.
@@ -129,14 +142,6 @@ Here are some PoC shots:
 ![physical_setup](./docs/img/ssh_stamp_openwrt_setup.png)
 ![connection](./docs/img/connecting_to_ssh_stamp.png)
 ![openwrt_hello](./docs/img/openwrt_ssh_helloworld.png)
-
-# Generate SBOM
-
-```
-cargo install cargo-cyclonedx
-cargo cyclonedx  # Generates XML by default
-cargo cyclonedx -f json
-```
 
 Sponsored by:
 

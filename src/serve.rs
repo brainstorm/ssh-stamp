@@ -98,7 +98,7 @@ pub async fn connection_loop<P: PlatformServices>(
             ServEvent::Defunct => {
                 defunct()?;
             }
-            ServEvent::PollAgain => {}
+            ServEvent::Authenticated | ServEvent::PollAgain => {}
         }
     }
 }

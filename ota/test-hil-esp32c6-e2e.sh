@@ -82,7 +82,7 @@ clean_flash(){
 
 flash_app(){
     echo "Flashing the board with the application"
-    espflash flash --baud=921600 --partition-table partitions.csv $SSH_STAMP_ELF
+    espflash flash --baud=921600 --partition-table ssh-stamp-esp32/partitions.csv $SSH_STAMP_ELF
 }
 
 reach_app(){

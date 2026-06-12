@@ -69,8 +69,21 @@ pub mod env_parser {
     ///
     /// Returns `None` if the value contains non-ASCII-graphic characters.
     #[must_use]
-    pub fn parse_wifi_ssid(value: &str) -> Option<String<32>> {
+    pub fn parse_wifi_ap_ssid(value: &str) -> Option<String<32>> {
         if !env_sanitize(value) {
+            return None;
+        }
+        let mut s = String::new();
+        s.push_str(value).ok()?;
+        Some(s)
+    }
+
+    /// Parses and validates a `WiFi` SSID from an environment variable value.
+    ///
+    /// Returns `None` if the value contains non-ASCII-graphic characters.
+    #[must_use]
+    pub fn parse_wifi_station_ssid(value: &str) -> Option<String<32>> {
+        if !value.is_empty() && !env_sanitize(value) {
             return None;
         }
         let mut s = String::new();
@@ -363,11 +376,17 @@ pub async fn session_env(
             "SSH_STAMP_PUBKEY" => {
                 pubkey_env(a, config, ctx).await?;
             }
-            "SSH_STAMP_WIFI_SSID" => {
-                wifi_ssid_env(a, config, ctx).await?;
+            "SSH_STAMP_WIFI_AP_SSID" => {
+                wifi_ap_ssid_env(a, config, ctx).await?;
             }
-            "SSH_STAMP_WIFI_PSK" => {
-                wifi_psk_env(a, config, ctx).await?;
+            "SSH_STAMP_WIFI_AP_PSK" => {
+                wifi_ap_psk_env(a, config, ctx).await?;
+            }
+            "SSH_STAMP_WIFI_STA_SSID" => {
+                wifi_sta_ssid_env(a, config, ctx).await?;
+            }
+            "SSH_STAMP_WIFI_STA_PW" => {
+                wifi_sta_psk_env(a, config, ctx).await?;
             }
             "SSH_STAMP_WIFI_MAC_ADDRESS" => {
                 wifi_mac_address_env(a, config, ctx).await?;
@@ -425,39 +444,39 @@ pub async fn pubkey_env(
     Ok(())
 }
 
-/// Handles `SSH_STAMP_WIFI_SSID` environment variable requests.
+/// Handles `SSH_STAMP_WIFI_AP_SSID` environment variable requests.
 ///
 /// # Errors
 /// Returns an error if SSH protocol operations fail or if the SSID is invalid.
-pub async fn wifi_ssid_env(
+pub async fn wifi_ap_ssid_env(
     a: sunset::event::ServEnvironmentRequest<'_, '_>,
     config: &SunsetMutex<SSHStampConfig>,
     ctx: &mut EventContext<'_>,
 ) -> Result<(), sunset::Error> {
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
-        if let Some(s) = env_parser::parse_wifi_ssid(a.value()?) {
-            config_guard.wifi_ssid = s;
-            debug!("Set wifi SSID from ENV");
+        if let Some(s) = env_parser::parse_wifi_ap_ssid(a.value()?) {
+            config_guard.wifi_ap_ssid = s;
+            debug!("Set wifi Access Point SSID from ENV");
             a.succeed()?;
             *ctx.config_changed = true;
             *ctx.needs_reset = true;
         } else {
-            warn!("SSH_STAMP_WIFI_SSID invalid and/or too long");
+            warn!("SSH_STAMP_WIFI_AP_SSID invalid and/or too long");
             a.fail()?;
         }
     } else {
-        warn!("SSH_STAMP_WIFI_SSID env received but not authenticated; rejecting");
+        warn!("SSH_STAMP_WIFI_AP_SSID env received but not authenticated; rejecting");
         a.fail()?;
     }
     Ok(())
 }
 
-/// Handles `SSH_STAMP_WIFI_PSK` environment variable requests.
+/// Handles `SSH_STAMP_WIFI_AP_PSK` environment variable requests.
 ///
 /// # Errors
 /// Returns an error if SSH protocol operations fail or if the PSK is invalid.
-pub async fn wifi_psk_env(
+pub async fn wifi_ap_psk_env(
     a: sunset::event::ServEnvironmentRequest<'_, '_>,
     config: &SunsetMutex<SSHStampConfig>,
     ctx: &mut EventContext<'_>,
@@ -465,17 +484,73 @@ pub async fn wifi_psk_env(
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
         if let Some(s) = env_parser::parse_wifi_psk(a.value()?) {
-            config_guard.wifi_pw = s;
-            debug!("Set WIFI PSK from ENV");
+            config_guard.wifi_ap_pw = s;
+            debug!("Set WIFI AP PSK from ENV");
             a.succeed()?;
             *ctx.config_changed = true;
             *ctx.needs_reset = true;
         } else {
-            warn!("SSH_STAMP_WIFI_PSK invalid and/or not within 8-63 characters");
+            warn!("SSH_STAMP_WIFI_AP_PSK invalid and/or not within 8-63 characters");
             a.fail()?;
         }
     } else {
-        warn!("SSH_STAMP_WIFI_PSK env received but not authenticated; rejecting");
+        warn!("SSH_STAMP_WIFI_AP_PSK env received but not authenticated; rejecting");
+        a.fail()?;
+    }
+    Ok(())
+}
+
+/// Handles `SSH_STAMP_WIFI_STA_SSID` environment variable requests.
+///
+/// # Errors
+/// Returns an error if SSH protocol operations fail or if the SSID is invalid.
+pub async fn wifi_sta_ssid_env(
+    a: sunset::event::ServEnvironmentRequest<'_, '_>,
+    config: &SunsetMutex<SSHStampConfig>,
+    ctx: &mut EventContext<'_>,
+) -> Result<(), sunset::Error> {
+    let mut config_guard = config.lock().await;
+    if *ctx.auth_checked || config_guard.first_login {
+        if let Some(s) = env_parser::parse_wifi_station_ssid(a.value()?) {
+            config_guard.wifi_sta_ssid = s;
+            debug!("Set wifi STATION SSID from ENV");
+            a.succeed()?;
+            *ctx.config_changed = true;
+            *ctx.needs_reset = true;
+        } else {
+            warn!("SSH_STAMP_WIFI_STA_SSID invalid and/or too long");
+            a.fail()?;
+        }
+    } else {
+        warn!("SSH_STAMP_WIFI_STA_SSID env received but not authenticated; rejecting");
+        a.fail()?;
+    }
+    Ok(())
+}
+
+/// Handles `SSH_STAMP_WIFI_STA_PSK` environment variable requests.
+///
+/// # Errors
+/// Returns an error if SSH protocol operations fail or if the SSID is invalid.
+pub async fn wifi_sta_psk_env(
+    a: sunset::event::ServEnvironmentRequest<'_, '_>,
+    config: &SunsetMutex<SSHStampConfig>,
+    ctx: &mut EventContext<'_>,
+) -> Result<(), sunset::Error> {
+    let mut config_guard = config.lock().await;
+    if *ctx.auth_checked || config_guard.first_login {
+        if let Some(s) = env_parser::parse_wifi_psk(a.value()?) {
+            config_guard.wifi_sta_pw = s;
+            debug!("Set wifi STATION PSK from ENV");
+            a.succeed()?;
+            *ctx.config_changed = true;
+            *ctx.needs_reset = true;
+        } else {
+            warn!("SSH_STAMP_WIFI_STA_PSK invalid and/or not within 8-63 characters");
+            a.fail()?;
+        }
+    } else {
+        warn!("SSH_STAMP_WIFI_STA_PSK env received but not authenticated; rejecting");
         a.fail()?;
     }
     Ok(())

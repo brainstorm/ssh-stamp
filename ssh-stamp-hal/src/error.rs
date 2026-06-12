@@ -62,6 +62,8 @@ pub enum WifiError {
     SocketClose,
     /// DHCP client error.
     Dhcpc,
+    /// Station Mode error.
+    StationMode,
 }
 
 /// Flash storage errors.

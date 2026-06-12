@@ -66,11 +66,11 @@ where
     match load(flash, buf) {
         Ok(mut c) => {
             debug!("Good existing config");
-            if c.wifi_ssid.as_str() == "ssh-stamp" {
-                debug!("Migrating insecure default SSID, regenerating randomly");
-                c.wifi_ssid = SSHStampConfig::generate_wifi_ssid()?;
-                if c.wifi_pw.is_empty() {
-                    c.wifi_pw = SSHStampConfig::generate_wifi_password()?;
+            if c.wifi_ap_ssid.as_str() == "ssh-stamp" {
+                debug!("Migrating insecure default Access Point SSID, regenerating randomly");
+                c.wifi_ap_ssid = SSHStampConfig::generate_wifi_ssid()?;
+                if c.wifi_ap_pw.is_empty() {
+                    c.wifi_ap_pw = SSHStampConfig::generate_wifi_password()?;
                 }
                 save(flash, buf, &c)?;
             }

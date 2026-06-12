@@ -40,12 +40,15 @@ impl Default for UartConfig {
 /// Contains settings for running the device as a `WiFi` access point.
 #[derive(Clone, Debug)]
 pub struct WifiApConfigStatic {
+    /// Wifi Mode - Access Point (ap) or Station (sta) Mode. Access Point by default.
     /// Network name (SSID), max 32 characters.
-    pub ssid: String<32>,
+    pub ap_ssid: String<32>,
+    pub sta_ssid: String<32>,
     /// Mandatory `WiFi` password, max 63 characters.
     /// We don't want None here as it would present an open network,
     /// which is not something we want to support.
-    pub password: String<63>,
+    pub ap_password: String<63>,
+    pub sta_password: String<63>,
     /// `WiFi` channel (1-14 for 2.4GHz).
     pub channel: u8,
     /// MAC address for the access point interface.
@@ -55,8 +58,10 @@ pub struct WifiApConfigStatic {
 impl Default for WifiApConfigStatic {
     fn default() -> Self {
         Self {
-            ssid: String::new(),
-            password: String::new(),
+            ap_ssid: String::new(),
+            ap_password: String::new(),
+            sta_ssid: String::new(),
+            sta_password: String::new(),
             channel: 1,
             mac: [0; 6],
         }

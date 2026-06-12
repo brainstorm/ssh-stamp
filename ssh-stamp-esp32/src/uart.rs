@@ -77,7 +77,7 @@ impl BufferedUart {
                                 let dropped = self
                                     .inward
                                     .try_read(&mut drop_buf[..rx_slice.len()])
-                                    .unwrap_or_default();
+                                    .unwrap_or(0);
                                 let _ = self.dropped_rx_bytes.fetch_update(
                                     Ordering::Relaxed,
                                     Ordering::Relaxed,

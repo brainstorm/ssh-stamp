@@ -29,7 +29,7 @@ edge-nal-embassy = { workspace = true }
 heapless = { workspace = true }
 
 esp-hal = { workspace = true }
-esp-radio = { version = "0.18", features = ["wifi", "log-04"] }
+esp-radio = { version = "1.0.0-beta.0", features = ["wifi", "log-04"] }
 esp-storage = { version = "0.9" }
 esp-bootloader-esp-idf = { version = "0.5" }
 esp-alloc = { version = "0.10" }
@@ -60,3 +60,6 @@ esp32c3 = ["esp-hal/esp32c3", "esp-radio/esp32c3", "esp-storage/esp32c3", "esp-b
 esp32c6 = ["esp-hal/esp32c6", "esp-radio/esp32c6", "esp-storage/esp32c6", "esp-bootloader-esp-idf/esp32c6", "esp-alloc/esp32c6", "esp-backtrace/esp32c6", "esp-rtos/esp32c6", "esp-println/esp32c6"]
 esp32s2 = ["esp-hal/esp32s2", "esp-radio/esp32s2", "esp-storage/esp32s2", "esp-bootloader-esp-idf/esp32s2", "esp-alloc/esp32s2", "esp-backtrace/esp32s2", "esp-rtos/esp32s2", "esp-println/esp32s2"]
 esp32s3 = ["esp-hal/esp32s3", "esp-radio/esp32s3", "esp-storage/esp32s3", "esp-bootloader-esp-idf/esp32s3", "esp-alloc/esp32s3", "esp-backtrace/esp32s3", "esp-rtos/esp32s3", "esp-println/esp32s3"]
+
+[lints]
+workspace = true

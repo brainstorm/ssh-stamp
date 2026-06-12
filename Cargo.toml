@@ -9,14 +9,25 @@ authors = [
     "Julio Beltran Ortega <jubeormk1@gmail.com>",
     "Anthony Tambasco <anthony.tambasco@fastmail.com>",
     "Roman Valls Guimera <brainstorm@nopcode.org>",
+    "Marko Malenic <mmalenic1@gmail.com>",
 ]
 edition = "2024"
-license = "MIT OR Apache-2.0"
+license = "GPL-3.0-or-later"
 
 [lib]
 
 [workspace]
 members = ["ssh-stamp-hal", "ssh-stamp-esp32", "ota"]
+
+[workspace.lints.clippy]
+mem_forget = "warn"
+await_holding_lock = "warn"
+pedantic = "warn"
+large_futures = { level = "allow", priority = 1 }
+default_trait_access = { level = "allow", priority = 1 }
+
+[lints]
+workspace = true
 
 [workspace.dependencies]
 # Async runtime
@@ -26,21 +37,21 @@ embassy-time = { version = "0.5" }
 embassy-futures = "0.1.2"
 
 # Collections
-heapless = "0.8"
+heapless = "0.9"
 
 # ESP32
 esp-hal = { version = "1.1", features = ["unstable", "log-04"] }
 
 # SSH protocol
-sunset = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-basic", default-features = false, features = [
+sunset = { git = "https://github.com/mkj/sunset", rev = "fd3f8284ebca704f3c3789faf80487af18a50114", default-features = false, features = [
     "openssh-key",
     "embedded-io",
 ] }
-sunset-async = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-basic", default-features = false, features = [
+sunset-async = { git = "https://github.com/mkj/sunset", rev = "fd3f8284ebca704f3c3789faf80487af18a50114", default-features = false, features = [
     "multi-thread",
 ] }
-sunset-sshwire-derive = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-basic", default-features = false }
-sunset-sftp = { git = "https://github.com/jubeormk1/sunset", branch = "dev/sftp-basic", default-features = false }
+sunset-sshwire-derive = { git = "https://github.com/mkj/sunset", rev = "fd3f8284ebca704f3c3789faf80487af18a50114", default-features = false }
+sunset-sftp = { git = "https://github.com/mkj/sunset", rev = "fd3f8284ebca704f3c3789faf80487af18a50114", default-features = false }
 
 # Crypto
 sha2 = { version = "0.10", default-features = false }
@@ -60,10 +71,10 @@ esp-storage = { version = "0.8" }
 esp-bootloader-esp-idf = { version = "0.4.0" }
 
 # Networking
-edge-dhcp = "0.6"
-edge-nal = "0.5"
-edge-nal-embassy = "0.7"
-embassy-net = { version = "0.7", features = [
+edge-dhcp = "0.7"
+edge-nal = "0.6"
+edge-nal-embassy = "0.8"
+embassy-net = { version = "0.8", features = [
     "tcp",
     "udp",
     "dhcpv4",
@@ -84,7 +95,7 @@ portable-atomic = "1"
 snafu = { version = "0.8", default-features = false }
 pastey = "0.1"
 pretty-hex = { version = "0.4", default-features = false }
-embedded-io-async = "0.6.1"
+embedded-io-async = "0.7"
 embassy-embedded-hal = "0.6"
 
 [dependencies]
