@@ -35,12 +35,11 @@ use esp_radio::wifi::{
 };
 use log::info;
 use log::{debug, error, warn};
+use ssh_stamp::settings::STATION_MODE_MAX_RETRY_SECONDS;
 use ssh_stamp_hal::{HalError, NetworkProviderHal, WifiApConfigStatic, WifiError, WifiHal};
 use static_cell::StaticCell;
 
 extern crate alloc;
-
-const STATION_MODE_MAX_RETRY_SECONDS: u8 = 10;
 
 /// Handle for bringing up ESP32-family `WiFi` as an access point.
 ///
