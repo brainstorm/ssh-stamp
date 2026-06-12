@@ -20,6 +20,8 @@ pub const DEFAULT_IP: Ipv4Addr = Ipv4Addr::new(192, 168, 4, 1);
 // WiFi SSID and password character set (alphanumeric)
 pub(crate) const WIFI_PASSWORD_CHARS: &[u8; 62] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+// Wifi Station Mode Connection
+pub const STATION_MODE_MAX_RETRY_SECONDS: u8 = 10;
 
 // UART settings
 //pub(crate) const BAUD_RATE: u32 = 115200;
