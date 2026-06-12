@@ -14,6 +14,7 @@ the EU market.
 
 - **Product name:** ssh-stamp
 - **Developer:** Roman Valls Guimera — brainstorm@nopcode.org
+- **Security Engineer:** Spiros Thanasoulas — dsp@2f30.org
 - **License:** GPL-3.0-or-later
 - **Product category:** Embedded firmware (SSH server for microcontrollers)
 - **Intended use:** Network-attached SSH-to-UART bridge for IoT/embedded
@@ -23,9 +24,14 @@ the EU market.
 
 ### Reporting a vulnerability
 
-Report security vulnerabilities by emailing **brainstorm@nopcode.org**.
-
 Do **not** open a public GitHub issue for security-sensitive bugs.
+
+Report security vulnerabilities by emailing BOTH **brainstorm@nopcode.org** and **dsp@2f30.org**.
+
+Ideally encrypt and sign using the following PGP public keys:
+
+https://u.2f30.org/dsp/files/pubkey.txt
+http://pgp.id/pks/lookup?search=0x12A5388F08F80CB5&fingerprint=true&op=index
 
 ### What to include
 
