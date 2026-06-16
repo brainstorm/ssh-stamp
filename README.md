@@ -78,7 +78,7 @@ INFO - SSH hostkey fingerprint: <FINGERPRINT>
 INFO - Connect to the AP `<RANDOM AP NAME>` as a DHCP client with IP: 192.168.4.1
 ```
 
-2. Connect a laptop/phone to the WiFi AP using the printed PSK, then SSH into the device at `root@192.168.4.1`.
+2. Connect a laptop/phone to the WiFi AP using the printed SSID and PSK, then SSH into the device at `root@192.168.4.1`.
 
 3. Provisioning via SSH environment variables
 

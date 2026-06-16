@@ -12,8 +12,7 @@
 //! deserialized on boot by [`store::load_or_create`](crate::store::load_or_create).
 //!
 //! On first boot, [`SSHStampConfig::new`] generates a random SSID and WPA2
-//! PSK (printed to the serial console). The old hardcoded `"ssh-stamp"` SSID is
-//! automatically migrated to a random one if found in existing flash config.
+//! PSK (printed to the serial console).
 
 use log::{debug, warn};
 

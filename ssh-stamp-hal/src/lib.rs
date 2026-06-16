@@ -42,8 +42,7 @@
 //!
 //! To port ssh-stamp to a new microcontroller family:
 //!
-//! 1. Create `ssh-stamp-yourplatform/` with both a lib and
-//!    `src/bin/ssh-stamp-yourplatform.rs`.
+//! 1. Create lib and bin for your platform: `ssh-stamp/ssh-stamp-yourplatform/src/lib.rs` and `ssh-stamp/ssh-stamp-yourplatform/src/bin/ssh-stamp-yourplatform.rs`.
 //! 2. Implement the needed traits from `ssh-stamp-hal/src/traits/`. At a
 //!    minimum: a [`NetworkProviderHal`] (or [`WifiHal`]), [`OtaActions`], and
 //!    a UART type implementing the `BufferedSerial` trait from the `ssh-stamp`
