@@ -12,6 +12,23 @@
 //!
 //! Brings up ESP-specific peripherals (heap, flash, RNG, UART, radio), then
 //! hands control to the platform-agnostic [`ssh_stamp::app::run_app`].
+//!
+//! # UART Pin Assignments
+//!
+//! GPIO pin numbers for the UART bridge vary by target:
+//!
+//! | Target   | RX  | TX  | Notes                                      |
+//! |----------|-----|-----|--------------------------------------------|
+//! | ESP32    | 13  | 14  |                                            |
+//! | ESP32-C2 | 18  | 19  | GPIO9 is a strapping pin; 18/19 avoid it   |
+//! | ESP32-C3 | 20  | 21  |                                            |
+//! | ESP32-C6 | 10  | 11  | Default (also used for S2/S3)              |
+//! | ESP32-S2 | 10  | 11  |                                            |
+//! | ESP32-S3 | 10  | 11  |                                            |
+//!
+//! These are the only source of truth for pin numbers. Port binaries for
+//! other MCUs define their own assignments; no other file in this repository
+//! hard-codes UART pin values.
 
 #![no_std]
 #![no_main]
@@ -85,6 +102,39 @@ async fn main(spawner: Spawner) -> ! {
             .expect("Failed to validate the current ota partition");
     }
 
+    // UART pin assignment — single source of truth for all ESP32 targets.
+    // The `cfg_if!` block selects per-target GPIO numbers that are used both
+    // for the hardware UART pins (EspUartPins) and for the config record
+    // (UartPins). No other file in the repository defines UART pin numbers.
+    cfg_if::cfg_if!(
+        if #[cfg(feature = "esp32")] {
+            let uart_pins = UartPins { rx: 13, tx: 14 };
+            let pins = EspUartPins {
+                rx: peripherals.GPIO13.into(),
+                tx: peripherals.GPIO14.into(),
+            };
+        } else if #[cfg(feature = "esp32c2")] {
+            // GPIO9 is a strapping pin - use GPIO18/19 instead to avoid boot interference
+            let uart_pins = UartPins { rx: 18, tx: 19 };
+            let pins = EspUartPins {
+                rx: peripherals.GPIO18.into(),
+                tx: peripherals.GPIO19.into(),
+            };
+        } else if #[cfg(feature = "esp32c3")] {
+            let uart_pins = UartPins { rx: 20, tx: 21 };
+            let pins = EspUartPins {
+                rx: peripherals.GPIO20.into(),
+                tx: peripherals.GPIO21.into(),
+            };
+        } else {
+            let uart_pins = UartPins { rx: 10, tx: 11 };
+            let pins = EspUartPins {
+                rx: peripherals.GPIO10.into(),
+                tx: peripherals.GPIO11.into(),
+            };
+        }
+    );
+
     debug!("Loading config");
     let flash_config = {
         let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
@@ -92,40 +142,12 @@ async fn main(spawner: Spawner) -> ! {
         };
         let mut fb = flash_storage_guard.lock().await;
         let (flash_storage, buf) = fb.split_ref_mut();
-        ssh_stamp::store::load_or_create(flash_storage, buf, mac_address())
+        store::load_or_create(flash_storage, buf, mac_address(), uart_pins)
     }
     .expect("Could not load or create SSHStampConfig");
 
     static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
     let config: &'static SunsetMutex<SSHStampConfig> = CONFIG.init(SunsetMutex::new(flash_config));
-
-    // TODO: This should be moved to the platform layer, but it needs the config for the AP password.
-    // So we need to load the config first.
-    // Refactor towards some kind of BSP (board-specific abstraction).
-    cfg_if::cfg_if!(
-        if #[cfg(feature = "esp32")] {
-            let pins = EspUartPins {
-                rx: peripherals.GPIO13.into(),
-                tx: peripherals.GPIO14.into(),
-            };
-        } else if #[cfg(feature = "esp32c2")] {
-            // GPIO9 is a strapping pin - use GPIO18/19 instead to avoid boot interference
-            let pins = EspUartPins {
-                rx: peripherals.GPIO18.into(),
-                tx: peripherals.GPIO19.into(),
-            };
-        } else if #[cfg(feature = "esp32c3")] {
-            let pins = EspUartPins {
-                rx: peripherals.GPIO20.into(),
-                tx: peripherals.GPIO21.into(),
-            };
-        } else {
-            let pins = EspUartPins {
-                rx: peripherals.GPIO10.into(),
-                tx: peripherals.GPIO11.into(),
-            };
-        }
-    );
 
     debug!("Initialising timers");
     let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);

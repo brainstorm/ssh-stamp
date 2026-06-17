@@ -78,7 +78,7 @@ INFO - SSH hostkey fingerprint: <FINGERPRINT>
 INFO - Connect to the AP `<RANDOM AP NAME>` as a DHCP client with IP: 192.168.4.1
 ```
 
-2. Connect a laptop/phone to the `ssh-stamp` AP using the printed PSK, then SSH into the device at `root@192.168.4.1`.
+2. Connect a laptop/phone to the WiFi AP using the printed SSID and PSK, then SSH into the device at `root@192.168.4.1`.
 
 3. Provisioning via SSH environment variables
 
@@ -119,14 +119,15 @@ Notes:
 
 If your SSH client doesn't forward environment variables by default, use the `-o SendEnv=VAR` option as shown above or configure `SendEnv` in your SSH client config.
 
-# Default UART Pins
-| Target  | RX | TX | 
-| ----    | -- | -- |
-| ESP32   | 13 | 14 | 
-| ESP32S2 | 11 | 10 | 
-| ESP32C2 | 18 | 19 |
-| ESP32C3 | 20 | 21 |
-| ESP32C6 | 11 | 10 |
+# UART pins
+
+Default UART RX/TX pins vary by target and are defined in the port binary (`ssh-stamp-esp32/src/bin/ssh-stamp-esp32.rs`). To look them up, run:
+
+```
+cargo build-doc
+```
+
+Then open `target/riscv32imac-unknown-none-elf/doc/ssh_stamp/index.html` and navigate to the `ssh_stamp_esp32` crate documentation, which contains a per-target pin assignment table.
 
 # Example usecases
 

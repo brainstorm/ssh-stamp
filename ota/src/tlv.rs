@@ -141,7 +141,8 @@ impl<'de> SSHDecode<'de> for Tlv {
     }
 }
 
-/// An implementation of `SSHSource` based on [[`sunset::sshwire::DecodeBytes`]]
+/// An implementation of [`sunset::sshwire::SSHSource`] that reads TLV-encoded
+/// records from a byte slice.
 ///
 pub struct TlvsSource<'a> {
     remaining_buf: &'a [u8],

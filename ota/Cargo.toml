@@ -21,6 +21,15 @@ log.workspace = true
 sha2.workspace = true
 rustc-hash.workspace = true
 
+# Bare-metal targets have no OS to provide entropy, so getrandom expects a
+# __getrandom_custom symbol at link time. The custom feature tells getrandom
+# "someone else will provide the implementation" — the port binary (e.g.
+# ssh-stamp-esp32) registers the real hardware RNG handler via
+# register_custom_getrandom!. On host targets, getrandom calls the OS
+# natively and this feature is irrelevant, hence cfg(target_os = "none").
+[target.'cfg(target_os = "none")'.dependencies]
+getrandom = { version = "0.2.10", default-features = false, features = ["custom"] }
+
 # Only for helpers and tests
 [target.'cfg(not(target_os = "none"))'.dependencies]
 clap = "4.5"
