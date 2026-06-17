@@ -42,8 +42,9 @@ use esp_println::logger;
 use esp_rtos::embassy::InterruptExecutor;
 use heapless::String;
 use log::{debug, error, warn};
-use ssh_stamp::config::SSHStampConfig;
+use ssh_stamp::config::{SSHStampConfig, UartPins};
 use ssh_stamp::platform::PlatformServices;
+use ssh_stamp::store;
 use ssh_stamp::{app, settings::DEFAULT_IP};
 use ssh_stamp_esp32::{
     BufferedUart, EspPlatform, EspUartPins, EspWifi, UART_BUF, flash, mac_address,
