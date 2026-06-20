@@ -15,23 +15,21 @@
 //!
 //! # UART Pin Assignments
 //!
-//! GPIO pin numbers for the UART bridge vary by target:
-//!
-//! | Target   | RX  | TX  | Notes                                      |
-//! |----------|-----|-----|--------------------------------------------|
-//! | ESP32    | 13  | 14  |                                            |
-//! | ESP32-C2 | 18  | 19  | GPIO9 is a strapping pin; 18/19 avoid it   |
-//! | ESP32-C3 | 20  | 21  |                                            |
-//! | ESP32-C6 | 10  | 11  | Default (also used for S2/S3)              |
-//! | ESP32-S2 | 10  | 11  |                                            |
-//! | ESP32-S3 | 10  | 11  |                                            |
-//!
-//! These are the only source of truth for pin numbers. Port binaries for
-//! other MCUs define their own assignments; no other file in this repository
-//! hard-codes UART pin values.
+//! UART pin numbers are defined per-board in [`ssh_stamp_esp32_boards::Board`].
+//! Select a board via a `board-<name>` feature (e.g. `board-esp32c6-devkitc`).
+//! See the `ssh-stamp-esp32-boards` crate documentation for the full list.
 
 #![no_std]
 #![no_main]
+
+#[cfg(not(any(
+    feature = "board-esp32c6-devkitc",
+    feature = "board-esp32c6-generic",
+    feature = "board-esp32-s2-saola",
+)))]
+compile_error!(
+    "No board feature selected. Pass --features board-<name> (e.g. board-esp32c6-devkitc). See ssh-stamp-esp32-boards crate for available boards."
+);
 
 extern crate alloc;
 
@@ -50,6 +48,7 @@ use ssh_stamp_esp32::{
     BufferedUart, EspPlatform, EspUartPins, EspWifi, UART_BUF, flash, mac_address,
     register_custom_rng, uart_task,
 };
+use ssh_stamp_esp32_boards::Board;
 use ssh_stamp_hal::{HalError, WifiError};
 use ssh_stamp_hal::{NetworkProviderHal, WifiHal};
 use static_cell::StaticCell;
@@ -103,38 +102,35 @@ async fn main(spawner: Spawner) -> ! {
             .expect("Failed to validate the current ota partition");
     }
 
-    // UART pin assignment — single source of truth for all ESP32 targets.
-    // The `cfg_if!` block selects per-target GPIO numbers that are used both
-    // for the hardware UART pins (EspUartPins) and for the config record
-    // (UartPins). No other file in the repository defines UART pin numbers.
+    // Board selection — determines UART pin numbers via the Board trait.
+    // Each board feature also activates the corresponding IC feature.
     cfg_if::cfg_if!(
-        if #[cfg(feature = "esp32")] {
-            let uart_pins = UartPins { rx: 13, tx: 14 };
-            let pins = EspUartPins {
-                rx: peripherals.GPIO13.into(),
-                tx: peripherals.GPIO14.into(),
-            };
-        } else if #[cfg(feature = "esp32c2")] {
-            // GPIO9 is a strapping pin - use GPIO18/19 instead to avoid boot interference
-            let uart_pins = UartPins { rx: 18, tx: 19 };
-            let pins = EspUartPins {
-                rx: peripherals.GPIO18.into(),
-                tx: peripherals.GPIO19.into(),
-            };
-        } else if #[cfg(feature = "esp32c3")] {
-            let uart_pins = UartPins { rx: 20, tx: 21 };
-            let pins = EspUartPins {
-                rx: peripherals.GPIO20.into(),
-                tx: peripherals.GPIO21.into(),
-            };
+        if #[cfg(feature = "board-esp32c6-devkitc")] {
+            use ssh_stamp_esp32_boards::Esp32c6Devkitc as B;
+        } else if #[cfg(feature = "board-esp32c6-generic")] {
+            use ssh_stamp_esp32_boards::Esp32c6Generic as B;
+        } else if #[cfg(feature = "board-esp32-s2-saola")] {
+            use ssh_stamp_esp32_boards::Esp32s2Saola as B;
         } else {
-            let uart_pins = UartPins { rx: 10, tx: 11 };
-            let pins = EspUartPins {
-                rx: peripherals.GPIO10.into(),
-                tx: peripherals.GPIO11.into(),
-            };
+            compile_error!("No board feature selected.");
         }
     );
+
+    let uart_pins = UartPins {
+        rx: B::UART_RX,
+        tx: B::UART_TX,
+    };
+
+    // Extract UART GPIO pins for the active board. The macro selects
+    // the correct GPIO fields from peripherals based on the board feature
+    // and verifies at compile time that they match the Board trait consts,
+    // so the binary never references peripherals.GPIONN directly and the
+    // Board trait remains the single source of truth for pin numbers.
+    let (rx_pin, tx_pin) = ssh_stamp_esp32_boards::take_uart_pins!(peripherals, B);
+    let pins = EspUartPins {
+        rx: rx_pin,
+        tx: tx_pin,
+    };
 
     debug!("Loading config");
     let flash_config = {

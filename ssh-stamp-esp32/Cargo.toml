@@ -40,6 +40,8 @@ esp-println = { version = "0.17", features = ["log-04"] }
 embedded-storage = { workspace = true }
 embedded-storage-async = { workspace = true }
 
+ssh-stamp-esp32-boards = { path = "../ssh-stamp-esp32-boards", optional = true }
+
 once_cell = { workspace = true }
 sunset-async = { workspace = true }
 sha2 = { workspace = true }
@@ -51,9 +53,19 @@ portable-atomic = { version = "1" }
 cfg-if = "1"
 
 [features]
-default = ["esp32c6"]
+default = ["board-esp32c6-devkitc"]
 sftp-ota = ["ssh-stamp/sftp-ota"]
 ipv6 = ["ssh-stamp/ipv6"]
+
+# Board features — select a specific PCB. Each enables the corresponding
+# board definition in ssh-stamp-esp32-boards AND the IC feature it targets.
+board-esp32c6-devkitc = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32c6-devkitc", "esp32c6"]
+board-esp32c6-generic = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32c6-generic", "esp32c6"]
+board-esp32-s2-saola = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32-s2-saola", "esp32s2"]
+
+# IC features — select the chip only; activated automatically by board features.
+# Kept for all Espressif MCUs even when no board definition exists yet, so the
+# chip remains targetable for custom boards or future BSP entries.
 esp32 = ["esp-hal/esp32", "esp-radio/esp32", "esp-storage/esp32", "esp-bootloader-esp-idf/esp32", "esp-alloc/esp32", "esp-backtrace/esp32", "esp-rtos/esp32", "esp-println/esp32"]
 esp32c2 = ["esp-hal/esp32c2", "esp-radio/esp32c2", "esp-storage/esp32c2", "esp-bootloader-esp-idf/esp32c2", "esp-alloc/esp32c2", "esp-backtrace/esp32c2", "esp-rtos/esp32c2", "esp-println/esp32c2"]
 esp32c3 = ["esp-hal/esp32c3", "esp-radio/esp32c3", "esp-storage/esp32c3", "esp-bootloader-esp-idf/esp32c3", "esp-alloc/esp32c3", "esp-backtrace/esp32c3", "esp-rtos/esp32c3", "esp-println/esp32c3"]

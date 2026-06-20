@@ -2397,10 +2397,15 @@ dependencies = [
  "portable-atomic",
  "sha2",
  "ssh-stamp",
+ "ssh-stamp-esp32-boards",
  "ssh-stamp-hal",
  "static_cell",
  "sunset-async",
 ]
+
+[[package]]
+name = "ssh-stamp-esp32-boards"
+version = "0.1.0"
 
 [[package]]
 name = "ssh-stamp-hal"

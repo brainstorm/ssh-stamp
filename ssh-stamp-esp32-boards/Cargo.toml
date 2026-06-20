@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "ssh-stamp-esp32-boards"
+version = "0.1.0"
+edition = "2024"
+authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
+description = "Board Support Package — per-PCB pin mappings for ssh-stamp-esp32"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/brainstorm/ssh-stamp"
+
+[features]
+board-esp32c6-devkitc = []
+board-esp32c6-generic = []
+board-esp32-s2-saola = []
+
+[lints]
+workspace = true

@@ -121,13 +121,27 @@ If your SSH client doesn't forward environment variables by default, use the `-o
 
 # UART pins
 
-Default UART RX/TX pins vary by target and are defined in the port binary (`ssh-stamp-esp32/src/bin/ssh-stamp-esp32.rs`). To look them up, run:
+UART RX/TX pins are defined per-board in the `ssh-stamp-esp32-boards` crate.
+Each board feature (e.g. `board-esp32c6-devkitc`) selects a specific PCB and
+its pin assignments. The `Board` trait is the single source of truth — no
+other file in the repository hard-codes UART pin numbers.
+
+Supported boards:
+
+| Board feature            | IC        | UART RX | UART TX | Board                                                                              |
+|--------------------------|-----------|---------|---------|------------------------------------------------------------------------------------|
+| `board-esp32c6-devkitc`  | ESP32-C6  | 10      | 11      | [ESP32-C6-DevKitC-1](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c6/esp32-c6-devkitc-1/index.html) |
+| `board-esp32c6-generic`  | ESP32-C6  | 10      | 11      | Generic ESP32-C6 board                                                              |
+| `board-esp32-s2-saola`   | ESP32-S2  | 10      | 11      | [ESP32-S2-Saola-1](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s2/esp32-s2-saola-1/index.html) |
+
+To see the full list with links, run:
 
 ```
 cargo build-doc
 ```
 
-Then open `target/riscv32imac-unknown-none-elf/doc/ssh_stamp/index.html` and navigate to the `ssh_stamp_esp32` crate documentation, which contains a per-target pin assignment table.
+Then open `target/riscv32imac-unknown-none-elf/doc/ssh_stamp_esp32_boards/index.html`,
+which contains the per-board pin assignment table.
 
 # Example usecases
 
