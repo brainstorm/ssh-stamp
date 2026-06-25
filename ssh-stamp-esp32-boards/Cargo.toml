@@ -16,5 +16,9 @@ board-esp32c6-devkitc = []
 board-esp32c6-generic = []
 board-esp32-s2-saola = []
 
+[build-dependencies]
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+
 [lints]
 workspace = true
