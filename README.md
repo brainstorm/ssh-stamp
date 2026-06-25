@@ -121,13 +121,20 @@ If your SSH client doesn't forward environment variables by default, use the `-o
 
 # UART pins
 
-Default UART RX/TX pins vary by target and are defined in the port binary (`ssh-stamp-esp32/src/bin/ssh-stamp-esp32.rs`). To look them up, run:
+UART RX/TX pins are defined per-board in `boards/*.toml` files inside the
+`ssh-stamp-esp32-boards` crate. Each board feature (e.g.
+`board-esp32c6-devkitc`) selects a specific PCB and its pin assignments.
+The TOML files are the single source of truth — no other file in the
+repository hard-codes UART pin numbers.
+
+To see the available boards and their pin assignments, run:
 
 ```
 cargo build-doc
 ```
 
-Then open `target/riscv32imac-unknown-none-elf/doc/ssh_stamp/index.html` and navigate to the `ssh_stamp_esp32` crate documentation, which contains a per-target pin assignment table.
+Then open `target/riscv32imac-unknown-none-elf/doc/ssh_stamp_esp32_boards/index.html`,
+which contains the auto-generated per-board pin assignment table.
 
 # Example usecases
 
