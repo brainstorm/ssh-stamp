@@ -13,10 +13,16 @@ fn main() {
         .split("[[package]]")
         .find(|s| s.contains("name = \"sunset\""))
         .and_then(|s| {
-            s.lines()
-                .find_map(|l| l.trim().strip_prefix("version = ").map(|v| v.trim_matches('"')))
+            s.lines().find_map(|l| {
+                l.trim()
+                    .strip_prefix("version = ")
+                    .map(|v| v.trim_matches('"'))
+            })
         })
         .unwrap_or("unknown");
-    let ident = format!("SSH-2.0-Sunset-{sunset_ver}-ssh-stamp-{}", env!("CARGO_PKG_VERSION"));
+    let ident = format!(
+        "SSH-2.0-Sunset-{sunset_ver}-ssh-stamp-{}",
+        env!("CARGO_PKG_VERSION")
+    );
     println!("cargo::rustc-env=SSH_STAMP_IDENT={ident}");
 }
