@@ -43,15 +43,15 @@ heapless = "0.9"
 esp-hal = { version = "1.1", features = ["unstable", "log-04"] }
 
 # SSH protocol
-sunset = { git = "https://github.com/mkj/sunset", rev = "fd3f8284ebca704f3c3789faf80487af18a50114", default-features = false, features = [
+sunset = { version = "0.5.0", default-features = false, features = [
     "openssh-key",
     "embedded-io",
 ] }
-sunset-async = { git = "https://github.com/mkj/sunset", rev = "fd3f8284ebca704f3c3789faf80487af18a50114", default-features = false, features = [
+sunset-async = { version = "0.5.0", default-features = false, features = [
     "multi-thread",
 ] }
-sunset-sshwire-derive = { git = "https://github.com/mkj/sunset", rev = "fd3f8284ebca704f3c3789faf80487af18a50114", default-features = false }
-sunset-sftp = { git = "https://github.com/mkj/sunset", rev = "fd3f8284ebca704f3c3789faf80487af18a50114", default-features = false }
+sunset-sshwire-derive = { version = "0.2.2", default-features = false }
+sunset-sftp = { version = "0.1.3", default-features = false }
 
 # Crypto
 sha2 = { version = "0.10", default-features = false }

@@ -28,7 +28,6 @@ pub async fn run_ota_server<W: OtaActions>(
     stdio: ChanInOut<'_>,
     ota_writer: W,
 ) -> Result<(), sunset::Error> {
-    let mut buffer_in = [0u8; 512];
     let mut request_buffer = [0u8; MAX_REQUEST_LEN];
 
     let mut file_server = SftpOtaServer::new(ota_writer);
@@ -39,7 +38,7 @@ pub async fn run_ota_server<W: OtaActions>(
         &mut file_server,
         &mut request_buffer,
     )
-    .process_loop(chan_in, chan_out, &mut buffer_in)
+    .process_loop(chan_in, chan_out)
     .await
     {
         Ok(()) => {
