@@ -27,7 +27,7 @@ use crate::handle::{self, SessionType};
 use crate::platform::PlatformServices;
 use crate::serial::BufferedSerial;
 use crate::serve;
-use crate::settings::{UART_BUFFER_SIZE, WIFI_PASSWORD_CHARS};
+use crate::settings::{SSH_STAMP_IDENT, UART_BUFFER_SIZE, WIFI_PASSWORD_CHARS};
 
 /// Ensures a `WiFi` password exists, persists a freshly-generated one if not,
 /// prints the SSH hostkey fingerprint, and returns a ready-to-use
@@ -50,6 +50,8 @@ pub async fn prepare_ap_config<P: PlatformServices>(
     platform: &P,
 ) -> Result<WifiApConfigStatic, sunset::Error> {
     let mut guard = config.lock().await;
+
+    info!("SSH server ident: {SSH_STAMP_IDENT}");
 
     if guard.wifi_ap_pw.is_empty() {
         let pw = generate_wifi_password()?;
