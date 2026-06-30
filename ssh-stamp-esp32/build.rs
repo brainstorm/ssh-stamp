@@ -5,4 +5,6 @@
 
 fn main() {
     println!("cargo:rustc-link-arg-bins=-Tlinkall.x");
+    // esp-radio sets this cfg on 5GHz-capable chips (ESP32-C5).
+    println!("cargo:rustc-check-cfg=cfg(wifi_has_5g)");
 }

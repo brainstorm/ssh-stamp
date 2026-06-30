@@ -1017,6 +1017,7 @@ dependencies = [
  "esp32",
  "esp32c2",
  "esp32c3",
+ "esp32c5",
  "esp32c6",
  "esp32h2",
  "esp32s2",
@@ -1076,12 +1077,14 @@ dependencies = [
  "esp-wifi-sys-esp32",
  "esp-wifi-sys-esp32c2",
  "esp-wifi-sys-esp32c3",
+ "esp-wifi-sys-esp32c5",
  "esp-wifi-sys-esp32c6",
  "esp-wifi-sys-esp32s2",
  "esp-wifi-sys-esp32s3",
  "esp32",
  "esp32c2",
  "esp32c3",
+ "esp32c5",
  "esp32c6",
  "esp32s2",
  "esp32s3",
@@ -1113,6 +1116,10 @@ dependencies = [
  "document-features",
  "embassy-net-driver",
  "embassy-sync 0.8.0",
+ "embedded-io 0.6.1",
+ "embedded-io 0.7.1",
+ "embedded-io-async 0.6.1",
+ "embedded-io-async 0.7.0",
  "enumset",
  "esp-alloc",
  "esp-config",
@@ -1126,6 +1133,7 @@ dependencies = [
  "esp-wifi-sys-esp32",
  "esp-wifi-sys-esp32c2",
  "esp-wifi-sys-esp32c3",
+ "esp-wifi-sys-esp32c5",
  "esp-wifi-sys-esp32c6",
  "esp-wifi-sys-esp32h2",
  "esp-wifi-sys-esp32s2",
@@ -1133,6 +1141,7 @@ dependencies = [
  "esp32",
  "esp32c2",
  "esp32c3",
+ "esp32c5",
  "esp32c6",
  "esp32s2",
  "esp32s3",
@@ -1180,6 +1189,7 @@ dependencies = [
  "esp32",
  "esp32c2",
  "esp32c3",
+ "esp32c5",
  "esp32c6",
  "esp32s2",
  "esp32s3",
@@ -1283,6 +1293,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "esp-wifi-sys-esp32c5"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "039337bdc50a40335ed01598e83053164426fed82817492719513d922dcc3592"
+
+[[package]]
 name = "esp-wifi-sys-esp32c6"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1341,6 +1357,15 @@ name = "esp32c3"
 version = "0.32.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21e89ed62cf6c043a6d29c520b02a13b359ec8a75d67b65d4330ed717d15fe97"
+dependencies = [
+ "vcell",
+]
+
+[[package]]
+name = "esp32c5"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6f8ba56195df10224263c60ceb93b4578450019ee838b7338039a281117cb02"
 dependencies = [
  "vcell",
 ]

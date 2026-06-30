@@ -29,7 +29,7 @@ edge-nal-embassy = { workspace = true }
 heapless = { workspace = true }
 
 esp-hal = { workspace = true }
-esp-radio = { version = "1.0.0-beta.0", features = ["wifi", "log-04"] }
+esp-radio = { version = "1.0.0-beta.0", features = ["wifi", "log-04", "unstable"] }
 esp-storage = { version = "0.9" }
 esp-bootloader-esp-idf = { version = "0.5" }
 esp-alloc = { version = "0.10" }
@@ -59,6 +59,7 @@ ipv6 = ["ssh-stamp/ipv6"]
 
 # Board features — select a specific PCB. Each enables the corresponding
 # board definition in ssh-stamp-esp32-boards AND the IC feature it targets.
+board-esp32c5-devkitc = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32c5-devkitc", "esp32c5"]
 board-esp32c6-devkitc = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32c6-devkitc", "esp32c6"]
 board-esp32c6-generic = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32c6-generic", "esp32c6"]
 board-esp32-s2-saola = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32-s2-saola", "esp32s2"]
@@ -69,6 +70,7 @@ board-esp32-s2-saola = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/bo
 esp32 = ["esp-hal/esp32", "esp-radio/esp32", "esp-storage/esp32", "esp-bootloader-esp-idf/esp32", "esp-alloc/esp32", "esp-backtrace/esp32", "esp-rtos/esp32", "esp-println/esp32"]
 esp32c2 = ["esp-hal/esp32c2", "esp-radio/esp32c2", "esp-storage/esp32c2", "esp-bootloader-esp-idf/esp32c2", "esp-alloc/esp32c2", "esp-backtrace/esp32c2", "esp-rtos/esp32c2", "esp-println/esp32c2"]
 esp32c3 = ["esp-hal/esp32c3", "esp-radio/esp32c3", "esp-storage/esp32c3", "esp-bootloader-esp-idf/esp32c3", "esp-alloc/esp32c3", "esp-backtrace/esp32c3", "esp-rtos/esp32c3", "esp-println/esp32c3"]
+esp32c5 = ["esp-hal/esp32c5", "esp-radio/esp32c5", "esp-storage/esp32c5", "esp-bootloader-esp-idf/esp32c5", "esp-alloc/esp32c5", "esp-backtrace/esp32c5", "esp-rtos/esp32c5", "esp-println/esp32c5"]
 esp32c6 = ["esp-hal/esp32c6", "esp-radio/esp32c6", "esp-storage/esp32c6", "esp-bootloader-esp-idf/esp32c6", "esp-alloc/esp32c6", "esp-backtrace/esp32c6", "esp-rtos/esp32c6", "esp-println/esp32c6"]
 esp32s2 = ["esp-hal/esp32s2", "esp-radio/esp32s2", "esp-storage/esp32s2", "esp-bootloader-esp-idf/esp32s2", "esp-alloc/esp32s2", "esp-backtrace/esp32s2", "esp-rtos/esp32s2", "esp-println/esp32s2"]
 esp32s3 = ["esp-hal/esp32s3", "esp-radio/esp32s3", "esp-storage/esp32s3", "esp-bootloader-esp-idf/esp32s3", "esp-alloc/esp32s3", "esp-backtrace/esp32s3", "esp-rtos/esp32s3", "esp-println/esp32s3"]

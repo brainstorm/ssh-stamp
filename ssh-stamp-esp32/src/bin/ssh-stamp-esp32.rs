@@ -27,6 +27,7 @@ extern crate alloc;
 
 use embassy_executor::Spawner;
 use esp_hal::interrupt::{Priority, software::SoftwareInterruptControl};
+#[cfg(not(feature = "esp32c5"))]
 use esp_hal::rng::{Trng, TrngSource};
 use esp_println::logger;
 use esp_rtos::embassy::InterruptExecutor;
@@ -77,11 +78,23 @@ async fn main(spawner: Spawner) -> ! {
     // cryptographically secure random values.
     // See: https://github.com/brainstorm/ssh-stamp/issues/10
     // See: https://github.com/esp-rs/esp-hal/pull/3829
-    let trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
-    let trng = Trng::try_new().unwrap();
-    let rng = trng.downgrade();
-    register_custom_rng(rng);
-    drop(trng_source);
+    //
+    // TODO: The ESP32-C5 TRNG is not yet available in esp-hal 1.1.1. Once
+    // https://github.com/esp-rs/esp-hal/pull/4978 lands in a release, remove
+    // this cfg_if! and use Trng/TrngSource unconditionally for all targets.
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "esp32c5")] {
+            // ESP32-C5 has no TRNG peripheral — use the basic Rng directly.
+            let rng = esp_hal::rng::Rng::new();
+            register_custom_rng(rng);
+        } else {
+            let trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
+            let trng = Trng::try_new().unwrap();
+            let rng = trng.downgrade();
+            register_custom_rng(rng);
+            drop(trng_source);
+        }
+    }
 
     debug!("Initialising flash");
     flash::init(peripherals.FLASH);
@@ -149,8 +162,10 @@ async fn main(spawner: Spawner) -> ! {
     cfg_if::cfg_if! {
         if #[cfg(any(feature = "esp32", feature = "esp32s2", feature = "esp32s3"))] {
             let interrupt_spawner = interrupt_executor.start(Priority::Priority3);
-        } else {
+        } else if #[cfg(feature = "esp32c6")] {
             let interrupt_spawner = interrupt_executor.start(Priority::Priority10);
+        } else {
+            let interrupt_spawner = interrupt_executor.start(Priority::Priority1);
         }
     }
     interrupt_spawner

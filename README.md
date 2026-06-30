@@ -37,12 +37,12 @@ Build/flash for your board using the short command pattern (replace `<target>` w
 | `esp32` | `xtensa-esp32-none-elf` |
 | `esp32c2` | `riscv32imc-unknown-none-elf` |
 | `esp32c3` | `riscv32imc-unknown-none-elf` |
+| `esp32c5` | `riscv32imac-unknown-none-elf` |
 | `esp32c6` | `riscv32imac-unknown-none-elf` |
 | `esp32s2` | `xtensa-esp32s2-none-elf` |
 | `esp32s3` | `xtensa-esp32s3-none-elf` |
 
 <!--| `esp32c61` | `riscv32imac-unknown-none-elf` |-->
-<!--| `esp32c5` | `riscv32imac-unknown-none-elf` |-->
 
 ```
 rustup target add <rust-toolchain-target>
@@ -112,9 +112,17 @@ export SSH_STAMP_WIFI_STA_SSID=""
 ssh -o SendEnv=SSH_STAMP_WIFI_STA_SSID root@192.168.4.1
 ```
 
+- To select the WiFi band (ESP32-C5 only; ignored on other chips):
+```
+export SSH_STAMP_WIFI_BAND="5g"
+ssh -o SendEnv=SSH_STAMP_WIFI_BAND root@192.168.4.1
+```
+Accepts `2.4g` (default), `5g`, or `auto`. The device resets after applying the change.
+
 Notes:
 - `SSH_STAMP_PUBKEY` is accepted on first-boot to add the initial admin key.
 - `SSH_STAMP_WIFI_AP_SSID` and `SSH_STAMP_WIFI_AP_PSK` may be applied while authenticated via pubkey (or on first-boot). After a successful change the device persists the settings and performs a software reset so the new WiFi settings take effect.
+- `SSH_STAMP_WIFI_BAND` selects the AP radio band. Only the ESP32-C5 supports 5GHz; other chips ignore the setting and stay on 2.4GHz.
 - If you prefer a single-step provisioning, export all three env vars locally and forward them with `SendEnv` in the same SSH invocation.
 
 If your SSH client doesn't forward environment variables by default, use the `-o SendEnv=VAR` option as shown above or configure `SendEnv` in your SSH client config.

@@ -35,6 +35,22 @@ impl Default for UartConfig {
     }
 }
 
+/// `WiFi` band mode for the access point.
+///
+/// Selects whether the AP operates on 2.4GHz, 5GHz, or both.
+/// Only the ESP32-C5 supports 5GHz; other chips ignore the setting
+/// and always operate on 2.4GHz.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BandMode {
+    /// 2.4 GHz only (default, supported by all ESP32 variants).
+    #[default]
+    Band2_4G,
+    /// 5 GHz only (ESP32-C5 only).
+    Band5G,
+    /// Dual-band 2.4 GHz + 5 GHz (ESP32-C5 only).
+    Auto,
+}
+
 /// `WiFi` access point configuration.
 ///
 /// Contains settings for running the device as a `WiFi` access point.
@@ -49,8 +65,10 @@ pub struct WifiApConfigStatic {
     /// which is not something we want to support.
     pub ap_password: String<63>,
     pub sta_password: String<63>,
-    /// `WiFi` channel (1-14 for 2.4GHz).
+    /// `WiFi` channel (1-14 for 2.4GHz, 36+ for 5GHz).
     pub channel: u8,
+    /// `WiFi` band mode (2.4GHz / 5GHz / Auto). Ignored on chips without 5GHz.
+    pub band: BandMode,
     /// MAC address for the access point interface.
     pub mac: [u8; 6],
 }
@@ -63,6 +81,7 @@ impl Default for WifiApConfigStatic {
             sta_ssid: String::new(),
             sta_password: String::new(),
             channel: 1,
+            band: BandMode::default(),
             mac: [0; 6],
         }
     }
