@@ -18,7 +18,7 @@ use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
 use heapless::String;
 use log::{debug, error, info, warn};
 use ssh_key::HashAlg;
-use ssh_stamp_hal::WifiApConfigStatic;
+use ssh_stamp_hal::{BandMode, WifiApConfigStatic};
 use sunset::SignKey;
 use sunset_async::SunsetMutex;
 
@@ -74,12 +74,26 @@ pub async fn prepare_ap_config<P: PlatformServices>(
 
     print_hostkey_fingerprint(&guard.hostkey);
 
+    // Resolve band mode from the stored u8 (0=2.4G, 1=5G, 2=Auto).
+    // 5GHz is only available on the ESP32-C5; other chips silently fall
+    // back to 2.4GHz at the radio level.
+    let band = match guard.wifi_ap_band {
+        1 => BandMode::Band5G,
+        2 => BandMode::Auto,
+        _ => BandMode::Band2_4G,
+    };
+    // Channel 1 for 2.4GHz, channel 36 for 5GHz/Auto (esp-radio default).
+    let channel = if guard.wifi_ap_band == 0 { 1 } else { 36 };
+
+    info!("WIFI AP band: {band:?} (channel {channel})");
+
     Ok(WifiApConfigStatic {
         ap_ssid: guard.wifi_ap_ssid.clone(),
         ap_password: guard.wifi_ap_pw.clone(),
         sta_ssid: guard.wifi_sta_ssid.clone(),
         sta_password: guard.wifi_sta_pw.clone(),
-        channel: 1,
+        channel,
+        band,
         mac,
     })
 }

@@ -30,13 +30,15 @@ use embassy_time::{Duration, Timer};
 use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_radio::wifi::{
-    AuthenticationMethod, Config as RadioConfig, ControllerConfig, Interface, WifiController,
-    ap::AccessPointConfig, ap::EventInfo, sta::StationConfig,
+    AuthenticationMethod, BandMode as RadioBandMode, Config as RadioConfig, ControllerConfig,
+    Interface, WifiController, ap::AccessPointConfig, ap::EventInfo, sta::StationConfig,
 };
 use log::info;
 use log::{debug, error, warn};
 use ssh_stamp::settings::STATION_MODE_MAX_RETRY_SECONDS;
-use ssh_stamp_hal::{HalError, NetworkProviderHal, WifiApConfigStatic, WifiError, WifiHal};
+use ssh_stamp_hal::{
+    BandMode, HalError, NetworkProviderHal, WifiApConfigStatic, WifiError, WifiHal,
+};
 use static_cell::StaticCell;
 
 extern crate alloc;
@@ -98,41 +100,18 @@ impl NetworkProviderHal for EspWifi {
             .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
 
         let sta_ssid_static: &'static str = STA_SSID_CELL.init(ap_config.sta_ssid.clone()).as_str();
-        let ap_radio_config;
-        let net_config;
-        let wifi_interface;
-
-        if sta_ssid_static.is_empty() {
-            info!("Wifi configuring Access Point Mode");
-            let password = AllocString::from(ap_config.ap_password.as_str());
-            ap_radio_config = RadioConfig::AccessPoint(
-                AccessPointConfig::default()
-                    .with_ssid(AllocString::from(ap_config.ap_ssid.as_str()))
-                    .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
-                    .with_password(password.clone()),
-            );
-            net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
-                address: Ipv4Cidr::new(self.gateway, 24),
-                gateway: Some(self.gateway),
-                // The embassy-net heapless version is different so `Default::default()` must be used here.
-                dns_servers: Default::default(),
-            });
-            wifi_interface = Interface::access_point();
-        } else {
-            info!("Wifi configuring Station Mode");
-            let password = AllocString::from(ap_config.sta_password.as_str());
-            ap_radio_config = RadioConfig::Station(
-                StationConfig::default()
-                    .with_ssid(AllocString::from(ap_config.sta_ssid.as_str()))
-                    .with_password(password.clone()),
-            );
-            net_config = embassy_net::Config::dhcpv4(DhcpConfig::default());
-            wifi_interface = Interface::station();
-        }
+        let (ap_radio_config, net_config, wifi_interface) =
+            build_radio_config(&ap_config, sta_ssid_static, self.gateway);
 
         let controller_config = ControllerConfig::default().with_initial_config(ap_radio_config);
-        let wifi_controller = WifiController::new(wifi_peri, controller_config)
+        let mut wifi_controller = WifiController::new(wifi_peri, controller_config)
             .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
+
+        // Set the WiFi band mode (AP mode only). Only the ESP32-C5 supports
+        // 5GHz; other chips ignore the setting.
+        if sta_ssid_static.is_empty() {
+            set_band_mode(&mut wifi_controller, ap_config.band);
+        }
 
         let seed = u64::from(self.rng.random()) << 32 | u64::from(self.rng.random());
 
@@ -191,6 +170,62 @@ impl NetworkProviderHal for EspWifi {
         }
 
         Ok(ap_stack)
+    }
+}
+
+/// Build the esp-radio config, embassy-net config, and interface for AP or
+/// Station mode based on whether a Station SSID is configured.
+fn build_radio_config(
+    ap_config: &WifiApConfigStatic,
+    sta_ssid: &str,
+    gateway: Ipv4Addr,
+) -> (RadioConfig, embassy_net::Config, Interface) {
+    if sta_ssid.is_empty() {
+        info!("Wifi configuring Access Point Mode");
+        let password = AllocString::from(ap_config.ap_password.as_str());
+        let radio = RadioConfig::AccessPoint(
+            AccessPointConfig::default()
+                .with_ssid(AllocString::from(ap_config.ap_ssid.as_str()))
+                .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
+                .with_password(password)
+                .with_channel(ap_config.channel),
+        );
+        let net = embassy_net::Config::ipv4_static(StaticConfigV4 {
+            address: Ipv4Cidr::new(gateway, 24),
+            gateway: Some(gateway),
+            dns_servers: Default::default(),
+        });
+        (radio, net, Interface::access_point())
+    } else {
+        info!("Wifi configuring Station Mode");
+        let password = AllocString::from(ap_config.sta_password.as_str());
+        let radio = RadioConfig::Station(
+            StationConfig::default()
+                .with_ssid(AllocString::from(ap_config.sta_ssid.as_str()))
+                .with_password(password),
+        );
+        let net = embassy_net::Config::dhcpv4(DhcpConfig::default());
+        (radio, net, Interface::station())
+    }
+}
+
+/// Set the `WiFi` band mode on the controller. Only the ESP32-C5 supports 5GHz;
+/// on other chips `set_band_mode` returns an error that is logged and ignored.
+fn set_band_mode(wifi_controller: &mut WifiController<'static>, band: BandMode) {
+    let radio_band = match band {
+        BandMode::Band2_4G => RadioBandMode::_2_4G,
+        // _5G and Auto only exist when wifi_has_5g cfg is set (ESP32-C5).
+        // On other chips, fall back to 2.4GHz.
+        #[cfg(wifi_has_5g)]
+        BandMode::Band5G => RadioBandMode::_5G,
+        #[cfg(wifi_has_5g)]
+        BandMode::Auto => RadioBandMode::Auto,
+        #[cfg(not(wifi_has_5g))]
+        _ => RadioBandMode::_2_4G,
+    };
+    match wifi_controller.set_band_mode(radio_band.clone()) {
+        Ok(()) => debug!("Set WiFi band mode: {radio_band:?}"),
+        Err(e) => warn!("Failed to set band mode {radio_band:?}: {e:?} (non-5G chip?)"),
     }
 }
 

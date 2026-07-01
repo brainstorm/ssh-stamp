@@ -48,6 +48,8 @@ pub struct SSHStampConfig {
     /// Access Point Mode
     pub wifi_ap_ssid: String<32>,
     pub wifi_ap_pw: String<63>,
+    /// AP band mode (2.4GHz / 5GHz / Auto). Ignored on chips without 5GHz.
+    pub wifi_ap_band: u8,
     /// Station Mode
     pub wifi_sta_ssid: String<32>,
     pub wifi_sta_pw: String<63>,
@@ -82,7 +84,7 @@ const MAC_RANDOM_SENTINEL: [u8; 6] = [0xFF; 6];
 
 impl SSHStampConfig {
     /// Bump this when the format changes
-    pub const CURRENT_VERSION: u8 = 10;
+    pub const CURRENT_VERSION: u8 = 11;
 
     /// Check if configured for random MAC on each boot
     #[must_use]
@@ -118,6 +120,7 @@ impl SSHStampConfig {
         // Wifi Access Point Mode
         let wifi_ap_ssid = Self::generate_wifi_ssid()?;
         let wifi_ap_pw = Self::generate_wifi_password()?;
+        let wifi_ap_band = 0; // BandMode::Band2_4G (default)
         // Wifi Station Mode
         let wifi_sta_ssid = String::<32>::new();
         let wifi_sta_pw = String::<63>::new();
@@ -133,6 +136,7 @@ impl SSHStampConfig {
             pubkeys: Default::default(),
             wifi_ap_ssid,
             wifi_ap_pw,
+            wifi_ap_band,
             wifi_sta_ssid,
             wifi_sta_pw,
             mac,
@@ -332,6 +336,7 @@ impl SSHEncode for SSHStampConfig {
         // Wifi Access Point Mode
         self.wifi_ap_ssid.as_str().enc(s)?;
         self.wifi_ap_pw.as_str().enc(s)?;
+        self.wifi_ap_band.enc(s)?;
         // Wifi Station Mode
         self.wifi_sta_ssid.as_str().enc(s)?;
         self.wifi_sta_pw.as_str().enc(s)?;
@@ -369,6 +374,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         let wifi_ap_ssid = String::try_from(wifi_ap_ssid_str).map_err(|_| WireError::BadString)?;
         let wifi_ap_pw_str: &str = SSHDecode::dec(s)?;
         let wifi_ap_pw = String::try_from(wifi_ap_pw_str).map_err(|_| WireError::BadString)?;
+        let wifi_ap_band: u8 = SSHDecode::dec(s)?;
         // Wifi Station Mode
         let wifi_sta_ssid_str: &str = SSHDecode::dec(s)?;
         let wifi_sta_ssid =
@@ -395,6 +401,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
             pubkeys,
             wifi_ap_ssid,
             wifi_ap_pw,
+            wifi_ap_band,
             wifi_sta_ssid,
             wifi_sta_pw,
             mac,
