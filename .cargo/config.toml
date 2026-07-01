@@ -9,11 +9,13 @@
 #
 # Boards with a BSP entry use a board-<name> feature:
 build-esp32c5 = "build --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c5-devkitc"
+build-esp32c61 = "build --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c61-devkitc"
 build-esp32c6 = "build --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c6-devkitc"
 build-esp32c6-generic = "build --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c6-generic"
 build-esp32s2 = "build --profile esp32s2 --target xtensa-esp32s2-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32-s2-saola -Z build-std=core,alloc"
 
 run-esp32c5 = "run --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c5-devkitc"
+run-esp32c61 = "run --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c61-devkitc"
 run-esp32c6 = "run --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c6-devkitc"
 run-esp32c6-generic = "run --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c6-generic"
 run-esp32s2 = "run --profile esp32s2 --target xtensa-esp32s2-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32-s2-saola"

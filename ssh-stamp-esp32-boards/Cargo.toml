@@ -13,6 +13,7 @@ repository = "https://github.com/brainstorm/ssh-stamp"
 
 [features]
 board-esp32c5-devkitc = []
+board-esp32c61-devkitc = []
 board-esp32c6-devkitc = []
 board-esp32c6-generic = []
 board-esp32-s2-saola = []

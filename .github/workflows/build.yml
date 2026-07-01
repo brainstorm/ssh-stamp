@@ -28,6 +28,7 @@ jobs:
             { soc: "esp32c3", board: "esp32c3", target: "riscv32imc-unknown-none-elf", toolchain: "stable", buildstd: "", binlib: "--lib" },
             { soc: "esp32c5", board: "board-esp32c5-devkitc", target: "riscv32imac-unknown-none-elf", toolchain: "stable", buildstd: "", binlib: "--bin ssh-stamp-esp32" },
             { soc: "esp32c6", board: "board-esp32c6-devkitc", target: "riscv32imac-unknown-none-elf", toolchain: "stable", buildstd: "", binlib: "--bin ssh-stamp-esp32" },
+            { soc: "esp32c61", board: "board-esp32c61-devkitc", target: "riscv32imac-unknown-none-elf", toolchain: "stable", buildstd: "", binlib: "--bin ssh-stamp-esp32" },
             { soc: "esp32c6", board: "board-esp32c6-generic", target: "riscv32imac-unknown-none-elf", toolchain: "stable", buildstd: "", binlib: "--bin ssh-stamp-esp32" },
             # Xtensa devices:
             { soc: "esp32", board: "esp32", target: "xtensa-esp32-none-elf", toolchain: "esp", buildstd: "-Z build-std=core,alloc", binlib: "--lib" },

@@ -27,7 +27,7 @@ extern crate alloc;
 
 use embassy_executor::Spawner;
 use esp_hal::interrupt::{Priority, software::SoftwareInterruptControl};
-#[cfg(not(feature = "esp32c5"))]
+#[cfg(not(any(feature = "esp32c5", feature = "esp32c61")))]
 use esp_hal::rng::{Trng, TrngSource};
 use esp_println::logger;
 use esp_rtos::embassy::InterruptExecutor;
@@ -79,12 +79,12 @@ async fn main(spawner: Spawner) -> ! {
     // See: https://github.com/brainstorm/ssh-stamp/issues/10
     // See: https://github.com/esp-rs/esp-hal/pull/3829
     //
-    // TODO: The ESP32-C5 TRNG is not yet available in esp-hal 1.1.1. Once
+    // TODO: The ESP32-C5/C61 TRNG is not yet available in esp-hal 1.1.1. Once
     // https://github.com/esp-rs/esp-hal/pull/4978 lands in a release, remove
     // this cfg_if! and use Trng/TrngSource unconditionally for all targets.
     cfg_if::cfg_if! {
-        if #[cfg(feature = "esp32c5")] {
-            // ESP32-C5 has no TRNG peripheral — use the basic Rng directly.
+        if #[cfg(any(feature = "esp32c5", feature = "esp32c61"))] {
+            // ESP32-C5/C61 have no TRNG peripheral — use the basic Rng directly.
             let rng = esp_hal::rng::Rng::new();
             register_custom_rng(rng);
         } else {
