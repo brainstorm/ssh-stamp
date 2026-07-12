@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Generic ESP32-C6 board.
+# Uses GPIO 10/11 for UART, matching the safe default on the ESP32-C6 family.
+
+[pins]
+uart_rx = 10
+uart_tx = 11

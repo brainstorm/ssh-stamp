@@ -6,6 +6,7 @@
 
 //! Hardware configuration types.
 
+use core::str::FromStr;
 use heapless::String;
 
 /// UART peripheral configuration.
@@ -35,6 +36,57 @@ impl Default for UartConfig {
     }
 }
 
+/// `WiFi` band mode for the access point.
+///
+/// Selects whether the AP operates on 2.4GHz, 5GHz, or both.
+/// Only the ESP32-C5 supports 5GHz; other chips ignore the setting
+/// and always operate on 2.4GHz.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BandMode {
+    /// 2.4 GHz only (default, supported by all ESP32 variants).
+    #[default]
+    Band2_4G,
+    /// 5 GHz only (ESP32-C5 only).
+    Band5G,
+    /// Dual-band 2.4 GHz + 5 GHz (ESP32-C5 only).
+    Auto,
+}
+
+impl FromStr for BandMode {
+    type Err = ();
+
+    /// Parses a `WiFi` band mode from a string value.
+    ///
+    /// Accepts `"2.4g"`, `"2g"`, `"24g"`, `"5g"`, or `"auto"` (case-insensitive).
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        if value.eq_ignore_ascii_case("2.4g")
+            || value.eq_ignore_ascii_case("2g")
+            || value.eq_ignore_ascii_case("24g")
+        {
+            Ok(Self::Band2_4G)
+        } else if value.eq_ignore_ascii_case("5g") {
+            Ok(Self::Band5G)
+        } else if value.eq_ignore_ascii_case("auto") {
+            Ok(Self::Auto)
+        } else {
+            Err(())
+        }
+    }
+}
+
+impl From<u8> for BandMode {
+    /// Resolves a `BandMode` from its on-wire `u8` representation.
+    ///
+    /// Unknown values fall back to `Band2_4G` (the default).
+    fn from(value: u8) -> Self {
+        match value {
+            1 => Self::Band5G,
+            2 => Self::Auto,
+            _ => Self::Band2_4G,
+        }
+    }
+}
+
 /// `WiFi` access point configuration.
 ///
 /// Contains settings for running the device as a `WiFi` access point.
@@ -49,8 +101,10 @@ pub struct WifiApConfigStatic {
     /// which is not something we want to support.
     pub ap_password: String<63>,
     pub sta_password: String<63>,
-    /// `WiFi` channel (1-14 for 2.4GHz).
+    /// `WiFi` channel (1-14 for 2.4GHz, 36+ for 5GHz).
     pub channel: u8,
+    /// `WiFi` band mode (2.4GHz / 5GHz / Auto). Ignored on chips without 5GHz.
+    pub band: BandMode,
     /// MAC address for the access point interface.
     pub mac: [u8; 6],
 }
@@ -63,6 +117,7 @@ impl Default for WifiApConfigStatic {
             sta_ssid: String::new(),
             sta_password: String::new(),
             channel: 1,
+            band: BandMode::default(),
             mac: [0; 6],
         }
     }

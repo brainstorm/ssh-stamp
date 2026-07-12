@@ -134,7 +134,7 @@ impl<W: OtaActions> UpdateProcessor<W> {
 
         debug!(
             "Decoding TLV from tlv_holder: {:?},  current_len: {}",
-            &self.tlv_holder, &self.current_len
+            self.tlv_holder, self.current_len
         );
         let mut singular_source = tlv::TlvsSource::new(&self.tlv_holder[..self.current_len]);
 

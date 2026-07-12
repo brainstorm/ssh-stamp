@@ -52,7 +52,7 @@ pub async fn connection_loop<P: PlatformServices>(
         let mut ph = ProgressHolder::new();
         let ev = serv.progress(&mut ph).await?;
 
-        trace!("{:?}", &ev);
+        trace!("{ev:?}");
 
         let mut ctx = EventContext {
             session: &mut session,

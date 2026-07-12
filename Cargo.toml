@@ -17,7 +17,7 @@ license = "GPL-3.0-or-later"
 [lib]
 
 [workspace]
-members = ["ssh-stamp-hal", "ssh-stamp-esp32", "ota"]
+members = ["ssh-stamp-hal", "ssh-stamp-esp32", "ssh-stamp-esp32-boards", "ota"]
 
 [workspace.lints.clippy]
 mem_forget = "warn"

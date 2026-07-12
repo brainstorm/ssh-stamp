@@ -31,6 +31,7 @@ use sunset_async::{ChanInOut, SSHServer, SunsetMutex};
 
 pub mod env_parser {
     use super::String;
+    use core::str::FromStr;
 
     /// Limit the maximum length accepted for an SSH key, Ed25519 lines
     /// should be less than this.
@@ -129,6 +130,17 @@ pub mod env_parser {
         }
         Some([parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]])
     }
+
+    /// Parses a `WiFi` band mode from an environment variable value.
+    ///
+    /// Accepts: `"2.4g"`, `"5g"`, `"auto"` (case-insensitive).
+    /// Returns the band as a `u8`: 0 = 2.4GHz, 1 = 5GHz, 2 = Auto.
+    #[must_use]
+    pub fn parse_wifi_band(value: &str) -> Option<u8> {
+        ssh_stamp_hal::BandMode::from_str(value)
+            .ok()
+            .map(|band| band as u8)
+    }
 }
 
 #[derive(Debug)]
@@ -163,7 +175,7 @@ pub fn session_subsystem(
             a.fail()?;
         } else if a.command()?.to_lowercase().as_str() == "sftp" {
             if let Some(ch) = ctx.session.take() {
-                debug_assert!(ch.num() == a.channel());
+                debug_assert_eq!(ch.num(), a.channel());
                 #[cfg(feature = "sftp-ota")]
                 {
                     a.succeed()?;
@@ -220,7 +232,7 @@ pub async fn session_shell<P: PlatformServices>(
                     platform.reset();
                 }
             }
-            debug_assert!(ch.num() == a.channel());
+            debug_assert_eq!(ch.num(), a.channel());
             a.succeed()?;
             debug!("We got shell");
             platform.activate_uart();
@@ -382,6 +394,9 @@ pub async fn session_env(
             "SSH_STAMP_WIFI_AP_PSK" => {
                 wifi_ap_psk_env(a, config, ctx).await?;
             }
+            "SSH_STAMP_WIFI_BAND" => {
+                wifi_band_env(a, config, ctx).await?;
+            }
             "SSH_STAMP_WIFI_STA_SSID" => {
                 wifi_sta_ssid_env(a, config, ctx).await?;
             }
@@ -495,6 +510,38 @@ pub async fn wifi_ap_psk_env(
         }
     } else {
         warn!("SSH_STAMP_WIFI_AP_PSK env received but not authenticated; rejecting");
+        a.fail()?;
+    }
+    Ok(())
+}
+
+/// Handles `SSH_STAMP_WIFI_BAND` environment variable requests.
+///
+/// Accepts `2.4g`, `5g`, or `auto` (case-insensitive). Only the ESP32-C5
+/// supports 5GHz; other chips will ignore the setting at runtime.
+/// Triggers a config save + reset on success.
+///
+/// # Errors
+/// Returns an error if SSH protocol operations fail.
+pub async fn wifi_band_env(
+    a: sunset::event::ServEnvironmentRequest<'_, '_>,
+    config: &SunsetMutex<SSHStampConfig>,
+    ctx: &mut EventContext<'_>,
+) -> Result<(), sunset::Error> {
+    let mut config_guard = config.lock().await;
+    if *ctx.auth_checked || config_guard.first_login {
+        if let Some(band) = env_parser::parse_wifi_band(a.value()?) {
+            config_guard.wifi_ap_band = band;
+            debug!("Set WIFI AP band from ENV: {band}");
+            a.succeed()?;
+            *ctx.config_changed = true;
+            *ctx.needs_reset = true;
+        } else {
+            warn!("SSH_STAMP_WIFI_BAND must be 2.4g, 5g, or auto");
+            a.fail()?;
+        }
+    } else {
+        warn!("SSH_STAMP_WIFI_BAND env received but not authenticated; rejecting");
         a.fail()?;
     }
     Ok(())

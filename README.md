@@ -37,12 +37,11 @@ Build/flash for your board using the short command pattern (replace `<target>` w
 | `esp32` | `xtensa-esp32-none-elf` |
 | `esp32c2` | `riscv32imc-unknown-none-elf` |
 | `esp32c3` | `riscv32imc-unknown-none-elf` |
+| `esp32c5` | `riscv32imac-unknown-none-elf` |
 | `esp32c6` | `riscv32imac-unknown-none-elf` |
+| `esp32c61` | `riscv32imac-unknown-none-elf` |
 | `esp32s2` | `xtensa-esp32s2-none-elf` |
 | `esp32s3` | `xtensa-esp32s3-none-elf` |
-
-<!--| `esp32c61` | `riscv32imac-unknown-none-elf` |-->
-<!--| `esp32c5` | `riscv32imac-unknown-none-elf` |-->
 
 ```
 rustup target add <rust-toolchain-target>
@@ -112,22 +111,37 @@ export SSH_STAMP_WIFI_STA_SSID=""
 ssh -o SendEnv=SSH_STAMP_WIFI_STA_SSID root@192.168.4.1
 ```
 
+- To select the WiFi band (ESP32-C5 only; ignored on other chips):
+```
+export SSH_STAMP_WIFI_BAND="5g"
+ssh -o SendEnv=SSH_STAMP_WIFI_BAND root@192.168.4.1
+```
+Accepts `2.4g` (default), `5g`, or `auto`. The device resets after applying the change.
+
 Notes:
 - `SSH_STAMP_PUBKEY` is accepted on first-boot to add the initial admin key.
 - `SSH_STAMP_WIFI_AP_SSID` and `SSH_STAMP_WIFI_AP_PSK` may be applied while authenticated via pubkey (or on first-boot). After a successful change the device persists the settings and performs a software reset so the new WiFi settings take effect.
+- `SSH_STAMP_WIFI_BAND` selects the AP radio band. Only the ESP32-C5 supports 5GHz; other chips ignore the setting and stay on 2.4GHz.
 - If you prefer a single-step provisioning, export all three env vars locally and forward them with `SendEnv` in the same SSH invocation.
 
 If your SSH client doesn't forward environment variables by default, use the `-o SendEnv=VAR` option as shown above or configure `SendEnv` in your SSH client config.
 
 # UART pins
 
-Default UART RX/TX pins vary by target and are defined in the port binary (`ssh-stamp-esp32/src/bin/ssh-stamp-esp32.rs`). To look them up, run:
+UART RX/TX pins are defined per-board in `boards/*.toml` files inside the
+`ssh-stamp-esp32-boards` crate. Each board feature (e.g.
+`board-esp32c6-devkitc`) selects a specific PCB and its pin assignments.
+The TOML files are the single source of truth — no other file in the
+repository hard-codes UART pin numbers.
+
+To see the available boards and their pin assignments, run:
 
 ```
 cargo build-doc
 ```
 
-Then open `target/riscv32imac-unknown-none-elf/doc/ssh_stamp/index.html` and navigate to the `ssh_stamp_esp32` crate documentation, which contains a per-target pin assignment table.
+Then open `target/riscv32imac-unknown-none-elf/doc/ssh_stamp_esp32_boards/index.html`,
+which contains the auto-generated per-board pin assignment table.
 
 # Example usecases
 

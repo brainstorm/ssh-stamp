@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Espressif ESP32-C61-DevKitC-1
+url = "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c61/esp32-c61-devkitc-1/user_guide.html"
+
+[pins]
+uart_rx = 2
+uart_tx = 3

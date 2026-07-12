@@ -15,20 +15,10 @@
 //!
 //! # UART Pin Assignments
 //!
-//! GPIO pin numbers for the UART bridge vary by target:
-//!
-//! | Target   | RX  | TX  | Notes                                      |
-//! |----------|-----|-----|--------------------------------------------|
-//! | ESP32    | 13  | 14  |                                            |
-//! | ESP32-C2 | 18  | 19  | GPIO9 is a strapping pin; 18/19 avoid it   |
-//! | ESP32-C3 | 20  | 21  |                                            |
-//! | ESP32-C6 | 10  | 11  | Default (also used for S2/S3)              |
-//! | ESP32-S2 | 10  | 11  |                                            |
-//! | ESP32-S3 | 10  | 11  |                                            |
-//!
-//! These are the only source of truth for pin numbers. Port binaries for
-//! other MCUs define their own assignments; no other file in this repository
-//! hard-codes UART pin values.
+//! UART pin numbers are defined per-board in `boards/*.toml` files in the
+//! `ssh-stamp-esp32-boards` crate. Select a board via a `board-<name>` feature
+//! (e.g. `board-esp32c6-devkitc`). See the `ssh-stamp-esp32-boards` crate
+//! documentation for the full list.
 
 #![no_std]
 #![no_main]
@@ -37,6 +27,7 @@ extern crate alloc;
 
 use embassy_executor::Spawner;
 use esp_hal::interrupt::{Priority, software::SoftwareInterruptControl};
+#[cfg(not(any(feature = "esp32c5", feature = "esp32c61")))]
 use esp_hal::rng::{Trng, TrngSource};
 use esp_println::logger;
 use esp_rtos::embassy::InterruptExecutor;
@@ -50,6 +41,7 @@ use ssh_stamp_esp32::{
     BufferedUart, EspPlatform, EspUartPins, EspWifi, UART_BUF, flash, mac_address,
     register_custom_rng, uart_task,
 };
+use ssh_stamp_esp32_boards::Board;
 use ssh_stamp_hal::{HalError, WifiError};
 use ssh_stamp_hal::{NetworkProviderHal, WifiHal};
 use static_cell::StaticCell;
@@ -86,11 +78,23 @@ async fn main(spawner: Spawner) -> ! {
     // cryptographically secure random values.
     // See: https://github.com/brainstorm/ssh-stamp/issues/10
     // See: https://github.com/esp-rs/esp-hal/pull/3829
-    let trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
-    let trng = Trng::try_new().unwrap();
-    let rng = trng.downgrade();
-    register_custom_rng(rng);
-    drop(trng_source);
+    //
+    // TODO: The ESP32-C5/C61 TRNG is not yet available in esp-hal 1.1.1. Once
+    // https://github.com/esp-rs/esp-hal/pull/4978 lands in a release, remove
+    // this cfg_if! and use Trng/TrngSource unconditionally for all targets.
+    cfg_if::cfg_if! {
+        if #[cfg(any(feature = "esp32c5", feature = "esp32c61"))] {
+            // ESP32-C5/C61 have no TRNG peripheral — use the basic Rng directly.
+            let rng = esp_hal::rng::Rng::new();
+            register_custom_rng(rng);
+        } else {
+            let trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
+            let trng = Trng::try_new().unwrap();
+            let rng = trng.downgrade();
+            register_custom_rng(rng);
+            drop(trng_source);
+        }
+    }
 
     debug!("Initialising flash");
     flash::init(peripherals.FLASH);
@@ -103,38 +107,21 @@ async fn main(spawner: Spawner) -> ! {
             .expect("Failed to validate the current ota partition");
     }
 
-    // UART pin assignment — single source of truth for all ESP32 targets.
-    // The `cfg_if!` block selects per-target GPIO numbers that are used both
-    // for the hardware UART pins (EspUartPins) and for the config record
-    // (UartPins). No other file in the repository defines UART pin numbers.
-    cfg_if::cfg_if!(
-        if #[cfg(feature = "esp32")] {
-            let uart_pins = UartPins { rx: 13, tx: 14 };
-            let pins = EspUartPins {
-                rx: peripherals.GPIO13.into(),
-                tx: peripherals.GPIO14.into(),
-            };
-        } else if #[cfg(feature = "esp32c2")] {
-            // GPIO9 is a strapping pin - use GPIO18/19 instead to avoid boot interference
-            let uart_pins = UartPins { rx: 18, tx: 19 };
-            let pins = EspUartPins {
-                rx: peripherals.GPIO18.into(),
-                tx: peripherals.GPIO19.into(),
-            };
-        } else if #[cfg(feature = "esp32c3")] {
-            let uart_pins = UartPins { rx: 20, tx: 21 };
-            let pins = EspUartPins {
-                rx: peripherals.GPIO20.into(),
-                tx: peripherals.GPIO21.into(),
-            };
-        } else {
-            let uart_pins = UartPins { rx: 10, tx: 11 };
-            let pins = EspUartPins {
-                rx: peripherals.GPIO10.into(),
-                tx: peripherals.GPIO11.into(),
-            };
-        }
-    );
+    // Board selection — the generated select_board! macro expands to a
+    // cfg_if! that imports the active board's struct as B. The pin numbers
+    // come from boards/*.toml via build.rs codegen — no per-board lines here.
+    ssh_stamp_esp32_boards::select_board!();
+    debug!("Active board: {}", B::NAME);
+
+    let (rx_pin, tx_pin, rx_num, tx_num) = ssh_stamp_esp32_boards::take_uart_pins!(peripherals);
+    let pins = EspUartPins {
+        rx: rx_pin,
+        tx: tx_pin,
+    };
+    let uart_pins = UartPins {
+        rx: rx_num,
+        tx: tx_num,
+    };
 
     debug!("Loading config");
     let flash_config = {
@@ -175,8 +162,10 @@ async fn main(spawner: Spawner) -> ! {
     cfg_if::cfg_if! {
         if #[cfg(any(feature = "esp32", feature = "esp32s2", feature = "esp32s3"))] {
             let interrupt_spawner = interrupt_executor.start(Priority::Priority3);
-        } else {
+        } else if #[cfg(feature = "esp32c6")] {
             let interrupt_spawner = interrupt_executor.start(Priority::Priority10);
+        } else {
+            let interrupt_spawner = interrupt_executor.start(Priority::Priority1);
         }
     }
     interrupt_spawner
