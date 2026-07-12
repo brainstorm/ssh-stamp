@@ -31,6 +31,7 @@ use sunset_async::{ChanInOut, SSHServer, SunsetMutex};
 
 pub mod env_parser {
     use super::String;
+    use core::str::FromStr;
 
     /// Limit the maximum length accepted for an SSH key, Ed25519 lines
     /// should be less than this.
@@ -136,12 +137,9 @@ pub mod env_parser {
     /// Returns the band as a `u8`: 0 = 2.4GHz, 1 = 5GHz, 2 = Auto.
     #[must_use]
     pub fn parse_wifi_band(value: &str) -> Option<u8> {
-        match value.to_ascii_lowercase().as_str() {
-            "2.4g" | "2g" | "24g" => Some(0),
-            "5g" => Some(1),
-            "auto" => Some(2),
-            _ => None,
-        }
+        ssh_stamp_hal::BandMode::from_str(value)
+            .ok()
+            .map(|band| band as u8)
     }
 }
 

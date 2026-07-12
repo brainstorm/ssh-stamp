@@ -6,6 +6,7 @@
 
 //! Hardware configuration types.
 
+use core::str::FromStr;
 use heapless::String;
 
 /// UART peripheral configuration.
@@ -49,6 +50,41 @@ pub enum BandMode {
     Band5G,
     /// Dual-band 2.4 GHz + 5 GHz (ESP32-C5 only).
     Auto,
+}
+
+impl FromStr for BandMode {
+    type Err = ();
+
+    /// Parses a `WiFi` band mode from a string value.
+    ///
+    /// Accepts `"2.4g"`, `"2g"`, `"24g"`, `"5g"`, or `"auto"` (case-insensitive).
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        if value.eq_ignore_ascii_case("2.4g")
+            || value.eq_ignore_ascii_case("2g")
+            || value.eq_ignore_ascii_case("24g")
+        {
+            Ok(Self::Band2_4G)
+        } else if value.eq_ignore_ascii_case("5g") {
+            Ok(Self::Band5G)
+        } else if value.eq_ignore_ascii_case("auto") {
+            Ok(Self::Auto)
+        } else {
+            Err(())
+        }
+    }
+}
+
+impl From<u8> for BandMode {
+    /// Resolves a `BandMode` from its on-wire `u8` representation.
+    ///
+    /// Unknown values fall back to `Band2_4G` (the default).
+    fn from(value: u8) -> Self {
+        match value {
+            1 => Self::Band5G,
+            2 => Self::Auto,
+            _ => Self::Band2_4G,
+        }
+    }
 }
 
 /// `WiFi` access point configuration.

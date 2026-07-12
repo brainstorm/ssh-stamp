@@ -75,11 +75,7 @@ pub async fn prepare_ap_config<P: PlatformServices>(
     // Resolve band mode from the stored u8 (0=2.4G, 1=5G, 2=Auto).
     // 5GHz is only available on the ESP32-C5; other chips silently fall
     // back to 2.4GHz at the radio level.
-    let band = match guard.wifi_ap_band {
-        1 => BandMode::Band5G,
-        2 => BandMode::Auto,
-        _ => BandMode::Band2_4G,
-    };
+    let band = BandMode::from(guard.wifi_ap_band);
     // Channel 1 for 2.4GHz, channel 36 for 5GHz/Auto (esp-radio default).
     let channel = if guard.wifi_ap_band == 0 { 1 } else { 36 };
 
