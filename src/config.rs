@@ -253,7 +253,7 @@ fn enc_ipv4_config(v: Option<&StaticConfigV4>, s: &mut dyn SSHSink) -> WireResul
     v.is_some().enc(s)?;
     if let Some(v) = v {
         v.address.address().to_bits().enc(s)?;
-        debug!("enc_ipv4_config: prefix = {}", &v.address.prefix_len());
+        debug!("enc_ipv4_config: prefix = {}", v.address.prefix_len());
         v.address.prefix_len().enc(s)?;
         // to u32
         let gw = v.gateway.as_ref().map(|g| g.to_bits());

@@ -97,7 +97,7 @@ where
 {
     let c = SSHStampConfig::new(default_mac, default_uart_pins)?;
     save(flash, buf, &c)?;
-    debug!("Created new config: {:?}", &c);
+    debug!("Created new config: {c:?}");
 
     Ok(c)
 }
@@ -157,9 +157,9 @@ where
         hash: config_hash(config)?,
     };
 
-    debug!("Before write_ssh, with hash: {}", &sc.hash.hex_dump());
+    debug!("Before write_ssh, with hash: {}", sc.hash.hex_dump());
     let l = sshwire::write_ssh(buf, &sc)?;
-    debug!("Saved flash (after write_ssh): {}", &buf[..l].hex_dump());
+    debug!("Saved flash (after write_ssh): {}", buf[..l].hex_dump());
 
     debug!(
         "CONFIG_OFFSET + FlashConfig::BUF_SIZE = {}",

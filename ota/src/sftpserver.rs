@@ -143,7 +143,7 @@ impl<T: OpaqueFileHandle + InitFromSeed, W: OtaActions> SftpServer<T> for SftpOt
             self.file_handle = Some(handle.clone());
             info!(
                 "SftpServer Open operation: path = {:?}, write_permission = {:?}, handle = {:?}",
-                path, self.write_permission, &handle
+                path, self.write_permission, handle
             );
             Ok(handle)
         } else {

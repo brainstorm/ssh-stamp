@@ -175,7 +175,7 @@ pub fn session_subsystem(
             a.fail()?;
         } else if a.command()?.to_lowercase().as_str() == "sftp" {
             if let Some(ch) = ctx.session.take() {
-                debug_assert!(ch.num() == a.channel());
+                debug_assert_eq!(ch.num(), a.channel());
                 #[cfg(feature = "sftp-ota")]
                 {
                     a.succeed()?;
@@ -232,7 +232,7 @@ pub async fn session_shell<P: PlatformServices>(
                     platform.reset();
                 }
             }
-            debug_assert!(ch.num() == a.channel());
+            debug_assert_eq!(ch.num(), a.channel());
             a.succeed()?;
             debug!("We got shell");
             platform.activate_uart();
