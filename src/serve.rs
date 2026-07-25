@@ -42,6 +42,7 @@ pub async fn connection_loop<P: PlatformServices>(
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
     config: &SunsetMutex<SSHStampConfig>,
     platform: &P,
+    #[cfg(feature = "can")] can_queue: &Channel<NoopRawMutex, ChanHandle, 1>,
 ) -> Result<(), sunset::Error> {
     let mut session: Option<ChanHandle> = None;
     let mut config_changed = false;
@@ -59,6 +60,8 @@ pub async fn connection_loop<P: PlatformServices>(
             auth_checked: &mut auth_checked,
             config_changed: &mut config_changed,
             needs_reset: &mut needs_reset,
+            #[cfg(feature = "can")]
+            can_queue,
         };
 
         match ev {

@@ -19,6 +19,8 @@ use heapless::String;
 use log::{debug, error, info, warn};
 use ssh_key::HashAlg;
 use ssh_stamp_hal::{BandMode, WifiApConfigStatic};
+#[cfg(feature = "can")]
+use sunset::ChanHandle;
 use sunset::SignKey;
 use sunset_async::SunsetMutex;
 
@@ -110,7 +112,6 @@ where
     U: BufferedSerial,
     P: PlatformServices,
 {
-    // TODO: Are the size of those buffers reasonable?
     let mut rx_buffer = [0u8; 1536];
     let mut tx_buffer = [0u8; 1536];
 
@@ -134,7 +135,16 @@ where
         let ssh_server = serve::ssh_wait_for_initialisation(&mut inbuf, &mut outbuf);
 
         let chan_pipe = Channel::<NoopRawMutex, SessionType, 1>::new();
+        #[cfg(feature = "can")]
+        let can_queue = Channel::<NoopRawMutex, ChanHandle, 1>::new();
+        #[cfg(feature = "can")]
+        let connection =
+            serve::connection_loop(&ssh_server, &chan_pipe, config, platform, &can_queue);
+        #[cfg(not(feature = "can"))]
         let connection = serve::connection_loop(&ssh_server, &chan_pipe, config, platform);
+        #[cfg(feature = "can")]
+        let bridge = handle::ssh_client(uart, &ssh_server, &chan_pipe, platform, &can_queue);
+        #[cfg(not(feature = "can"))]
         let bridge = handle::ssh_client(uart, &ssh_server, &chan_pipe, platform);
 
         let (mut rsock, mut wsock) = tcp_socket.split();

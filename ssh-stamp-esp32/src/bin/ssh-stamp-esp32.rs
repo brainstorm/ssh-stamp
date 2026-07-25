@@ -37,6 +37,8 @@ use ssh_stamp::config::{SSHStampConfig, UartPins};
 use ssh_stamp::platform::PlatformServices;
 use ssh_stamp::store;
 use ssh_stamp::{app, settings::DEFAULT_IP};
+#[cfg(feature = "can")]
+use ssh_stamp_esp32::{BufferedCan, CAN_BUF, EspCanPins, can_task};
 use ssh_stamp_esp32::{
     BufferedUart, EspPlatform, EspUartPins, EspWifi, UART_BUF, flash, mac_address,
     register_custom_rng, uart_task,
@@ -171,8 +173,33 @@ async fn main(spawner: Spawner) -> ! {
     interrupt_spawner
         .spawn(uart_task(uart_buf, peripherals.UART1, pins).expect("uart_task spawn failed"));
 
+    #[cfg(feature = "can")]
+    let can_buf: &'static BufferedCan = {
+        // The Waveshare board shares GPIO19/20 between USB and the CAN
+        // transceiver; steer them to CAN before starting the TWAI driver.
+        #[cfg(feature = "board-esp32-s3-touch-lcd-43")]
+        ssh_stamp_esp32::route_can_transceiver(
+            peripherals.I2C0,
+            peripherals.GPIO8.into(),
+            peripherals.GPIO9.into(),
+        );
+
+        let can_pins = ssh_stamp_esp32_boards::take_can_pins!(peripherals);
+        let can_pins = EspCanPins {
+            tx: can_pins.0,
+            rx: can_pins.1,
+        };
+        let can_buf = CAN_BUF.init_with(BufferedCan::new);
+        interrupt_spawner
+            .spawn(can_task(can_buf, peripherals.TWAI0, can_pins).expect("can_task spawn failed"));
+        can_buf
+    };
+
     debug!("Initialising radio");
 
+    #[cfg(feature = "can")]
+    let platform = EspPlatform::new(can_buf);
+    #[cfg(not(feature = "can"))]
     let platform = EspPlatform::new();
     let ap_config = app::prepare_ap_config(config, &platform)
         .await

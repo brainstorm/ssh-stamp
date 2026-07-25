@@ -55,6 +55,7 @@ cfg-if = "1"
 [features]
 default = ["board-esp32c6-devkitc"]
 sftp-ota = ["ssh-stamp/sftp-ota"]
+can = ["ssh-stamp/can"]
 ipv6 = ["ssh-stamp/ipv6"]
 
 # Board features — select a specific PCB. Each enables the corresponding
@@ -64,6 +65,7 @@ board-esp32c61-devkitc = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/
 board-esp32c6-devkitc = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32c6-devkitc", "esp32c6"]
 board-esp32c6-generic = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32c6-generic", "esp32c6"]
 board-esp32-s2-saola = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32-s2-saola", "esp32s2"]
+board-esp32-s3-touch-lcd-43 = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32-s3-touch-lcd-43", "esp32s3"]
 
 # IC features — select the chip only; activated automatically by board features.
 # Kept for all Espressif MCUs even when no board definition exists yet, so the

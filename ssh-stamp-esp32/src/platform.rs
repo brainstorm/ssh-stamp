@@ -17,19 +17,30 @@ use crate::EspOtaWriter;
 use crate::flash;
 use crate::uart::UART_SIGNAL;
 
-/// Zero-sized handle through which the app layer reaches ESP-only services.
+/// Handle through which the app layer reaches ESP-only services.
 ///
 /// Construct once on the embassy executor and pass `&EspPlatform` to
 /// [`ssh_stamp::app::run_app`] / [`ssh_stamp::app::prepare_ap_config`].
-pub struct EspPlatform;
+pub struct EspPlatform {
+    #[cfg(feature = "can")]
+    can: &'static crate::can::BufferedCan,
+}
 
 impl EspPlatform {
+    #[cfg(not(feature = "can"))]
     #[must_use]
     pub fn new() -> Self {
-        Self
+        Self {}
+    }
+
+    #[cfg(feature = "can")]
+    #[must_use]
+    pub fn new(can: &'static crate::can::BufferedCan) -> Self {
+        Self { can }
     }
 }
 
+#[cfg(not(feature = "can"))]
 impl Default for EspPlatform {
     fn default() -> Self {
         Self::new()
@@ -38,6 +49,14 @@ impl Default for EspPlatform {
 
 impl PlatformServices for EspPlatform {
     type OtaWriter = EspOtaWriter;
+
+    #[cfg(feature = "can")]
+    type Can = crate::can::BufferedCan;
+
+    #[cfg(feature = "can")]
+    fn can(&self) -> &'static Self::Can {
+        self.can
+    }
 
     async fn save_config(&self, config: &SSHStampConfig) -> Result<(), HalError> {
         let Some(flash_guard) = flash::get_flash_n_buffer() else {

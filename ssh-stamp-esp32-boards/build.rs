@@ -86,6 +86,8 @@ struct BoardDef {
 struct Pins {
     uart_rx: u8,
     uart_tx: u8,
+    can_tx: Option<u8>,
+    can_rx: Option<u8>,
 }
 
 /// A parsed board ready for codegen.
@@ -96,6 +98,8 @@ struct Board {
     url: Option<String>,
     uart_rx: u8,
     uart_tx: u8,
+    can_tx: Option<u8>,
+    can_rx: Option<u8>,
 }
 
 /// Errors surfaced by the build script as `Result`.
@@ -190,6 +194,8 @@ fn load_boards(boards_dir: &Path) -> Result<Vec<Board>> {
             url: def.url,
             uart_rx: def.pins.uart_rx,
             uart_tx: def.pins.uart_tx,
+            can_tx: def.pins.can_tx,
+            can_rx: def.pins.can_rx,
         });
     }
 
@@ -231,22 +237,27 @@ fn generate_code(boards: &[Board]) -> Result<String> {
     gen_structs(&mut out, boards)?;
     gen_catalog(&mut out, boards)?;
     gen_take_uart_pins(&mut out, boards);
+    gen_take_can_pins(&mut out, boards);
     gen_select_board(&mut out, boards);
 
     Ok(out)
 }
 
 fn gen_structs(out: &mut String, boards: &[Board]) -> Result<()> {
-    // One `pub struct` + `impl Board` per board, with a rustdoc link to the
-    // board's official documentation page (if the TOML provided a `url`).
     for b in boards {
         let doc = match &b.url {
             Some(url) => format!("/// Board: {}.\n///\n/// <{url}>", b.name),
             None => format!("/// Board: {}.", b.name),
         };
+        let can_tx = b
+            .can_tx
+            .map_or("None".to_string(), |v| format!("Some({v})"));
+        let can_rx = b
+            .can_rx
+            .map_or("None".to_string(), |v| format!("Some({v})"));
         writeln!(
             out,
-            "{doc}\npub struct {s};\nimpl Board for {s} {{\n    const NAME: &str = \"{n}\";\n}}",
+            "{doc}\npub struct {s};\nimpl Board for {s} {{\n    const NAME: &str = \"{n}\";\n    const CAN_TX: Option<u8> = {can_tx};\n    const CAN_RX: Option<u8> = {can_rx};\n}}",
             s = b.struct_name,
             n = b.name,
         )?;
@@ -316,6 +327,73 @@ fn gen_take_uart_pins(out: &mut String, boards: &[Board]) {
         .collect();
 
     let rendered = TAKE_UART_PINS_TMPL
+        .replace("{branches}", &branches)
+        .replace("{features}", &features.join(", "));
+
+    out.push_str(&rendered);
+    out.push('\n');
+}
+
+/// Doc-comment + signature for `take_can_pins!`. Per-board branches are
+/// inserted at `{branches}` and the fallback `not(any(...))` feature list
+/// at `{features}`.
+const TAKE_CAN_PINS_TMPL: &str = r#"/// Extract CAN GPIO pins from `peripherals`.
+///
+/// Returns `(tx_pin, rx_pin)`. The pin numbers come from `boards/*.toml`.
+/// Only call this macro when the `can` feature is enabled.
+///
+/// # Panics
+///
+/// Compile-time error if no board feature is selected, or if the selected
+/// board does not have CAN pins defined.
+#[macro_export]
+macro_rules! take_can_pins {
+    ($peripherals:expr) => {{
+{branches}        #[cfg(not(any({features})))]
+        {{
+            compile_error!("No board feature selected. Pass --features board-<name>. See ssh-stamp-esp32-boards crate for available boards.");
+        }}
+    }};
+}
+"#;
+
+/// Per-board `#[cfg]` branch inside `take_can_pins!`.
+const CAN_PIN_BRANCH_SOME: &str = r#"        #[cfg(feature = "{feature}")]
+        {{
+            (
+                $peripherals.GPIO{tx}.into(),
+                $peripherals.GPIO{rx}.into(),
+            )
+        }}
+"#;
+
+const CAN_PIN_BRANCH_NONE: &str = r#"        #[cfg(feature = "{feature}")]
+        {{
+            compile_error!("Board `{feature}` does not have CAN pins defined. Enable the `can` feature only for boards with CAN support.");
+        }}
+"#;
+
+fn gen_take_can_pins(out: &mut String, boards: &[Board]) {
+    let mut branches = String::new();
+    for b in boards {
+        if let (Some(tx), Some(rx)) = (b.can_tx, b.can_rx) {
+            branches.push_str(
+                &CAN_PIN_BRANCH_SOME
+                    .replace("{feature}", &b.feature)
+                    .replace("{tx}", &tx.to_string())
+                    .replace("{rx}", &rx.to_string()),
+            );
+        } else {
+            branches.push_str(&CAN_PIN_BRANCH_NONE.replace("{feature}", &b.feature));
+        }
+    }
+
+    let features: Vec<String> = boards
+        .iter()
+        .map(|b| format!("feature = \"{}\"", b.feature))
+        .collect();
+
+    let rendered = TAKE_CAN_PINS_TMPL
         .replace("{branches}", &branches)
         .replace("{features}", &features.join(", "));
 

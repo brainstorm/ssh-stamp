@@ -96,6 +96,8 @@
 extern crate alloc;
 
 pub mod app;
+#[cfg(feature = "can")]
+pub mod can;
 pub mod config;
 pub mod errors;
 pub mod handle;

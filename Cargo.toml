@@ -97,6 +97,7 @@ pastey = "0.1"
 pretty-hex = { version = "0.4", default-features = false }
 embedded-io-async = "0.7"
 embassy-embedded-hal = "0.6"
+embedded-can = "0.4"
 
 [dependencies]
 ota = { path = "ota" }
@@ -112,6 +113,7 @@ embassy-net = { workspace = true }
 smoltcp = { workspace = true }
 embassy-time = { workspace = true }
 embedded-io-async = { workspace = true }
+embedded-can = { workspace = true, optional = true }
 hex = { version = "0.4", default-features = false }
 log = { workspace = true }
 ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
@@ -163,3 +165,6 @@ ipv6 = []
 
 # Enables the SFTP OTA Subsystem. Use packer to pack a binary and PUT it over sftp
 sftp-ota = []
+
+# Enables CAN bus tunnelling over SSH via the "can" subsystem
+can = ["dep:embedded-can"]
