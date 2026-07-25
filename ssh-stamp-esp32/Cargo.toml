@@ -56,6 +56,12 @@ cfg-if = "1"
 default = ["board-esp32c6-devkitc"]
 sftp-ota = ["ssh-stamp/sftp-ota"]
 can = ["ssh-stamp/can"]
+# Bench bring-up variant of `can`: run the TWAI controller in self-test
+# (no-acknowledge) mode so each frame is transmitted exactly once even when
+# no other CAN node is attached (scope/analyzer only). Leave this OFF for a
+# real bus — Normal mode retransmits until a node acknowledges, as CAN
+# reliability expects.
+can-no-ack = ["can"]
 ipv6 = ["ssh-stamp/ipv6"]
 
 # Board features — select a specific PCB. Each enables the corresponding

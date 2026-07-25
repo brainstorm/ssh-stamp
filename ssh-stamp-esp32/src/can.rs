@@ -12,6 +12,7 @@
 use core::future::Future;
 
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pipe::Pipe};
+use embassy_time::{Duration, with_timeout};
 use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals::TWAI0;
 use esp_hal::twai::{self, EspTwaiFrame, ExtendedId, StandardId, TwaiMode};
@@ -25,6 +26,30 @@ const OUTWARD_BUF_SZ: usize = 256;
 
 /// Longest slcan line: `T` + 8 ID chars + 1 DLC char + 16 data chars.
 const SLCAN_LINE_SZ: usize = 32;
+
+/// TWAI operating mode.
+///
+/// `Normal` is what a real bus needs: the controller takes part in
+/// acknowledgement and retransmits a frame until some node acknowledges it.
+/// On a bench with no acknowledging peer (only a scope/analyzer attached)
+/// that same rule makes a single write repeat on the wire, so the
+/// `can-no-ack` feature switches to `SelfTest` mode, which drops the
+/// acknowledgement requirement: one slcan line, exactly one frame.
+#[cfg(feature = "can-no-ack")]
+const TWAI_MODE: TwaiMode = TwaiMode::SelfTest;
+#[cfg(not(feature = "can-no-ack"))]
+const TWAI_MODE: TwaiMode = TwaiMode::Normal;
+
+/// Safety net for transmissions stuck retrying (shorted/unwired bus, or a
+/// frame nothing acknowledges in `Normal` mode). Dropping the transmit
+/// future on timeout issues a TWAI TX-abort, cancelling the pending
+/// retransmissions instead of retrying forever. In `Normal` mode the
+/// timeout is generous so arbitration on a busy but healthy bus never
+/// drops frames; with `can-no-ack` any wait at all means a bus fault.
+#[cfg(feature = "can-no-ack")]
+const TX_TIMEOUT: Duration = Duration::from_millis(1);
+#[cfg(not(feature = "can-no-ack"))]
+const TX_TIMEOUT: Duration = Duration::from_millis(10);
 
 /// Bidirectional pipe buffer between the TWAI peripheral and the SSH
 /// `can` subsystem bridge. Frames travel slcan-encoded in both pipes.
@@ -105,9 +130,16 @@ impl BufferedCan {
                             };
                             if let Some(esp_frame) =
                                 id.and_then(|id| EspTwaiFrame::new(id, &frame.data))
-                                && let Err(e) = twai_tx.transmit_async(&esp_frame).await
                             {
-                                warn!("TWAI TX error: {e:?}");
+                                match with_timeout(TX_TIMEOUT, twai_tx.transmit_async(&esp_frame))
+                                    .await
+                                {
+                                    Ok(Ok(())) => {}
+                                    Ok(Err(e)) => warn!("TWAI TX error: {e:?}"),
+                                    Err(_) => warn!(
+                                        "TWAI TX stuck (bus fault or missing ACK), aborting retransmission"
+                                    ),
+                                }
                             }
                         }
                         line.clear();
@@ -208,13 +240,8 @@ pub async fn can_task(
     twai0: TWAI0<'static>,
     pins: EspCanPins<'static>,
 ) {
-    let twai_config = twai::TwaiConfiguration::new(
-        twai0,
-        pins.rx,
-        pins.tx,
-        twai::BaudRate::B500K,
-        TwaiMode::Normal,
-    );
+    let twai_config =
+        twai::TwaiConfiguration::new(twai0, pins.rx, pins.tx, twai::BaudRate::B500K, TWAI_MODE);
 
     let twai = twai_config.into_async().start();
     can_buf.run(twai).await;
