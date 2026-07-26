@@ -48,6 +48,8 @@ pub async fn connection_loop<P: PlatformServices>(
     let mut config_changed = false;
     let mut needs_reset = false;
     let mut auth_checked = false;
+    #[cfg(all(feature = "sftp-ota", feature = "can"))]
+    let mut can_dispatched = false;
 
     loop {
         let mut ph = ProgressHolder::new();
@@ -62,6 +64,8 @@ pub async fn connection_loop<P: PlatformServices>(
             needs_reset: &mut needs_reset,
             #[cfg(feature = "can")]
             can_queue,
+            #[cfg(all(feature = "sftp-ota", feature = "can"))]
+            can_dispatched: &mut can_dispatched,
         };
 
         match ev {

@@ -175,14 +175,9 @@ async fn main(spawner: Spawner) -> ! {
 
     #[cfg(feature = "can")]
     let can_buf: &'static BufferedCan = {
-        // The Waveshare board shares GPIO19/20 between USB and the CAN
-        // transceiver; steer them to CAN before starting the TWAI driver.
-        #[cfg(feature = "board-esp32-s3-touch-lcd-43")]
-        ssh_stamp_esp32::route_can_transceiver(
-            peripherals.I2C0,
-            peripherals.GPIO8.into(),
-            peripherals.GPIO9.into(),
-        );
+        // Boards that mux their CAN pins with other functions declare the
+        // routing in their TOML; a no-op for boards without a [can_mux].
+        ssh_stamp_esp32_boards::setup_can_transceiver!(peripherals);
 
         let can_pins = ssh_stamp_esp32_boards::take_can_pins!(peripherals);
         let can_pins = EspCanPins {
@@ -195,12 +190,13 @@ async fn main(spawner: Spawner) -> ! {
         can_buf
     };
 
-    debug!("Initialising radio");
-
     #[cfg(feature = "can")]
     let platform = EspPlatform::new(can_buf);
     #[cfg(not(feature = "can"))]
     let platform = EspPlatform::new();
+
+    debug!("Initialising radio");
+
     let ap_config = app::prepare_ap_config(config, &platform)
         .await
         .expect("Failed to prepare AP config");

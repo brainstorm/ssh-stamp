@@ -36,12 +36,6 @@
 pub trait Board {
     /// Human-readable board name (e.g. `"esp32c6-devkitc"`).
     const NAME: &'static str;
-
-    /// CAN TX pin number, if the board has CAN support.
-    const CAN_TX: Option<u8>;
-
-    /// CAN RX pin number, if the board has CAN support.
-    const CAN_RX: Option<u8>;
 }
 
 include!(concat!(env!("OUT_DIR"), "/boards_gen.rs"));

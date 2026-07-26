@@ -26,9 +26,6 @@ mod rng;
 mod timer;
 mod uart;
 
-#[cfg(all(feature = "can", feature = "board-esp32-s3-touch-lcd-43"))]
-pub use can::route_can_transceiver;
-
 #[cfg(feature = "can")]
 pub use can::{BufferedCan, CAN_BUF, EspCanPins, can_task};
 pub use flash::{EspOtaWriter, FlashBuffer, get_flash_n_buffer, init as flash_init};

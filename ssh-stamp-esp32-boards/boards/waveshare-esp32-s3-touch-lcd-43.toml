@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Waveshare ESP32-S3-Touch-LCD-4.3
+url = "https://docs.waveshare.com/ESP32-S3-Touch-LCD-4.3"
+
+[pins]
+uart_rx = 44
+uart_tx = 43
+can_tx = 20
+can_rx = 19
+
+# The CAN pins (GPIO19/20) are shared with USB through an FSUSB42UMX analog
+# switch, steered by the USB_SEL line (EXIO5) of a CH422G I2C IO expander
+# on I2C0 (direction register 0x24, output register 0x38). Writing 0x20 to
+# the output register raises only USB_SEL, routing the pins to the onboard
+# TJA1051 CAN transceiver; the other EXIO lines (TP_RST, LCD_BL, LCD_RST,
+# SD_CS) stay low — ssh-stamp does not use the LCD.
+[can_mux]
+i2c_sda = 8
+i2c_scl = 9
+writes = [[0x24, 0x01], [0x38, 0x20]]

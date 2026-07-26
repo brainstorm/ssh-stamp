@@ -27,16 +27,12 @@ pub struct EspPlatform {
 }
 
 impl EspPlatform {
-    #[cfg(not(feature = "can"))]
     #[must_use]
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    #[cfg(feature = "can")]
-    #[must_use]
-    pub fn new(can: &'static crate::can::BufferedCan) -> Self {
-        Self { can }
+    pub fn new(#[cfg(feature = "can")] can: &'static crate::can::BufferedCan) -> Self {
+        Self {
+            #[cfg(feature = "can")]
+            can,
+        }
     }
 }
 

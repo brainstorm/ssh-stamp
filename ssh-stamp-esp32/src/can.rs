@@ -233,40 +233,6 @@ pub struct EspCanPins<'a> {
 /// Static storage for the buffered CAN singleton.
 pub static CAN_BUF: StaticCell<BufferedCan> = StaticCell::new();
 
-/// Route GPIO19/20 to the onboard TJA1051 CAN transceiver.
-///
-/// On the Waveshare ESP32-S3-Touch-LCD-4.3 those pins are shared with USB
-/// through an FSUSB42UMX analog switch, steered by the `USB_SEL` line
-/// (EXIO5) of a CH422G I2C IO expander. Driving `USB_SEL` high selects CAN.
-///
-/// # Panics
-///
-/// Panics if the I2C peripheral cannot be initialised.
-#[cfg(feature = "board-esp32-s3-touch-lcd-43")]
-pub fn route_can_transceiver(
-    i2c0: esp_hal::peripherals::I2C0<'static>,
-    sda: AnyPin<'static>,
-    scl: AnyPin<'static>,
-) {
-    use esp_hal::i2c::master::I2c;
-    use log::debug;
-
-    // CH422G: direction register at address 0x24, output register at 0x38.
-    // 0x20 raises only USB_SEL (bit 5); the other EXIO lines (TP_RST,
-    // LCD_BL, LCD_RST, SD_CS) stay low — ssh-stamp does not use the LCD.
-    let mut i2c = I2c::new(i2c0, esp_hal::i2c::master::Config::default())
-        .expect("I2C init error")
-        .with_sda(sda)
-        .with_scl(scl);
-    if let Err(e) = i2c.write(0x24, &[0x01]) {
-        warn!("CH422G direction write failed: {e:?}");
-    }
-    if let Err(e) = i2c.write(0x38, &[0x20]) {
-        warn!("CH422G output write failed: {e:?}");
-    }
-    debug!("CH422G USB_SEL set: GPIO19/20 routed to CAN transceiver");
-}
-
 /// Embassy task that owns the hardware TWAI peripheral and pumps it
 /// through [`BufferedCan::run`]. Spawn from a higher-priority
 /// `InterruptExecutor` for lower latency.

@@ -34,7 +34,7 @@ jobs:
             { soc: "esp32", board: "esp32", target: "xtensa-esp32-none-elf", toolchain: "esp", buildstd: "-Z build-std=core,alloc", binlib: "--lib" },
             { soc: "esp32s2", board: "board-esp32-s2-saola", target: "xtensa-esp32s2-none-elf", toolchain: "esp", buildstd: "-Z build-std=core,alloc", binlib: "--bin ssh-stamp-esp32" },
             { soc: "esp32s3", board: "esp32s3", target: "xtensa-esp32s3-none-elf", toolchain: "esp", buildstd: "-Z build-std=core,alloc", binlib: "--lib" },
-            { soc: "esp32s3", board: "board-esp32-s3-touch-lcd-43,can", target: "xtensa-esp32s3-none-elf", toolchain: "esp", buildstd: "-Z build-std=core,alloc", binlib: "--bin ssh-stamp-esp32" },
+            { soc: "esp32s3", board: "board-waveshare-esp32-s3-touch-lcd-43,can", target: "xtensa-esp32s3-none-elf", toolchain: "esp", buildstd: "-Z build-std=core,alloc", binlib: "--bin ssh-stamp-esp32" },
         ]
     steps:
       - name: Cache
