@@ -7,7 +7,9 @@
 //! Provides [`BufferedCan`] — a software-buffered, async CAN interface
 //! satisfying [`ssh_stamp::can::BufferedCan`]. The bridge can pump the
 //! same TWAI peripheral from two futures (TX and RX) concurrently because
-//! both sides take `&self`.
+//! both sides take `&self`. All framing (slcan / GVRET auto-detection)
+//! lives in the platform-agnostic [`ssh_stamp::can`] layer; this file only
+//! moves bytes and frames.
 
 use core::future::Future;
 
@@ -17,15 +19,16 @@ use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals::TWAI0;
 use esp_hal::twai::{self, EspTwaiFrame, ExtendedId, StandardId, TwaiMode};
 use log::warn;
-use portable_atomic::{AtomicUsize, Ordering};
-use ssh_stamp::can::{CanDecoder, CanEncoder, CanId, Slcan};
+use portable_atomic::{AtomicBool, AtomicUsize, Ordering};
+use ssh_stamp::can::{CanAction, CanId, CanParser, ENCODED_FRAME_MAX, encode_frame};
 use static_cell::StaticCell;
 
-const INWARD_BUF_SZ: usize = 256;
+const INWARD_BUF_SZ: usize = 512;
 const OUTWARD_BUF_SZ: usize = 256;
 
-/// Longest slcan line: `T` + 8 ID chars + 1 DLC char + 16 data chars.
-const SLCAN_LINE_SZ: usize = 32;
+/// Bus bitrate in bit/s. Keep in sync with the `BaudRate` passed to the
+/// TWAI driver in [`can_task`]; also reported to GVRET clients.
+const CAN_BITRATE: u32 = 500_000;
 
 /// TWAI operating mode.
 ///
@@ -52,13 +55,18 @@ const TX_TIMEOUT: Duration = Duration::from_millis(1);
 const TX_TIMEOUT: Duration = Duration::from_millis(10);
 
 /// Bidirectional pipe buffer between the TWAI peripheral and the SSH
-/// `can` subsystem bridge. Frames travel slcan-encoded in both pipes.
+/// `can` subsystem bridge. Traffic in both pipes is framed by the codec
+/// layer (slcan lines or GVRET binary messages).
 pub struct BufferedCan {
     outward: Pipe<CriticalSectionRawMutex, OUTWARD_BUF_SZ>,
     inward: Pipe<CriticalSectionRawMutex, INWARD_BUF_SZ>,
     dropped_rx_frames: AtomicUsize,
-    encoder: Slcan,
-    decoder: Slcan,
+    /// Bus→host framing: GVRET binary after the host sent `0xE7`,
+    /// slcan ASCII otherwise. Reset at the start of every session.
+    binary_mode: AtomicBool,
+    /// Set by [`BufferedCan::reset_protocol`]; makes the pump task drop
+    /// parser state left over from a previous session.
+    proto_reset: AtomicBool,
 }
 
 impl BufferedCan {
@@ -68,8 +76,8 @@ impl BufferedCan {
             outward: Pipe::new(),
             inward: Pipe::new(),
             dropped_rx_frames: AtomicUsize::from(0),
-            encoder: Slcan,
-            decoder: Slcan,
+            binary_mode: AtomicBool::new(false),
+            proto_reset: AtomicBool::new(false),
         }
     }
 
@@ -77,6 +85,11 @@ impl BufferedCan {
     ///
     /// This should be awaited from an Embassy task run in an `InterruptExecutor`
     /// for lower latency.
+    ///
+    /// Both directions write into `inward` (encoded bus frames and GVRET
+    /// replies). That is safe from interleaving because they run in this
+    /// single task and only issue a `write_all` after checking the whole
+    /// message fits, so the write never yields midway.
     pub async fn run(&self, twai: twai::Twai<'static, esp_hal::Async>) {
         let (mut twai_rx, mut twai_tx) = twai.split();
 
@@ -84,7 +97,7 @@ impl BufferedCan {
             use embassy_futures::select::select;
 
             let rd_from = async {
-                let mut frame_buf = [0u8; SLCAN_LINE_SZ];
+                let mut frame_buf = [0u8; ENCODED_FRAME_MAX];
                 loop {
                     let frame = match twai_rx.receive_async().await {
                         Ok(frame) => frame,
@@ -93,44 +106,39 @@ impl BufferedCan {
                             continue;
                         }
                     };
-                    let n = self.encoder.encode(&frame, &mut frame_buf);
-                    // Drop whole frames when the SSH side isn't keeping up:
-                    // a partial slcan line would corrupt the stream.
-                    if self.inward.free_capacity() < n {
-                        let _ = self.dropped_rx_frames.fetch_update(
-                            Ordering::Relaxed,
-                            Ordering::Relaxed,
-                            |d| Some(d.saturating_add(1)),
-                        );
-                    } else {
-                        self.inward.write_all(&frame_buf[..n]).await;
-                    }
+                    let binary = self.binary_mode.load(Ordering::Relaxed);
+                    let n = encode_frame(&frame, binary, &mut frame_buf);
+                    self.send_to_ssh(&frame_buf[..n]).await;
                 }
             };
 
             let rd_to = async {
-                // SSH reads arrive fragmented, so reassemble slcan lines
-                // before decoding. Oversized lines are discarded until the
-                // next terminator resyncs the stream.
-                let mut line = heapless::Vec::<u8, SLCAN_LINE_SZ>::new();
+                let mut parser = CanParser::new(CAN_BITRATE);
                 let mut chunk = [0u8; 64];
                 loop {
                     let n = self.outward.read(&mut chunk).await;
+                    if self.proto_reset.swap(false, Ordering::Relaxed) {
+                        parser.reset();
+                    }
                     for &byte in &chunk[..n] {
-                        if byte != b'\r' && byte != b'\n' {
-                            if line.push(byte).is_err() {
-                                line.clear();
+                        match parser.feed(byte) {
+                            None => {}
+                            Some(CanAction::EnableBinary) => {
+                                self.binary_mode.store(true, Ordering::Relaxed);
                             }
-                            continue;
-                        }
-                        if let Some(frame) = self.decoder.decode(&line) {
-                            let id: Option<twai::Id> = match frame.id {
-                                CanId::Standard(id) => StandardId::new(id).map(twai::Id::from),
-                                CanId::Extended(id) => ExtendedId::new(id).map(twai::Id::from),
-                            };
-                            if let Some(esp_frame) =
-                                id.and_then(|id| EspTwaiFrame::new(id, &frame.data))
-                            {
+                            Some(CanAction::Reply(bytes)) => {
+                                self.send_to_ssh(&bytes).await;
+                            }
+                            Some(CanAction::Transmit(frame)) => {
+                                let id: Option<twai::Id> = match frame.id {
+                                    CanId::Standard(id) => StandardId::new(id).map(twai::Id::from),
+                                    CanId::Extended(id) => ExtendedId::new(id).map(twai::Id::from),
+                                };
+                                let Some(esp_frame) =
+                                    id.and_then(|id| EspTwaiFrame::new(id, &frame.data))
+                                else {
+                                    continue;
+                                };
                                 match with_timeout(TX_TIMEOUT, twai_tx.transmit_async(&esp_frame))
                                     .await
                                 {
@@ -142,12 +150,26 @@ impl BufferedCan {
                                 }
                             }
                         }
-                        line.clear();
                     }
                 }
             };
 
             select(rd_from, rd_to).await;
+        }
+    }
+
+    /// Queue one whole encoded message for the SSH side, or drop it (and
+    /// count the drop) when the session isn't keeping up: a partial slcan
+    /// line or GVRET message would corrupt the stream.
+    async fn send_to_ssh(&self, msg: &[u8]) {
+        if self.inward.free_capacity() < msg.len() {
+            let _ =
+                self.dropped_rx_frames
+                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |d| {
+                        Some(d.saturating_add(1))
+                    });
+        } else {
+            self.inward.write_all(msg).await;
         }
     }
 
@@ -162,6 +184,16 @@ impl BufferedCan {
     /// Number of frames the RX side dropped since the last call. Resets the counter.
     pub fn check_dropped_frames(&self) -> usize {
         self.dropped_rx_frames.swap(0, Ordering::Relaxed)
+    }
+
+    /// Start-of-session reset: back to slcan framing, drop half-parsed
+    /// protocol state and discard bus traffic buffered while no session
+    /// was attached.
+    pub fn reset_protocol(&self) {
+        self.binary_mode.store(false, Ordering::Relaxed);
+        self.proto_reset.store(true, Ordering::Relaxed);
+        let mut sink = [0u8; 32];
+        while self.inward.try_read(&mut sink).is_ok() {}
     }
 }
 
@@ -182,6 +214,10 @@ impl ssh_stamp::can::BufferedCan for BufferedCan {
 
     fn check_dropped_frames(&self) -> usize {
         BufferedCan::check_dropped_frames(self)
+    }
+
+    fn reset_protocol(&self) {
+        BufferedCan::reset_protocol(self);
     }
 }
 
