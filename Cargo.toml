@@ -190,4 +190,7 @@ sftp-ota = ["ota/sftp"]
 
 # Enables CAN bus tunnelling over SSH via the "can" subsystem
 can = ["dep:embedded-can"]
+
+# Enables I2C master tunnelling over SSH via the "i2c" subsystem
+i2c = []
 mem-probe = []

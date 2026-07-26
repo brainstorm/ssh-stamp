@@ -23,9 +23,16 @@ use crate::serial::{BufferedSerial, serial_bridge};
 
 #[cfg(feature = "can")]
 use crate::can::can_bridge;
+#[cfg(feature = "i2c")]
+use crate::i2c::i2c_bridge;
 
-#[cfg(feature = "can")]
+#[cfg(all(
+    any(feature = "can", feature = "i2c"),
+    not(all(feature = "can", feature = "i2c"))
+))]
 use embassy_futures::select::{Either, select};
+#[cfg(all(feature = "can", feature = "i2c"))]
+use embassy_futures::select::{Either3, select3};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 
@@ -190,22 +197,50 @@ pub enum SessionType {
     Sftp(ChanHandle),
 }
 
+/// Hand-off channels from the connection loop to the per-subsystem bridge
+/// futures in [`ssh_client`]. One slot per optional bridge subsystem;
+/// empty when no bridge feature is enabled.
+pub struct SessionQueues {
+    #[cfg(feature = "can")]
+    pub can: Channel<NoopRawMutex, ChanHandle, 1>,
+    #[cfg(feature = "i2c")]
+    pub i2c: Channel<NoopRawMutex, ChanHandle, 1>,
+}
+
+impl SessionQueues {
+    #[must_use]
+    pub fn new() -> Self {
+        SessionQueues {
+            #[cfg(feature = "can")]
+            can: Channel::new(),
+            #[cfg(feature = "i2c")]
+            i2c: Channel::new(),
+        }
+    }
+}
+
+impl Default for SessionQueues {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct EventContext<'a> {
     pub session: &'a mut Option<ChanHandle>,
     pub auth_checked: &'a mut bool,
     pub config_changed: &'a mut bool,
     pub needs_reset: &'a mut bool,
-    /// Hands accepted `can` subsystem channels to the CAN bridge, which
-    /// runs concurrently with the shell (UART) session.
-    #[cfg(feature = "can")]
-    pub can_queue: &'a Channel<NoopRawMutex, ChanHandle, 1>,
-    /// Set once a CAN session is dispatched on this connection. SFTP (OTA)
-    /// needs the connection's full bandwidth, so it is refused afterwards.
-    #[cfg(all(feature = "sftp-ota", feature = "can"))]
-    pub can_dispatched: &'a mut bool,
+    /// Hands accepted bridge subsystem channels (CAN, I2C) to their
+    /// bridges, which run concurrently with the shell (UART) session.
+    pub queues: &'a SessionQueues,
+    /// Set once a bridge session is dispatched on this connection. SFTP
+    /// (OTA) needs the connection's full bandwidth, so it is refused
+    /// afterwards.
+    #[cfg(all(feature = "sftp-ota", any(feature = "can", feature = "i2c")))]
+    pub bridge_dispatched: &'a mut bool,
 }
 
-/// Handles SSH session subsystem requests (e.g., SFTP, CAN).
+/// Handles SSH session subsystem requests (e.g., SFTP, CAN, I2C).
 ///
 /// # Errors
 ///
@@ -225,13 +260,13 @@ pub fn session_subsystem(
             #[cfg(feature = "sftp-ota")]
             {
                 // SFTP (OTA) is exclusive: it needs the connection's full
-                // bandwidth, so refuse it once a CAN session is active.
-                #[cfg(feature = "can")]
-                let can_active = *ctx.can_dispatched;
-                #[cfg(not(feature = "can"))]
-                let can_active = false;
-                if can_active {
-                    warn!("SFTP subsystem refused: a CAN session is active on this connection");
+                // bandwidth, so refuse it once a bridge session is active.
+                #[cfg(any(feature = "can", feature = "i2c"))]
+                let bridge_active = *ctx.bridge_dispatched;
+                #[cfg(not(any(feature = "can", feature = "i2c")))]
+                let bridge_active = false;
+                if bridge_active {
+                    warn!("SFTP subsystem refused: a bridge session is active on this connection");
                     a.fail()?;
                 } else if let Some(ch) = ctx.session.take() {
                     debug_assert_eq!(ch.num(), a.channel());
@@ -259,12 +294,12 @@ pub fn session_subsystem(
                 // auth_checked is deliberately left untouched so the same
                 // (already authenticated) connection can still request a
                 // shell session and bridge UART concurrently with CAN.
-                if let Err(e) = ctx.can_queue.try_send(ch) {
+                if let Err(e) = ctx.queues.can.try_send(ch) {
                     log::error!("Could not send the CAN channel: {e:?}");
                 }
                 #[cfg(feature = "sftp-ota")]
                 {
-                    *ctx.can_dispatched = true;
+                    *ctx.bridge_dispatched = true;
                 }
             } else {
                 a.fail()?;
@@ -272,6 +307,29 @@ pub fn session_subsystem(
             #[cfg(not(feature = "can"))]
             {
                 warn!("CAN subsystem requested but not supported in this build");
+                a.fail()?;
+            }
+        } else if a.command()?.to_lowercase().as_str() == "i2c" {
+            #[cfg(feature = "i2c")]
+            if let Some(ch) = ctx.session.take() {
+                debug_assert_eq!(ch.num(), a.channel());
+                a.succeed()?;
+                debug!("We got I2C subsystem");
+                // As with CAN, auth_checked is left untouched so shell and
+                // other bridge sessions can still be requested afterwards.
+                if let Err(e) = ctx.queues.i2c.try_send(ch) {
+                    log::error!("Could not send the I2C channel: {e:?}");
+                }
+                #[cfg(feature = "sftp-ota")]
+                {
+                    *ctx.bridge_dispatched = true;
+                }
+            } else {
+                a.fail()?;
+            }
+            #[cfg(not(feature = "i2c"))]
+            {
+                warn!("I2C subsystem requested but not supported in this build");
                 a.fail()?;
             }
         } else {
@@ -873,10 +931,10 @@ pub fn defunct() -> Result<(), sunset::Error> {
 /// Handles an SSH client connection, bridging UART and SSH.
 ///
 #[cfg_attr(
-    feature = "can",
-    doc = "A `can` subsystem channel is bridged concurrently with the shell",
-    doc = "(UART) session on the same connection. The whole connection is",
-    doc = "torn down when either bridge finishes.",
+    any(feature = "can", feature = "i2c"),
+    doc = "Bridge subsystem channels (CAN, I2C) are bridged concurrently",
+    doc = "with the shell (UART) session on the same connection. The whole",
+    doc = "connection is torn down when any bridge finishes.",
     doc = ""
 )]
 /// # Errors
@@ -886,11 +944,12 @@ pub async fn ssh_client<'a, 'b, U, P>(
     ssh_server: &'b SSHServer<'a>,
     chan_pipe: &'b Channel<NoopRawMutex, SessionType, 1>,
     #[cfg_attr(
-        not(any(feature = "sftp-ota", feature = "can")),
+        not(any(feature = "sftp-ota", feature = "can", feature = "i2c")),
         allow(unused_variables)
     )]
     platform: &'b P,
-    #[cfg(feature = "can")] can_queue: &'b Channel<NoopRawMutex, ChanHandle, 1>,
+    #[cfg_attr(not(any(feature = "can", feature = "i2c")), allow(unused_variables))]
+    queues: &'b SessionQueues,
 ) -> Result<(), sunset::Error>
 where
     U: BufferedSerial,
@@ -920,20 +979,38 @@ where
     };
 
     #[cfg(feature = "can")]
-    let result = {
-        let can_session = async {
-            let ch = can_queue.receive().await;
-            info!("Handling CAN session");
-            let chan_io: ChanInOut<'_> = ssh_server.stdio(ch).await?;
-            let (stdin, stdout) = chan_io.split();
-            info!("Starting CAN bridge");
-            can_bridge(stdin, stdout, platform.can()).await
-        };
-        match select(session, can_session).await {
-            Either::First(r) | Either::Second(r) => r,
-        }
+    let can_session = async {
+        let ch = queues.can.receive().await;
+        info!("Handling CAN session");
+        let chan_io: ChanInOut<'_> = ssh_server.stdio(ch).await?;
+        let (stdin, stdout) = chan_io.split();
+        info!("Starting CAN bridge");
+        can_bridge(stdin, stdout, platform.can()).await
     };
-    #[cfg(not(feature = "can"))]
+
+    #[cfg(feature = "i2c")]
+    let i2c_session = async {
+        let ch = queues.i2c.receive().await;
+        info!("Handling I2C session");
+        let chan_io: ChanInOut<'_> = ssh_server.stdio(ch).await?;
+        let (stdin, stdout) = chan_io.split();
+        info!("Starting I2C bridge");
+        i2c_bridge(stdin, stdout, platform.i2c()).await
+    };
+
+    #[cfg(all(feature = "can", feature = "i2c"))]
+    let result = match select3(session, can_session, i2c_session).await {
+        Either3::First(r) | Either3::Second(r) | Either3::Third(r) => r,
+    };
+    #[cfg(all(feature = "can", not(feature = "i2c")))]
+    let result = match select(session, can_session).await {
+        Either::First(r) | Either::Second(r) => r,
+    };
+    #[cfg(all(feature = "i2c", not(feature = "can")))]
+    let result = match select(session, i2c_session).await {
+        Either::First(r) | Either::Second(r) => r,
+    };
+    #[cfg(not(any(feature = "can", feature = "i2c")))]
     let result = session.await;
     result
 }

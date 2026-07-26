@@ -77,6 +77,7 @@ can = ["ssh-stamp/can"]
 # real bus — Normal mode retransmits until a node acknowledges, as CAN
 # reliability expects.
 can-no-ack = ["can"]
+i2c = ["ssh-stamp/i2c"]
 ipv6 = ["ssh-stamp/ipv6"]
 
 mem-probe = ["ssh-stamp/mem-probe", "esp-alloc/internal-heap-stats"]
