@@ -11,7 +11,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 # SSH Stamp
 
-SSH-stamp is a bridge that connects SSH with well known electrical protocols such as UART, I2C, CAN, etc...
+SSH-stamp is a bridge that connects SSH with well known electrical protocols such as UART, I2C, CAN, etc... aimed but not limited to embedded hardware hackers and tinkerers.
 
 ![what_is_ssh_stamp](./docs/img/ssh_stamp_architecture.svg)
 
