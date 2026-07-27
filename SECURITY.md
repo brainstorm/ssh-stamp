@@ -20,6 +20,13 @@ the EU market.
 - **Intended use:** Network-attached SSH-to-UART bridge for IoT/embedded
   devices
 
+## Threat model
+
+We acknowledge that physical attacks are entirely possible (i.e UART/CAN/I2C are unprotected
+protocols per se). Therefore we will not accept reports that claim MITM-like attacks on that vein.
+
+On the other hand, SSH (pre-)authentication attacks will be taken in with great interest and care.
+
 ## Coordinated Vulnerability Disclosure
 
 ### Reporting a vulnerability
