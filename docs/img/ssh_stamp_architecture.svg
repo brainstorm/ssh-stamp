@@ -1,0 +1,393 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 1060 290"
+   role="img"
+   aria-label="SSH Stamp architecture: a computer connects over a secure SSH tunnel through Wi-Fi or Ethernet to an ESP32 running an SSH server that bridges to the target's pins. UART and CAN are supported; I2C and GPIO are planned."
+   version="1.1"
+   id="svg36"
+   sodipodi:docname="ssh-stamp-architecture.svg"
+   inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview36"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="6.2886792"
+     inkscape:cx="922.61026"
+     inkscape:cy="183.82238"
+     inkscape:window-width="3440"
+     inkscape:window-height="1371"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="g36" />
+  <title
+     id="title1">SSH Stamp architecture</title>
+  <defs
+     id="defs1">
+    <style
+       id="style1">
+      .stage{ font: 700 13px &quot;Noto Sans Mono&quot;, monospace; fill: #c2d4e8; letter-spacing: 0.3em; }
+      .h1   { font: 700 15px &quot;Noto Sans Mono&quot;, monospace; fill: #7cf29b; letter-spacing: 0.08em; }
+      .lbl  { font: 600 13px &quot;Noto Sans Mono&quot;, monospace; fill: #e6eef8; }
+      .sub  { font: 400 12px &quot;Noto Sans Mono&quot;, monospace; fill: #8ea0b6; }
+      .sub-small{ font: 400 10px &quot;Noto Sans Mono&quot;, monospace; fill: #8ea0b6; }
+      .pin  { font: 600 13px &quot;Noto Sans Mono&quot;, monospace; fill: #ffb454; }
+      .flow { font: 600 10px &quot;Noto Sans Mono&quot;, monospace; fill: #7cf29b; letter-spacing: 0.18em; }
+      .tunnel-lbl { font: 600 10px &quot;Noto Sans Mono&quot;, monospace; fill: #7cf29b; letter-spacing: 0.18em; }
+      .box  { fill: #0f1720; stroke: #2b3d55; stroke-width: 1.5; }
+      .card { fill: #0a1119; stroke: #7cf29b; stroke-width: 1.2; }
+      .rail { stroke: #7cf29b; stroke-width: 1.5; fill: none; }
+      .tunnel{ fill: #7cf29b; fill-opacity: 0.08; stroke: #7cf29b; stroke-opacity: 0.55; stroke-width: 1; stroke-dasharray: 4 2; }
+      .dot  { fill: #7cf29b; }
+      .sep  { stroke: #2b3d55; stroke-width: 1; fill: none; opacity: 0.45; }
+      .badge-ok { fill: #163a26; stroke: #3fae67; stroke-width: 1; }
+      .badge-ok-txt { font: 700 9px &quot;Noto Sans Mono&quot;, monospace; fill: #7cf29b; letter-spacing: 0.04em; }
+      .badge-plan { fill: #3a1d1d; stroke: #e05a5a; stroke-width: 1; }
+      .badge-plan-txt { font: 700 9px &quot;Noto Sans Mono&quot;, monospace; fill: #ff8a7c; letter-spacing: 0.04em; }
+    </style>
+  </defs>
+  <rect
+     width="1060"
+     height="290"
+     fill="#0b1016"
+     id="rect1" />
+  <!-- stage labels -->
+  <text
+     class="stage"
+     x="130"
+     y="44"
+     text-anchor="middle"
+     id="text1">1 · CLIENT</text>
+  <text
+     class="stage"
+     x="380"
+     y="44"
+     text-anchor="middle"
+     id="text2">2 · MEDIUM</text>
+  <text
+     class="stage"
+     x="625"
+     y="44"
+     text-anchor="middle"
+     id="text3">3 · SSH STAMP</text>
+  <text
+     class="stage"
+     x="900"
+     y="44"
+     text-anchor="middle"
+     id="text4">4 · TARGET</text>
+  <!-- slim faded section separators -->
+  <line
+     class="sep"
+     x1="240"
+     y1="62"
+     x2="240"
+     y2="275"
+     id="line4" />
+  <line
+     class="sep"
+     x1="505"
+     y1="62"
+     x2="505"
+     y2="275"
+     id="line5" />
+  <line
+     class="sep"
+     x1="760"
+     y1="62"
+     x2="760"
+     y2="275"
+     id="line6" />
+  <!-- secure SSH tunnel spans client link and wireless link -->
+  <rect
+     class="tunnel"
+     x="205"
+     y="184"
+     width="320"
+     height="22"
+     id="rect6" />
+  <text
+     class="tunnel-lbl"
+     x="365"
+     y="176"
+     text-anchor="middle"
+     id="text6">secure SSH tunnel</text>
+  <!-- continuous flow rail with segment labels above -->
+  <line
+     class="rail"
+     x1="205"
+     y1="195"
+     x2="275"
+     y2="195"
+     id="line7" />
+  <line
+     class="rail"
+     x1="485"
+     y1="195"
+     x2="525"
+     y2="195"
+     id="line8" />
+  <line
+     class="rail"
+     x1="725"
+     y1="195"
+     x2="795"
+     y2="195"
+     id="line9" />
+  <circle
+     class="dot"
+     cx="205"
+     cy="195"
+     r="3"
+     id="circle9" />
+  <circle
+     class="dot"
+     cx="275"
+     cy="195"
+     r="3"
+     id="circle10" />
+  <circle
+     class="dot"
+     cx="485"
+     cy="195"
+     r="3"
+     id="circle11" />
+  <circle
+     class="dot"
+     cx="525"
+     cy="195"
+     r="3"
+     id="circle12" />
+  <circle
+     class="dot"
+     cx="725"
+     cy="195"
+     r="3"
+     id="circle13" />
+  <circle
+     class="dot"
+     cx="795"
+     cy="195"
+     r="3"
+     id="circle14" />
+  <text
+     class="flow"
+     x="240"
+     y="182"
+     text-anchor="middle"
+     id="text14">SSH</text>
+  <text
+     class="flow"
+     x="505"
+     y="182"
+     text-anchor="middle"
+     id="text15">SSH</text>
+  <text
+     class="flow"
+     x="760"
+     y="182"
+     text-anchor="middle"
+     id="text16">WIRES</text>
+  <!-- 1. YOU -->
+  <g
+     transform="translate(55,130)"
+     id="g20">
+    <rect
+       class="box"
+       width="150"
+       height="130"
+       rx="10"
+       id="rect16" />
+    <text
+       class="h1"
+       x="14"
+       y="30"
+       id="text17">YOU</text>
+    <text
+       class="lbl"
+       x="14"
+       y="60"
+       id="text18">computer</text>
+    <text
+       class="sub"
+       x="14"
+       y="86"
+       id="text19">Any SSH client</text>
+    <text
+       class="sub"
+       x="14"
+       y="108"
+       id="text20">$ ssh root@stamp</text>
+  </g>
+  <!-- 2. Network -->
+  <g
+     transform="translate(275,130)"
+     id="g24">
+    <rect
+       class="box"
+       width="210"
+       height="130"
+       rx="10"
+       id="rect20" />
+    <text
+       class="h1"
+       x="14"
+       y="30"
+       id="text21">NETWORK</text>
+    <text
+       class="lbl"
+       x="14"
+       y="60"
+       id="text22">Wi-Fi or Ethernet</text>
+    <text
+       class="sub"
+       x="14"
+       y="86"
+       id="text23">WPA2 · AP or Station</text>
+    <text
+       class="sub"
+       x="14"
+       y="108"
+       id="text24">Random PSK on first boot</text>
+  </g>
+  <!-- 3. SSH Stamp -->
+  <g
+     transform="translate(525,130)"
+     id="g28">
+    <rect
+       class="card"
+       width="200"
+       height="130"
+       rx="10"
+       id="rect24" />
+    <text
+       class="h1"
+       x="14"
+       y="30"
+       id="text25">SSH STAMP</text>
+    <text
+       class="sub"
+       x="14"
+       y="52"
+       id="text26">ESP32 · Rust no_std</text>
+    <g
+       transform="translate(14,74)"
+       id="g27">
+      <rect
+         width="172"
+         height="40"
+         rx="6"
+         fill="#0b1420"
+         stroke="#3fae67"
+         id="rect26" />
+      <text
+         class="lbl"
+         x="12"
+         y="25"
+         id="text27">SSH server</text>
+    </g>
+  </g>
+  <!-- 4. Target protocols -->
+  <g
+     transform="translate(795,130)"
+     id="g36">
+    <rect
+       class="box"
+       width="210"
+       height="130"
+       rx="10"
+       id="rect28" />
+    <text
+       class="pin"
+       x="18"
+       y="34"
+       id="text28">UART</text>
+    <rect
+       class="badge-ok"
+       x="130"
+       y="25"
+       width="66"
+       height="18"
+       rx="4"
+       id="rect29" />
+    <text
+       class="badge-ok-txt"
+       x="163"
+       y="34"
+       text-anchor="middle"
+       dominant-baseline="central"
+       id="text29">supported</text>
+    <text
+       class="pin"
+       x="18"
+       y="54"
+       id="text30">CAN</text>
+    <rect
+       class="badge-ok"
+       x="130"
+       y="45"
+       width="66"
+       height="18"
+       rx="4"
+       id="rect30" />
+    <text
+       class="badge-ok-txt"
+       x="163"
+       y="54"
+       text-anchor="middle"
+       dominant-baseline="central"
+       id="text31">supported</text>
+    <text
+       class="pin"
+       x="18"
+       y="74"
+       id="text32">I2C</text>
+    <text
+       class="pin"
+       x="18"
+       y="94"
+       id="text34">GPIO</text>
+    <rect
+       class="badge-plan"
+       x="130"
+       y="85"
+       width="66"
+       height="18"
+       rx="4"
+       id="rect34" />
+    <text
+       class="badge-plan-txt"
+       x="163"
+       y="94"
+       text-anchor="middle"
+       dominant-baseline="central"
+       id="text35">planned</text>
+    <text
+       class="sub-small"
+       x="14"
+       y="118"
+       id="text36">... or bit-bang anything else</text>
+    <use
+       x="0"
+       y="0"
+       xlink:href="#rect30"
+       id="use36"
+       transform="translate(0.1590159,19.717972)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#text31"
+       id="use37"
+       transform="translate(0.1590159,19.717972)" />
+  </g>
+</svg>
