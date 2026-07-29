@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 290" role="img" aria-label="SSH Stamp architecture: a computer connects over a secure SSH tunnel through Wi-Fi or Ethernet to an ESP32 running an SSH server that bridges to the target's pins. UART and CAN are supported; I2C and GPIO are planned.">
+  <title>SSH Stamp architecture</title>
+  <defs>
+    <style>
+      .stage{ font: 700 13px "Noto Sans Mono", monospace; fill: #5a6b80; letter-spacing: 0.3em; }
+      .h1   { font: 700 15px "Noto Sans Mono", monospace; fill: #1f9d55; letter-spacing: 0.08em; }
+      .lbl  { font: 600 13px "Noto Sans Mono", monospace; fill: #1f2937; }
+      .sub  { font: 400 12px "Noto Sans Mono", monospace; fill: #5a6b80; }
+      .sub-small{ font: 400 10px "Noto Sans Mono", monospace; fill: #5a6b80; }
+      .pin  { font: 600 13px "Noto Sans Mono", monospace; fill: #b25c08; }
+      .flow { font: 600 10px "Noto Sans Mono", monospace; fill: #1f9d55; letter-spacing: 0.18em; }
+      .tunnel-lbl { font: 600 10px "Noto Sans Mono", monospace; fill: #1f9d55; letter-spacing: 0.18em; }
+      .box  { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; }
+      .card { fill: #ffffff; stroke: #1f9d55; stroke-width: 1.2; }
+      .rail { stroke: #1f9d55; stroke-width: 1.5; fill: none; }
+      .tunnel{ fill: #1f9d55; fill-opacity: 0.08; stroke: #1f9d55; stroke-opacity: 0.55; stroke-width: 1; stroke-dasharray: 4 2; }
+      .dot  { fill: #1f9d55; }
+      .sep  { stroke: #cbd5e1; stroke-width: 1; fill: none; opacity: 0.8; }
+      .badge-ok { fill: #e7f6ec; stroke: #1f9d55; stroke-width: 1; }
+      .badge-ok-txt { font: 700 9px "Noto Sans Mono", monospace; fill: #1f9d55; letter-spacing: 0.04em; }
+      .badge-plan { fill: #fbecec; stroke: #d44a4a; stroke-width: 1; }
+      .badge-plan-txt { font: 700 9px "Noto Sans Mono", monospace; fill: #d44a4a; letter-spacing: 0.04em; }
+    </style>
+  </defs>
+
+  <rect width="1060" height="290" fill="#f6f8fb"/>
+
+  <!-- stage labels -->
+  <text class="stage" x="130" y="44" text-anchor="middle">1 · CLIENT</text>
+  <text class="stage" x="380" y="44" text-anchor="middle">2 · MEDIUM</text>
+  <text class="stage" x="625" y="44" text-anchor="middle">3 · SSH STAMP</text>
+  <text class="stage" x="900" y="44" text-anchor="middle">4 · TARGET</text>
+
+  <!-- slim faded section separators -->
+  <line class="sep" x1="240" y1="62" x2="240" y2="275"/>
+  <line class="sep" x1="505" y1="62" x2="505" y2="275"/>
+  <line class="sep" x1="760" y1="62" x2="760" y2="275"/>
+
+  <!-- secure SSH tunnel spans client link and wireless link -->
+  <rect class="tunnel" x="205" y="184" width="320" height="22"/>
+  <text class="tunnel-lbl" x="365" y="176" text-anchor="middle">secure SSH tunnel</text>
+
+  <!-- continuous flow rail with segment labels above -->
+  <line class="rail" x1="205" y1="195" x2="275" y2="195"/>
+  <line class="rail" x1="485" y1="195" x2="525" y2="195"/>
+  <line class="rail" x1="725" y1="195" x2="795" y2="195"/>
+  <circle class="dot" cx="205" cy="195" r="3"/>
+  <circle class="dot" cx="275" cy="195" r="3"/>
+  <circle class="dot" cx="485" cy="195" r="3"/>
+  <circle class="dot" cx="525" cy="195" r="3"/>
+  <circle class="dot" cx="725" cy="195" r="3"/>
+  <circle class="dot" cx="795" cy="195" r="3"/>
+
+  <text class="flow" x="240" y="182" text-anchor="middle">SSH</text>
+  <text class="flow" x="505" y="182" text-anchor="middle">SSH</text>
+  <text class="flow" x="760" y="182" text-anchor="middle">WIRES</text>
+
+  <!-- 1. YOU -->
+  <g transform="translate(55,130)">
+    <rect class="box" width="150" height="130" rx="10"/>
+    <text class="h1"  x="14" y="30">YOU</text>
+    <text class="lbl" x="14" y="60">computer</text>
+    <text class="sub" x="14" y="86">Any SSH client</text>
+    <text class="sub" x="14" y="108">$ ssh root@stamp</text>
+  </g>
+
+  <!-- 2. Network -->
+  <g transform="translate(275,130)">
+    <rect class="box" width="210" height="130" rx="10"/>
+    <text class="h1"  x="14" y="30">NETWORK</text>
+    <text class="lbl" x="14" y="60">Wi-Fi or Ethernet</text>
+    <text class="sub" x="14" y="86">WPA2 · AP or Station</text>
+    <text class="sub" x="14" y="108">Random PSK on first boot</text>
+  </g>
+
+  <!-- 3. SSH Stamp -->
+  <g transform="translate(525,130)">
+    <rect class="card" width="200" height="130" rx="10"/>
+    <text class="h1"  x="14" y="30">SSH STAMP</text>
+    <text class="sub" x="14" y="52">ESP32 · Rust no_std</text>
+
+    <g transform="translate(14,74)">
+      <rect width="172" height="40" rx="6" fill="#f1f7f4" stroke="#1f9d55"/>
+      <text class="lbl" x="12" y="25">SSH server</text>
+    </g>
+  </g>
+
+  <!-- 4. Target protocols -->
+  <g transform="translate(795,130)">
+    <rect class="box" width="210" height="130" rx="10"/>
+
+    <text class="pin" x="18" y="34">UART</text>
+    <rect class="badge-ok" x="130" y="25" width="66" height="18" rx="4"/>
+    <text class="badge-ok-txt" x="163" y="34" text-anchor="middle" dominant-baseline="central">supported</text>
+
+    <text class="pin" x="18" y="54">CAN</text>
+    <rect class="badge-ok" x="130" y="45" width="66" height="18" rx="4"/>
+    <text class="badge-ok-txt" x="163" y="54" text-anchor="middle" dominant-baseline="central">supported</text>
+
+    <text class="pin" x="18" y="74">I2C</text>
+    <rect class="badge-plan" x="130" y="65" width="66" height="18" rx="4"/>
+    <text class="badge-plan-txt" x="163" y="74" text-anchor="middle" dominant-baseline="central">planned</text>
+
+    <text class="pin" x="18" y="94">GPIO</text>
+    <rect class="badge-plan" x="130" y="85" width="66" height="18" rx="4"/>
+    <text class="badge-plan-txt" x="163" y="94" text-anchor="middle" dominant-baseline="central">planned</text>
+
+    <text class="sub-small" x="14" y="118">... or bit-bang anything else</text>
+  </g>
+</svg>
