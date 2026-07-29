@@ -17,6 +17,7 @@ board-esp32c61-devkitc = []
 board-esp32c6-devkitc = []
 board-esp32c6-generic = []
 board-esp32-s2-saola = []
+board-waveshare-esp32-s3-touch-lcd-43 = []
 
 [build-dependencies]
 toml = "0.8"

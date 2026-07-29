@@ -16,6 +16,8 @@
 
 extern crate alloc;
 
+#[cfg(feature = "can")]
+mod can;
 pub mod flash;
 mod hash;
 mod network;
@@ -24,6 +26,8 @@ mod rng;
 mod timer;
 mod uart;
 
+#[cfg(feature = "can")]
+pub use can::{BufferedCan, CAN_BUF, EspCanPins, can_task};
 pub use flash::{EspOtaWriter, FlashBuffer, get_flash_n_buffer, init as flash_init};
 pub use hash::EspHmac;
 pub use network::{EspWifi, accept_requests, dhcp_server, net_up, wifi_up};

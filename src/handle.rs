@@ -20,6 +20,11 @@ use crate::config::SSHStampConfig;
 use crate::platform::PlatformServices;
 use crate::serial::{BufferedSerial, serial_bridge};
 
+#[cfg(feature = "can")]
+use crate::can::can_bridge;
+
+#[cfg(feature = "can")]
+use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 
@@ -155,9 +160,17 @@ pub struct EventContext<'a> {
     pub auth_checked: &'a mut bool,
     pub config_changed: &'a mut bool,
     pub needs_reset: &'a mut bool,
+    /// Hands accepted `can` subsystem channels to the CAN bridge, which
+    /// runs concurrently with the shell (UART) session.
+    #[cfg(feature = "can")]
+    pub can_queue: &'a Channel<NoopRawMutex, ChanHandle, 1>,
+    /// Set once a CAN session is dispatched on this connection. SFTP (OTA)
+    /// needs the connection's full bandwidth, so it is refused afterwards.
+    #[cfg(all(feature = "sftp-ota", feature = "can"))]
+    pub can_dispatched: &'a mut bool,
 }
 
-/// Handles SSH session subsystem requests (e.g., SFTP).
+/// Handles SSH session subsystem requests (e.g., SFTP, CAN).
 ///
 /// # Errors
 ///
@@ -174,23 +187,56 @@ pub fn session_subsystem(
             warn!("Unauthenticated SessionSubsystem rejected");
             a.fail()?;
         } else if a.command()?.to_lowercase().as_str() == "sftp" {
-            if let Some(ch) = ctx.session.take() {
-                debug_assert_eq!(ch.num(), a.channel());
-                #[cfg(feature = "sftp-ota")]
-                {
+            #[cfg(feature = "sftp-ota")]
+            {
+                // SFTP (OTA) is exclusive: it needs the connection's full
+                // bandwidth, so refuse it once a CAN session is active.
+                #[cfg(feature = "can")]
+                let can_active = *ctx.can_dispatched;
+                #[cfg(not(feature = "can"))]
+                let can_active = false;
+                if can_active {
+                    warn!("SFTP subsystem refused: a CAN session is active on this connection");
+                    a.fail()?;
+                } else if let Some(ch) = ctx.session.take() {
+                    debug_assert_eq!(ch.num(), a.channel());
                     a.succeed()?;
                     debug!("We got SFTP subsystem");
                     match chan_pipe.try_send(SessionType::Sftp(ch)) {
-                        Ok(_) => *ctx.auth_checked = false,
+                        Ok(()) => *ctx.auth_checked = false,
                         Err(e) => log::error!("Could not send the channel: {e:?}"),
-                    };
-                }
-                #[cfg(not(feature = "sftp-ota"))]
-                {
-                    warn!("SFTP subsystem requested but not supported in this build");
+                    }
+                } else {
                     a.fail()?;
                 }
+            }
+            #[cfg(not(feature = "sftp-ota"))]
+            {
+                warn!("SFTP subsystem requested but not supported in this build");
+                a.fail()?;
+            }
+        } else if a.command()?.to_lowercase().as_str() == "can" {
+            #[cfg(feature = "can")]
+            if let Some(ch) = ctx.session.take() {
+                debug_assert_eq!(ch.num(), a.channel());
+                a.succeed()?;
+                debug!("We got CAN subsystem");
+                // auth_checked is deliberately left untouched so the same
+                // (already authenticated) connection can still request a
+                // shell session and bridge UART concurrently with CAN.
+                if let Err(e) = ctx.can_queue.try_send(ch) {
+                    log::error!("Could not send the CAN channel: {e:?}");
+                }
+                #[cfg(feature = "sftp-ota")]
+                {
+                    *ctx.can_dispatched = true;
+                }
             } else {
+                a.fail()?;
+            }
+            #[cfg(not(feature = "can"))]
+            {
+                warn!("CAN subsystem requested but not supported in this build");
                 a.fail()?;
             }
         } else {
@@ -702,38 +748,70 @@ pub fn defunct() -> Result<(), sunset::Error> {
 
 /// Handles an SSH client connection, bridging UART and SSH.
 ///
+#[cfg_attr(
+    feature = "can",
+    doc = "A `can` subsystem channel is bridged concurrently with the shell",
+    doc = "(UART) session on the same connection. The whole connection is",
+    doc = "torn down when either bridge finishes.",
+    doc = ""
+)]
 /// # Errors
 /// Returns an error if SSH protocol operations or I/O fail.
 pub async fn ssh_client<'a, 'b, U, P>(
     uart_buff: &'a U,
     ssh_server: &'b SSHServer<'a>,
     chan_pipe: &'b Channel<NoopRawMutex, SessionType, 1>,
-    _platform: &'b P,
+    #[cfg_attr(
+        not(any(feature = "sftp-ota", feature = "can")),
+        allow(unused_variables)
+    )]
+    platform: &'b P,
+    #[cfg(feature = "can")] can_queue: &'b Channel<NoopRawMutex, ChanHandle, 1>,
 ) -> Result<(), sunset::Error>
 where
     U: BufferedSerial,
     P: PlatformServices,
 {
     debug!("Preparing bridge");
-    let session_type = chan_pipe.receive().await;
-    debug!("Checking bridge session type");
-    match session_type {
-        SessionType::Bridge(ch) => {
-            info!("Handling bridge session");
+    let session = async {
+        let session_type = chan_pipe.receive().await;
+        debug!("Checking bridge session type");
+        match session_type {
+            SessionType::Bridge(ch) => {
+                info!("Handling bridge session");
+                let chan_io: ChanInOut<'_> = ssh_server.stdio(ch).await?;
+                let (stdin, stdout) = chan_io.split();
+                info!("Starting bridge");
+                serial_bridge(stdin, stdout, uart_buff).await?;
+            }
+            #[cfg(feature = "sftp-ota")]
+            SessionType::Sftp(ch) => {
+                debug!("Handling SFTP session");
+                let stdio = ssh_server.stdio(ch).await?;
+                let ota_writer = platform.ota_writer();
+                ota::run_ota_server::<P::OtaWriter>(stdio, ota_writer).await?;
+            }
+        }
+        Ok(())
+    };
+
+    #[cfg(feature = "can")]
+    let result = {
+        let can_session = async {
+            let ch = can_queue.receive().await;
+            info!("Handling CAN session");
             let chan_io: ChanInOut<'_> = ssh_server.stdio(ch).await?;
             let (stdin, stdout) = chan_io.split();
-            info!("Starting bridge");
-            serial_bridge(stdin, stdout, uart_buff).await?;
+            info!("Starting CAN bridge");
+            can_bridge(stdin, stdout, platform.can()).await
+        };
+        match select(session, can_session).await {
+            Either::First(r) | Either::Second(r) => r,
         }
-        #[cfg(feature = "sftp-ota")]
-        SessionType::Sftp(ch) => {
-            debug!("Handling SFTP session");
-            let stdio = ssh_server.stdio(ch).await?;
-            let ota_writer = _platform.ota_writer();
-            ota::run_ota_server::<P::OtaWriter>(stdio, ota_writer).await?;
-        }
-    }
-    Ok(())
+    };
+    #[cfg(not(feature = "can"))]
+    let result = session.await;
+    result
 }
 
 pub fn bridge_disable() {

@@ -42,11 +42,14 @@ pub async fn connection_loop<P: PlatformServices>(
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
     config: &SunsetMutex<SSHStampConfig>,
     platform: &P,
+    #[cfg(feature = "can")] can_queue: &Channel<NoopRawMutex, ChanHandle, 1>,
 ) -> Result<(), sunset::Error> {
     let mut session: Option<ChanHandle> = None;
     let mut config_changed = false;
     let mut needs_reset = false;
     let mut auth_checked = false;
+    #[cfg(all(feature = "sftp-ota", feature = "can"))]
+    let mut can_dispatched = false;
 
     loop {
         let mut ph = ProgressHolder::new();
@@ -59,6 +62,10 @@ pub async fn connection_loop<P: PlatformServices>(
             auth_checked: &mut auth_checked,
             config_changed: &mut config_changed,
             needs_reset: &mut needs_reset,
+            #[cfg(feature = "can")]
+            can_queue,
+            #[cfg(all(feature = "sftp-ota", feature = "can"))]
+            can_dispatched: &mut can_dispatched,
         };
 
         match ev {

@@ -40,6 +40,16 @@ pub trait PlatformServices {
     /// SFTP session, so `'static` is required.
     type OtaWriter: OtaActions + 'static;
 
+    /// Buffered CAN type this platform provides. The CAN pump task owns
+    /// it for the lifetime of the device, so `'static` is required.
+    #[cfg(feature = "can")]
+    type Can: crate::can::BufferedCan + 'static;
+
+    /// Access the platform's buffered CAN interface for the SSH `can`
+    /// subsystem bridge.
+    #[cfg(feature = "can")]
+    fn can(&self) -> &'static Self::Can;
+
     /// Persist the full config to non-volatile storage.
     ///
     /// # Errors
