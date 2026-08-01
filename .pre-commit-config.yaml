@@ -11,9 +11,29 @@ repos:
         entry: cargo fmt --all -- --check --color always
         language: system
         pass_filenames: false
-      - id: clippy
-        name: clippy
-        description: Run clippy with project lint rules
-        entry: cargo clippy --workspace -- -D warnings
+      # `--workspace` cannot work here: the members target different
+      # architectures (RISC-V, Xtensa, Cortex-M) and one is a host-side
+      # crate, so a single invocation would try to build them all for
+      # whichever target happens to be the default. Lint each where it
+      # actually runs instead.
+      - id: clippy-esp32
+        name: clippy (esp32)
+        description: Lint the ESP32 firmware on its own target
+        entry: cargo clippy --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c6-devkitc -- -D warnings -A clippy::default_trait_access
+        language: system
+        pass_filenames: false
+      - id: clippy-rp2350
+        name: clippy (rp2350)
+        description: Lint the RP2350 firmware on its own target
+        entry: cargo clippy --release --target thumbv8m.main-none-eabihf -p ssh-stamp-rp2350 --bin ssh-stamp-rp2350 --no-default-features --features board-w6300-evb-pico2 -- -D warnings -A clippy::default_trait_access
+        language: system
+        pass_filenames: false
+      # `ota` is deliberately not linted here yet: it has pre-existing
+      # pedantic warnings that the old (never-passing) --workspace hook
+      # masked. Add `-p ota` once those are cleared.
+      - id: clippy-host
+        name: clippy (host tools)
+        description: Lint the host-side BSP codegen crate
+        entry: cargo clippy --target x86_64-unknown-linux-gnu -p ssh-stamp-board-codegen --all-targets -- -D warnings
         language: system
         pass_filenames: false
