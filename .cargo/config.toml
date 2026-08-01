@@ -33,6 +33,10 @@ build-esp32c2 = "build --release --target riscv32imc-unknown-none-elf -p ssh-sta
 build-esp32c3 = "build --release --target riscv32imc-unknown-none-elf -p ssh-stamp-esp32 --lib --no-default-features --features esp32c3"
 build-esp32s3 = "build --release --target xtensa-esp32s3-none-elf -p ssh-stamp-esp32 --lib --no-default-features --features esp32s3 -Z build-std=core,alloc"
 
+# RP2350 / W6300-EVB-Pico2 (Arm Cortex-M33, wired Ethernet via WIZnet W6300)
+build-rp2350 = "build --release --target thumbv8m.main-none-eabihf -p ssh-stamp-rp2350 --bin ssh-stamp-rp2350 --no-default-features --features board-w6300-evb-pico2"
+run-rp2350 = "run --release --target thumbv8m.main-none-eabihf -p ssh-stamp-rp2350 --bin ssh-stamp-rp2350 --no-default-features --features board-w6300-evb-pico2"
+
 # Test alias
 test-ota = "test --package ota --target x86_64-unknown-linux-gnu"
 
@@ -52,6 +56,17 @@ rustflags = ["-C", "force-frame-pointers"]
 [target.riscv32imac-unknown-none-elf] # ESP32C6
 runner = "espflash flash --baud=921600 --partition-table ssh-stamp-esp32/partitions.csv --monitor"
 rustflags = ["-C", "force-frame-pointers"]
+
+[target.thumbv8m.main-none-eabihf] # RP2350 (W6300-EVB-Pico2)
+# probe-rs needs the chip name `RP235x`, not RP2350/RP235xA.
+runner = "probe-rs run --chip RP235x"
+# The RP2350 `.start_block` image definition the boot ROM looks for comes
+# from this crate's own memory.x (embassy-rp only ships link-rp.x for the
+# RP2040), so link.x is the only extra script needed here.
+rustflags = [
+    "-C", "link-arg=--nmagic",
+    "-C", "link-arg=-Tlink.x",
+]
 
 [target.xtensa-esp32s2-none-elf] # ESP32-S2
 runner = "espflash flash --baud=921600 --monitor --chip esp32s2"
