@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Fixture: no url, no extension section — exercises the "—" and
+# compile_error! paths.
+
+[pins]
+uart_rx = 2
+uart_tx = 3

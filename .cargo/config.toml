@@ -37,8 +37,10 @@ build-esp32s3 = "build --release --target xtensa-esp32s3-none-elf -p ssh-stamp-e
 build-rp2350 = "build --release --target thumbv8m.main-none-eabihf -p ssh-stamp-rp2350 --bin ssh-stamp-rp2350 --no-default-features --features board-w6300-evb-pico2"
 run-rp2350 = "run --release --target thumbv8m.main-none-eabihf -p ssh-stamp-rp2350 --bin ssh-stamp-rp2350 --no-default-features --features board-w6300-evb-pico2"
 
-# Test alias
+# Test aliases. Both are host-side crates, so they pin the host triple to
+# escape the embedded default target in [build].
 test-ota = "test --package ota --target x86_64-unknown-linux-gnu"
+test-codegen = "test --package ssh-stamp-board-codegen --target x86_64-unknown-linux-gnu"
 
 # ota packer aliases
 build-packer = "build --package ota --bin packer --target x86_64-unknown-linux-gnu"
