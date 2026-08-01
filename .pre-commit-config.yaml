@@ -28,12 +28,9 @@ repos:
         entry: cargo clippy --release --target thumbv8m.main-none-eabihf -p ssh-stamp-rp2350 --bin ssh-stamp-rp2350 --no-default-features --features board-w6300-evb-pico2 -- -D warnings -A clippy::default_trait_access
         language: system
         pass_filenames: false
-      # `ota` is deliberately not linted here yet: it has pre-existing
-      # pedantic warnings that the old (never-passing) --workspace hook
-      # masked. Add `-p ota` once those are cleared.
       - id: clippy-host
         name: clippy (host tools)
-        description: Lint the host-side BSP codegen crate
-        entry: cargo clippy --target x86_64-unknown-linux-gnu -p ssh-stamp-board-codegen --all-targets -- -D warnings
+        description: Lint the host-side crates (BSP codegen, OTA packer)
+        entry: cargo clippy --target x86_64-unknown-linux-gnu -p ssh-stamp-board-codegen -p ota --all-targets -- -D warnings
         language: system
         pass_filenames: false

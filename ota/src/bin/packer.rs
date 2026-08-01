@@ -8,7 +8,7 @@ use clap::{ArgAction, Command};
 use sha2::{Digest, Sha256};
 use std::{
     io::{Read, Seek, SeekFrom, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 const OTA_PACKER_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -27,7 +27,7 @@ const FILE_TOO_LARGE: i32 = 10;
 
 fn main() {
     let matches = Command::new("packer")
-        .about(format!("SSH-Stamp utility {} to pack (unpack) OTA update files adding the required metadata.", OTA_PACKER_VERSION))
+        .about(format!("SSH-Stamp utility {OTA_PACKER_VERSION} to pack (unpack) OTA update files adding the required metadata."))
         .arg(clap::arg!(<FILE> "The file to process").required(true))
         .arg(
             clap::arg!(-u --unpack "Unpacks a OTA file. Will save to <file> with .ota.npkd extension")
@@ -59,22 +59,22 @@ fn main() {
     }
 
     if matches.get_flag("unpack") {
-        std::process::exit(unpack_ota(file_path));
+        std::process::exit(unpack_ota(&file_path));
     }
 
-    std::process::exit(pack_bin(file_path));
+    std::process::exit(pack_bin(&file_path));
 }
 
-fn unpack_ota(file_path: PathBuf) -> i32 {
+fn unpack_ota(file_path: &Path) -> i32 {
     println!("Unpacking BIN from OTA file {}...", file_path.display());
-    let Ok(file) = std::fs::File::open(&file_path) else {
-        eprintln!("Error: Could not open file '{}'", file_path.display(),);
+    let Ok(file) = std::fs::File::open(file_path) else {
+        eprintln!("Error: Could not open file '{}'", file_path.display());
         return OPEN_FAILED;
     };
     let mut reader = std::io::BufReader::new(file);
     let mut buffer = [0u8; 512];
     let Ok(_) = reader.read(&mut buffer) else {
-        eprintln!("Error: Could not read from file '{}'", file_path.display(),);
+        eprintln!("Error: Could not read from file '{}'", file_path.display());
         return READ_FAILED;
     };
     let Ok((header, seek_to_bin)) = OtaHeader::deserialize(&buffer) else {
@@ -85,9 +85,9 @@ fn unpack_ota(file_path: PathBuf) -> i32 {
         return READ_FAILED;
     };
 
-    println!("Found OTA header: {:?}", header);
+    println!("Found OTA header: {header:?}");
 
-    let mut file_path_bin = file_path.clone();
+    let mut file_path_bin = file_path.to_path_buf();
     file_path_bin.set_extension("ota.npkd");
     println!("Saving unpacked BIN file to: {}", file_path_bin.display());
 
@@ -141,46 +141,45 @@ fn unpack_ota(file_path: PathBuf) -> i32 {
 }
 
 // TODO: Optimize memory usage by streaming the file instead of reading it all at once
-fn pack_bin(file_path: PathBuf) -> i32 {
+fn pack_bin(file_path: &Path) -> i32 {
     println!("Packing {} as OTA...", file_path.display());
 
     let firmware_size = match file_path.metadata() {
-        Ok(metadata) => match u32::try_from(metadata.len()) {
-            Ok(size) => size,
-            Err(_) => {
+        Ok(metadata) => {
+            let Ok(size) = u32::try_from(metadata.len()) else {
                 eprintln!(
                     "Error: File '{}' is too large (max 4GB supported)",
                     file_path.display()
                 );
                 return FILE_TOO_LARGE;
-            }
-        },
+            };
+            size
+        }
         Err(e) => {
             eprintln!(
-                "Error: Could not retrieve metadata for file '{}': {}",
-                file_path.display(),
-                e
+                "Error: Could not retrieve metadata for file '{}': {e}",
+                file_path.display()
             );
             return OPEN_FAILED;
         }
     };
-    println!("Bin file size: {} bytes", firmware_size);
+    println!("Bin file size: {firmware_size} bytes");
 
     let mut hasher = Sha256::new();
-    let Ok(read) = std::fs::read(&file_path) else {
-        eprintln!("Error: Could not read file '{}'", file_path.display(),);
+    let Ok(read) = std::fs::read(file_path) else {
+        eprintln!("Error: Could not read file '{}'", file_path.display());
         return READ_FAILED;
     };
     hasher.update(&read);
 
     let firmware_sha256 = hasher.finalize();
-    println!("Firmware SHA-256: {:x}", firmware_sha256);
+    println!("Firmware SHA-256: {firmware_sha256:x}");
 
     // We could read an u32 from an argument if we want to support multiple OTA types...
     let ota_type = tlv::OTA_TYPE_VALUE_SSH_STAMP;
-    println!("OTA Type Number: {} (SSH-Stamp)", ota_type);
+    println!("OTA Type Number: {ota_type} (SSH-Stamp)");
 
-    let mut ota_file_path = file_path.clone();
+    let mut ota_file_path = file_path.to_path_buf();
     ota_file_path.set_extension("ota");
 
     println!("Saving OTA file to: {}", ota_file_path.display());
@@ -199,7 +198,7 @@ fn pack_bin(file_path: PathBuf) -> i32 {
     let header_len =
         OtaHeader::new(ota_type, firmware_sha256.as_slice(), firmware_size).serialize(&mut buf);
 
-    println!("OTA header length: {} bytes", header_len);
+    println!("OTA header length: {header_len} bytes");
 
     let Ok(bytes) = ota_file.write(&buf[..header_len]) else {
         eprintln!(
@@ -208,7 +207,7 @@ fn pack_bin(file_path: PathBuf) -> i32 {
         );
         return WRITE_FAILED;
     };
-    println!("Wrote {} bytes of OTA header", bytes);
+    println!("Wrote {bytes} bytes of OTA header");
 
     let Ok(bytes) = ota_file.write(&read) else {
         eprintln!(
@@ -217,7 +216,7 @@ fn pack_bin(file_path: PathBuf) -> i32 {
         );
         return WRITE_FAILED;
     };
-    println!("Wrote {} bytes of firmware data", bytes);
+    println!("Wrote {bytes} bytes of firmware data");
 
     OK
 }

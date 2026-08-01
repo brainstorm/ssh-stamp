@@ -263,6 +263,7 @@ impl OtaHeader {
     ///
     /// Used during packing of OTA files. Therefore, not needed in the embedded side.
     #[cfg(not(target_os = "none"))]
+    #[must_use]
     pub fn new(ota_type: u32, sha256_checksum: &[u8], firmware_blob_size: u32) -> Self {
         // TODO: Check that the sha256_checksum length is correct: 32 bytes
         let mut checksum_array = [0u8; tlv::CHECKSUM_LEN as usize];
