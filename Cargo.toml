@@ -18,6 +18,8 @@ license = "GPL-3.0-or-later"
 
 [workspace]
 members = [
+    # Host-side build tooling shared by the BSP build scripts.
+    "ssh-stamp-board-codegen",
     "ssh-stamp-hal",
     "ssh-stamp-esp32",
     "ssh-stamp-esp32-boards",

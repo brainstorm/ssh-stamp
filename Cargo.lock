@@ -3129,6 +3129,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ssh-stamp-board-codegen"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "ssh-stamp-esp32"
 version = "0.2.0"
 dependencies = [
@@ -3171,7 +3179,7 @@ name = "ssh-stamp-esp32-boards"
 version = "0.1.0"
 dependencies = [
  "serde",
- "toml",
+ "ssh-stamp-board-codegen",
 ]
 
 [[package]]
@@ -3219,7 +3227,7 @@ name = "ssh-stamp-rp2350-boards"
 version = "0.1.0"
 dependencies = [
  "serde",
- "toml",
+ "ssh-stamp-board-codegen",
 ]
 
 [[package]]

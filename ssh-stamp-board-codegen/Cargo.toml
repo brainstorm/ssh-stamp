@@ -3,20 +3,23 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [package]
-name = "ssh-stamp-rp2350-boards"
+name = "ssh-stamp-board-codegen"
 version = "0.1.0"
 edition = "2024"
 authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
-description = "Board Support Package — per-PCB pin mappings for ssh-stamp-rp2350"
+description = "Board Support Package codegen shared by the ssh-stamp BSP build scripts"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/brainstorm/ssh-stamp"
 
-[features]
-board-w6300-evb-pico2 = []
+# Short path for build scripts: `board_codegen::emit::…`.
+[lib]
+name = "board_codegen"
 
-[build-dependencies]
-ssh-stamp-board-codegen = { path = "../ssh-stamp-board-codegen" }
+# Host-side crate: build scripts always compile for the host, so unlike every
+# other member of this workspace it is a normal `std` crate.
+[dependencies]
 serde = { version = "1", features = ["derive"] }
+toml = "0.8"
 
 [lints]
 workspace = true

@@ -36,14 +36,4 @@
 
 #![no_std]
 
-/// Board identification trait.
-///
-/// Each board struct generated from `boards/*.toml` implements this trait.
-/// The `NAME` const is the board's filename (without `.toml`), used for
-/// boot-time logging.
-pub trait Board {
-    /// Human-readable board name (e.g. `"w6300-evb-pico2"`).
-    const NAME: &'static str;
-}
-
 include!(concat!(env!("OUT_DIR"), "/boards_gen.rs"));
