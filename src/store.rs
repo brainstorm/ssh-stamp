@@ -8,7 +8,7 @@ use embedded_storage::ReadStorage;
 use embedded_storage::nor_flash::NorFlash;
 
 use pretty_hex::PrettyHex;
-use sha2::Digest;
+use ssh_key::sha2::Digest;
 
 use log::{debug, error};
 
@@ -39,7 +39,7 @@ impl FlashConfig<'_> {
 }
 
 fn config_hash(config: &SSHStampConfig) -> Result<[u8; 32], SunsetError> {
-    let mut h = sha2::Sha256::new();
+    let mut h = ssh_key::sha2::Sha256::new();
     sshwire::hash_ser(&mut h, config)?;
     Ok(h.finalize().into())
 }
@@ -120,7 +120,7 @@ where
         SunsetError::msg("flash error")
     })?;
 
-    let flash_config: FlashConfig = sshwire::read_ssh(buf, None)
+    let (flash_config, _used): (FlashConfig, usize) = sshwire::read_ssh(buf, None)
         .map_err(|_| SunsetError::msg("failed to decode flash config"))?;
 
     if flash_config.version != SSHStampConfig::CURRENT_VERSION {

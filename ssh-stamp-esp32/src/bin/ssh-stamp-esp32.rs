@@ -228,6 +228,33 @@ async fn main(spawner: Spawner) -> ! {
     esp_hal::system::software_reset();
 }
 
+/// `getrandom` custom backend.
+///
+/// getrandom 0.4 picks its entropy backend by cfg rather than by cargo
+/// feature: every bare-metal target here is built with
+/// `--cfg getrandom_backend="custom"` (see `.cargo/config.toml`), which
+/// makes getrandom link this symbol. It must be defined exactly once in the
+/// whole program, so it lives in the binary — as getrandom's own docs
+/// recommend — and forwards to the hardware TRNG registered at boot by
+/// [`register_custom_rng`].
+///
+/// This is what feeds the SSH host key and the `WiFi` PSK, so it must be a
+/// real entropy source, never a stub.
+#[unsafe(no_mangle)]
+unsafe extern "Rust" fn __getrandom_v03_custom(
+    dest: *mut u8,
+    len: usize,
+) -> Result<(), getrandom::Error> {
+    // SAFETY: getrandom guarantees `dest` is valid for writes of `len`
+    // bytes. The buffer may be uninitialised, so it is zeroed before a
+    // slice is formed over it, as getrandom's documentation prescribes.
+    let buf = unsafe {
+        core::ptr::write_bytes(dest, 0, len);
+        core::slice::from_raw_parts_mut(dest, len)
+    };
+    ssh_stamp_esp32::rng_fill_bytes(buf)
+}
+
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}

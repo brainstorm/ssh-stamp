@@ -3,22 +3,32 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use core::hash::Hasher;
-
 use crate::handler::{OtaError, UpdateProcessor};
 use ssh_stamp_hal::OtaActions;
 
-use sunset::sshwire::{BinString, WireError};
 use sunset_async::ChanInOut;
 use sunset_sftp::{
-    SftpHandler,
-    handles::OpaqueFileHandle,
-    protocol::{FileHandle, Filename, NameEntry, PFlags, StatusCode},
-    server::{DirReadHeaderReply, DirReadReplyFinished, MAX_REQUEST_LEN, SftpServer},
+    SftpServerHandler,
+    protocol::{Filename, NameEntry, PFlags, StatusCode},
+    server::{
+        DirHandle, DirReadHeaderReply, DirReadReplyFinished, FileHandle, MAX_REQUEST_LEN,
+        SftpServer,
+    },
 };
 
 use log::{debug, error, info, warn};
-use rustc_hash::FxHasher;
+use sunset_sftp::embedded_io_async::Write;
+
+/// The single handle this server hands out.
+///
+/// sunset-sftp 0.2 lets the server pick its own `u32` handle values, and an
+/// OTA session only ever has one file open at a time, so a constant is
+/// enough — the previous hashed opaque handle bought nothing.
+const OTA_FILE_HANDLE: FileHandle = FileHandle(1);
+
+/// Handle returned for directory opens, kept distinct from the file one for
+/// clarity even though the protocol allows reusing the value.
+const OTA_DIR_HANDLE: DirHandle = DirHandle(1);
 
 /// Runs the OTA SFTP server
 ///
@@ -28,19 +38,12 @@ pub async fn run_ota_server<W: OtaActions>(
     stdio: ChanInOut<'_>,
     ota_writer: W,
 ) -> Result<(), sunset::Error> {
-    let mut request_buffer = [0u8; MAX_REQUEST_LEN];
-
     let mut file_server = SftpOtaServer::new(ota_writer);
+    let mut handler = SftpServerHandler::<MAX_REQUEST_LEN, MAX_REQUEST_LEN>::new();
 
     let (chan_in, chan_out) = stdio.split();
 
-    match SftpHandler::<OtaOpaqueFileHandle, SftpOtaServer<OtaOpaqueFileHandle, W>, 512>::new(
-        &mut file_server,
-        &mut request_buffer,
-    )
-    .process_loop(chan_in, chan_out)
-    .await
-    {
+    match handler.run(&mut file_server, chan_in, chan_out).await {
         Ok(()) => {
             debug!("sftp server loop finished gracefully");
             Ok(())
@@ -52,202 +55,141 @@ pub async fn run_ota_server<W: OtaActions>(
     }
 }
 
-/// This length is chosen to keep the file handle small
-/// while still providing a reasonable level of uniqueness.
-/// We are not expecting more than one OTA operation at a time.
-const OPAQUE_HASH_LEN: usize = 4;
-
-/// `OtaOpaqueFileHandle` for OTA SFTP server
-///
-/// Minimal implementation of an opaque file handle with a tiny hash
-#[derive(Hash, Debug, Eq, PartialEq, Clone)]
-struct OtaOpaqueFileHandle {
-    // Define fields as needed for OTA file handle
-    tiny_hash: [u8; OPAQUE_HASH_LEN],
-}
-
-impl OpaqueFileHandle for OtaOpaqueFileHandle {
-    fn try_from(file_handle: &FileHandle<'_>) -> sunset::sshwire::WireResult<Self> {
-        if !file_handle
-            .0
-            .0
-            .len()
-            .eq(&core::mem::size_of::<OtaOpaqueFileHandle>())
-        {
-            return Err(WireError::BadString);
-        }
-
-        let mut tiny_hash = [0u8; OPAQUE_HASH_LEN];
-        tiny_hash.copy_from_slice(file_handle.0.0);
-        Ok(OtaOpaqueFileHandle { tiny_hash })
-    }
-
-    fn into_file_handle(&self) -> FileHandle<'_> {
-        FileHandle(BinString(&self.tiny_hash))
-    }
-}
-
-/// Derive the file handle from a path seed.
-trait InitFromSeed: Sized {
-    type Err;
-
-    fn init_from_seed(seed: &str) -> Result<Self, Self::Err>;
-}
-
-impl InitFromSeed for OtaOpaqueFileHandle {
-    type Err = WireError;
-
-    fn init_from_seed(seed: &str) -> Result<Self, Self::Err> {
-        let mut hasher = FxHasher::default();
-        hasher.write(seed.as_bytes());
-        let hash_bytes = u32::try_from(hasher.finish()).unwrap_or(0).to_be_bytes();
-        Ok(OtaOpaqueFileHandle {
-            tiny_hash: hash_bytes,
-        })
-    }
-}
-
 /// SFTP server implementation for OTA updates
 ///
-/// This struct implements the `SftpServer` trait for handling OTA updates over SFTP
-/// For now, all methods log an error and return unsupported operation as this is a placeholder
-struct SftpOtaServer<T, W: OtaActions> {
-    // Add fields as necessary for OTA server state
-    file_handle: Option<T>,
+/// Accepts exactly one file at a time and streams it into the OTA
+/// partition; every other operation is refused.
+struct SftpOtaServer<W: OtaActions> {
+    /// `Some` while a file is open for this session.
+    open_handle: Option<FileHandle>,
     write_permission: bool,
     processor: UpdateProcessor<W>,
 }
 
-impl<T, W: OtaActions> SftpOtaServer<T, W> {
+impl<W: OtaActions> SftpOtaServer<W> {
     pub fn new(ota_writer: W) -> Self {
         Self {
-            // Initialize fields as necessary
-            file_handle: None,
+            open_handle: None,
             write_permission: false,
             processor: UpdateProcessor::new(ota_writer),
         }
     }
 }
 
-impl<T: OpaqueFileHandle + InitFromSeed, W: OtaActions> SftpServer<T> for SftpOtaServer<T, W> {
-    async fn open(&'_ mut self, path: &str, mode: &PFlags) -> sunset_sftp::server::SftpOpResult<T> {
-        if self.file_handle.is_none() {
-            let num_mode = u32::from(mode);
-
-            self.write_permission = num_mode & u32::from(&PFlags::SSH_FXF_WRITE) > 0
-                || num_mode & u32::from(&PFlags::SSH_FXF_APPEND) > 0
-                || num_mode & u32::from(&PFlags::SSH_FXF_CREAT) > 0;
-
-            let handle = T::init_from_seed(path).map_err(|_| StatusCode::SSH_FX_FAILURE)?;
-            self.file_handle = Some(handle.clone());
-            info!(
-                "SftpServer Open operation: path = {:?}, write_permission = {:?}, handle = {:?}",
-                path, self.write_permission, handle
-            );
-            Ok(handle)
-        } else {
+impl<W: OtaActions> SftpServer for SftpOtaServer<W> {
+    async fn open(
+        &mut self,
+        path: &str,
+        mode: &PFlags,
+    ) -> sunset_sftp::server::SftpOpResult<FileHandle> {
+        if self.open_handle.is_some() {
             error!(
                 "SftpServer Open operation failed: already writing OTA, path = {path:?}, attrs = {mode:?}"
             );
-            Err(StatusCode::SSH_FX_PERMISSION_DENIED)
+            return Err(StatusCode::SSH_FX_PERMISSION_DENIED);
         }
+
+        let num_mode = u32::from(mode);
+        self.write_permission = num_mode & u32::from(&PFlags::SSH_FXF_WRITE) > 0
+            || num_mode & u32::from(&PFlags::SSH_FXF_APPEND) > 0
+            || num_mode & u32::from(&PFlags::SSH_FXF_CREAT) > 0;
+
+        self.open_handle = Some(OTA_FILE_HANDLE);
+        info!(
+            "SftpServer Open operation: path = {:?}, write_permission = {:?}, handle = {:?}",
+            path, self.write_permission, OTA_FILE_HANDLE
+        );
+        Ok(OTA_FILE_HANDLE)
     }
 
-    async fn close(&mut self, handle: &T) -> sunset_sftp::server::SftpOpResult<()> {
-        // TODO: At this point I need to reset the target if all is ok or reset the processor if not so we are
-        // either loading a new firmware or ready to receive a correct one.
+    async fn close(&mut self, handle: FileHandle) -> sunset_sftp::server::SftpOpResult<()> {
         info!("Close called for handle {handle:?}");
-        if let Some(current_handle) = &self.file_handle {
-            if current_handle == handle {
-                let ret_val = match self.processor.finalize().await {
-                    Ok(()) => {
-                        info!("OTA update finalized successfully.");
-                        self.processor.reset_device();
-                        Ok(())
-                    }
-                    Err(e) => {
-                        error!("OTA update finalization failed: {e:?}");
-                        Err(StatusCode::SSH_FX_FAILURE)
-                    }
-                };
-                info!("SftpServer Close operation for OTA completed: handle = {handle:?}");
-                self.file_handle = None;
-                self.write_permission = false;
+        let Some(current_handle) = self.open_handle else {
+            warn!("SftpServer Close operation granted on untracked handle: {handle:?}");
+            return Ok(());
+        };
+        if current_handle != handle {
+            warn!("SftpServer Close operation failed: handle mismatch = {handle:?}");
+            return Err(StatusCode::SSH_FX_FAILURE);
+        }
 
-                ret_val
-            } else {
-                warn!("SftpServer Close operation failed: handle mismatch = {handle:?}");
+        let ret_val = match self.processor.finalize().await {
+            Ok(()) => {
+                info!("OTA update finalized successfully.");
+                self.processor.reset_device();
+                Ok(())
+            }
+            Err(e) => {
+                error!("OTA update finalization failed: {e:?}");
                 Err(StatusCode::SSH_FX_FAILURE)
             }
-        } else {
-            warn!("SftpServer Close operation granted on untracked handle: {handle:?}");
-            Ok(())
-        }
+        };
+        info!("SftpServer Close operation for OTA completed: handle = {handle:?}");
+        self.open_handle = None;
+        self.write_permission = false;
+
+        ret_val
     }
 
     async fn write(
         &mut self,
-        opaque_file_handle: &T,
+        handle: FileHandle,
         offset: u64,
         buf: &[u8],
     ) -> sunset_sftp::server::SftpOpResult<()> {
-        if let Some(current_handle) = &self.file_handle
-            && current_handle == opaque_file_handle
-        {
-            if !self.write_permission {
-                warn!(
-                    "SftpServer Write operation denied: no write permission for handle = {opaque_file_handle:?}"
-                );
-                return Err(StatusCode::SSH_FX_PERMISSION_DENIED);
-            }
-            debug!(
-                "SftpServer Write operation for OTA: handle = {opaque_file_handle:?}, offset = {offset:?}, buf_len = {:?}",
-                buf.len()
-            );
-
-            if let Err(e) = self.processor.process_data(offset, buf).await {
-                match e {
-                    OtaError::IllegalOperation => {
-                        error!(
-                            "SftpServer Write operation failed during OTA processing: Illegal Operation - {e:?}"
-                        );
-                        return Err(StatusCode::SSH_FX_PERMISSION_DENIED);
-                    }
-                    OtaError::UnknownTlvType => {
-                        error!(
-                            "SftpServer Write operation failed during OTA processing: Unknown TLV Type - {e:?}"
-                        );
-                        return Err(StatusCode::SSH_FX_OP_UNSUPPORTED);
-                    }
-                    _ => {
-                        error!("SftpServer Write operation failed during OTA processing: {e:?}");
-                        return Err(StatusCode::SSH_FX_FAILURE);
-                    }
-                }
-            }
-            debug!(
-                "SftpServer Write operation for OTA processed successfully: handle = {opaque_file_handle:?}, offset = {offset:?}, buf_len = {:?}",
-                buf.len()
-            );
-            return Ok(());
+        if self.open_handle != Some(handle) {
+            warn!("SftpServer Write operation failed: handle mismatch = {handle:?}");
+            return Err(StatusCode::SSH_FX_FAILURE);
+        }
+        if !self.write_permission {
+            warn!("SftpServer Write operation denied: no write permission for handle = {handle:?}");
+            return Err(StatusCode::SSH_FX_PERMISSION_DENIED);
         }
 
-        warn!("SftpServer Write operation failed: handle mismatch = {opaque_file_handle:?}");
-        Err(StatusCode::SSH_FX_FAILURE)
+        debug!(
+            "SftpServer Write operation for OTA: handle = {handle:?}, offset = {offset:?}, buf_len = {:?}",
+            buf.len()
+        );
+
+        if let Err(e) = self.processor.process_data(offset, buf).await {
+            return Err(match e {
+                OtaError::IllegalOperation => {
+                    error!(
+                        "SftpServer Write operation failed during OTA processing: Illegal Operation - {e:?}"
+                    );
+                    StatusCode::SSH_FX_PERMISSION_DENIED
+                }
+                OtaError::UnknownTlvType => {
+                    error!(
+                        "SftpServer Write operation failed during OTA processing: Unknown TLV Type - {e:?}"
+                    );
+                    StatusCode::SSH_FX_OP_UNSUPPORTED
+                }
+                _ => {
+                    error!("SftpServer Write operation failed during OTA processing: {e:?}");
+                    StatusCode::SSH_FX_FAILURE
+                }
+            });
+        }
+
+        debug!(
+            "SftpServer Write operation for OTA processed successfully: handle = {handle:?}, offset = {offset:?}, buf_len = {:?}",
+            buf.len()
+        );
+        Ok(())
     }
 
-    async fn opendir(&mut self, dir: &str) -> sunset_sftp::server::SftpOpResult<T> {
-        let handle = T::init_from_seed(dir).map_err(|_| StatusCode::SSH_FX_FAILURE)?;
-        info!("SftpServer OpenDir: dir = {dir:?}. Returning {handle:?}");
-        Ok(handle)
+    async fn opendir(&mut self, dir: &str) -> sunset_sftp::server::SftpOpResult<DirHandle> {
+        info!("SftpServer OpenDir: dir = {dir:?}. Returning {OTA_DIR_HANDLE:?}");
+        Ok(OTA_DIR_HANDLE)
     }
 
-    async fn readdir<const N: usize>(
+    async fn readdir<W2: Write>(
         &mut self,
-        opaque_dir_handle: &T,
-        _reply: DirReadHeaderReply<'_, N>,
+        handle: DirHandle,
+        _reply: DirReadHeaderReply<'_, '_, W2>,
     ) -> sunset_sftp::server::SftpOpResult<DirReadReplyFinished> {
-        info!("SftpServer ReadDir called for OTA SFTP server on handle: {opaque_dir_handle:?}");
+        info!("SftpServer ReadDir called for OTA SFTP server on handle: {handle:?}");
         Err(StatusCode::SSH_FX_EOF)
     }
 

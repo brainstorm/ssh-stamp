@@ -43,15 +43,15 @@ heapless = "0.9"
 esp-hal = { version = "1.1", features = ["unstable", "log-04"] }
 
 # SSH protocol
-sunset = { version = "0.5.0", default-features = false, features = [
+sunset = { version = "0.6.0", default-features = false, features = [
     "openssh-key",
     "embedded-io",
 ] }
-sunset-async = { version = "0.5.0", default-features = false, features = [
+sunset-async = { version = "0.6.0", default-features = false, features = [
     "multi-thread",
 ] }
-sunset-sshwire-derive = { version = "0.2.2", default-features = false }
-sunset-sftp = { version = "0.1.3", default-features = false }
+sunset-sshwire-derive = { version = "0.3.0", default-features = false }
+sunset-sftp = { version = "0.2.0", default-features = false }
 
 # Crypto
 sha2 = { version = "0.10", default-features = false }
@@ -107,7 +107,7 @@ sha2 = { workspace = true }
 rustc-hash = { workspace = true }
 
 cfg-if = "1"
-ed25519-dalek = { version = "2", default-features = false }
+ed25519-dalek = { version = "3", default-features = false }
 embassy-executor = { workspace = true }
 embassy-net = { workspace = true }
 smoltcp = { workspace = true }
@@ -116,12 +116,12 @@ embedded-io-async = { workspace = true }
 embedded-can = { workspace = true, optional = true }
 hex = { version = "0.4", default-features = false }
 log = { workspace = true }
-ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
+ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["ed25519"] }
 sunset = { workspace = true }
 sunset-async = { workspace = true }
 sunset-sshwire-derive = { workspace = true }
 sunset-sftp = { workspace = true }
-getrandom = { version = "0.2.10", features = ["custom"] }
+getrandom = { version = "0.4" }
 embassy-sync = { workspace = true }
 heapless = { workspace = true }
 embassy-futures = { workspace = true }
