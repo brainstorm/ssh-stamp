@@ -72,8 +72,10 @@ repository hard-codes UART pin numbers.
 To see the available boards and their pin assignments, run:
 
 ```
-cargo build-doc
+cargo xtask doc
 ```
+
+(`cargo xtask list` gives the same board list as a quick terminal summary.)
 
 Then open `target/riscv32imac-unknown-none-elf/doc/ssh_stamp_esp32_boards/index.html`,
 which contains the auto-generated per-board pin assignment table.

@@ -8,3 +8,7 @@ url = "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c5/esp32-
 [pins]
 uart_rx = 8
 uart_tx = 9
+
+# Consumed by `cargo xtask`; the BSP build script ignores this section.
+[build]
+chip = "esp32c5"

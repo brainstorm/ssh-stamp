@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+# Deliberately dependency-light: this is the build entry point for every
+# target, so it must compile fast on a bare `cargo xtask` with no extra
+# toolchain setup. Argument parsing is hand-rolled (see `Args::parse`)
+# rather than pulling in clap. See issue #116.
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+[lints]
+workspace = true
