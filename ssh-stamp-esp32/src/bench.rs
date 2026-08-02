@@ -8,8 +8,8 @@
 //! `esp_alloc::HEAP` to emit logs.
 //!
 
-use esp_alloc::HEAP;
-use ssh_stamp::bench_emit;
+#[cfg(feature = "mem-probe")]
+use {esp_alloc::HEAP, ssh_stamp::bench_emit};
 
 /// Logs the global heap's usage using the label.
 #[cfg(feature = "mem-probe")]

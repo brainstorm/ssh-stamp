@@ -5,6 +5,7 @@
 // SPDX-FileCopyrightText: 2026 pancake <pancake@nopcode.org>
 // SPDX-FileCopyrightText: 2026 Gabriel Ku Wei Bin <gabriel.ku@fsfe.org>
 // SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
+// SPDX-FileCopyrightText: 2026 Marko Malenic <mmalenic1@gmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -22,6 +23,7 @@
 
 #![no_std]
 #![no_main]
+#![forbid(unsafe_code)]
 
 extern crate alloc;
 
@@ -36,11 +38,14 @@ use log::{debug, error, warn};
 use ssh_stamp::config::{SSHStampConfig, UartPins};
 use ssh_stamp::platform::PlatformServices;
 use ssh_stamp::store;
-use ssh_stamp::{app, settings::DEFAULT_IP};
+use ssh_stamp::{
+    app, mem_probe,
+    settings::{DEFAULT_IP, HEAP_SIZE},
+};
 #[cfg(feature = "can")]
 use ssh_stamp_esp32::{BufferedCan, CAN_BUF, EspCanPins, can_task};
 use ssh_stamp_esp32::{
-    BufferedUart, EspPlatform, EspUartPins, EspWifi, UART_BUF, flash, mac_address,
+    BufferedUart, EspPlatform, EspUartPins, EspWifi, UART_BUF, bench, flash, mac_address,
     register_custom_rng, uart_task,
 };
 use ssh_stamp_esp32_boards::Board;
@@ -48,6 +53,8 @@ use ssh_stamp_hal::{HalError, WifiError};
 use ssh_stamp_hal::{NetworkProviderHal, WifiHal};
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
+#[cfg(feature = "crypto-bench")]
+use {esp_hal::clock::cpu_clock, ssh_stamp::crypto_bench};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "esp32")] {
@@ -63,16 +70,20 @@ async fn main(spawner: Spawner) -> ! {
         if #[cfg(feature = "esp32s2")] {
             // TODO: This heap size will crash at runtime (only for the ESP32S2);
             // see https://github.com/brainstorm/ssh-stamp/pull/41#issuecomment-2964775170
-            esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 72 * 1024);
+            esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: HEAP_SIZE);
         } else {
-            esp_alloc::heap_allocator!(size: 72 * 1024);
+            esp_alloc::heap_allocator!(size: HEAP_SIZE);
         }
     );
     esp_bootloader_esp_idf::esp_app_desc!();
     logger::init_logger_from_env();
+    bench::log_heap("boot");
     debug!("HSM: initialising peripherals");
 
-    let peripherals = esp_hal::init(esp_hal::Config::default());
+    // Note that benches do depend on a stable clock speed across comparisons. The default
+    // shouldn't change much, but theoretically an upgrade could change it.
+    let config = esp_hal::Config::default();
+    let peripherals = esp_hal::init(config);
 
     // Enable true random number generation using ADC entropy source before config creation.
     // The ESP32 hardware RNG only produces true random numbers when RF subsystem is enabled
@@ -158,6 +169,14 @@ async fn main(spawner: Spawner) -> ! {
        }
     }
 
+    mem_probe::bench_boot();
+    // Run the crypto benches before the network stack, if enabled.
+    #[cfg(feature = "crypto-bench")]
+    {
+        bench_cycles::init();
+        crypto_bench::run(20, bench_cycles::read, cpu_clock().as_mhz());
+    }
+
     let uart_buf = UART_BUF.init_with(BufferedUart::new);
     let interrupt_executor =
         INT_EXECUTOR.init_with(|| InterruptExecutor::new(sw_int.software_interrupt1));
@@ -195,6 +214,8 @@ async fn main(spawner: Spawner) -> ! {
     #[cfg(not(feature = "can"))]
     let platform = EspPlatform::new();
 
+    mem_probe::bench_peripherals_ready();
+    bench::log_heap("peripherals");
     debug!("Initialising radio");
 
     let ap_config = app::prepare_ap_config(config, &platform)
@@ -220,12 +241,62 @@ async fn main(spawner: Spawner) -> ! {
         }
     }
 
+    mem_probe::bench_wifi_up();
+    bench::log_heap("wifi_up");
     if let Err(e) = app::run_app(stack.unwrap(), uart_buf, config, &platform).await {
         error!("run_app exited with error: {e}");
     }
 
     warn!("End of main, resetting");
     esp_hal::system::software_reset();
+}
+
+/// CPU cycle counter crypto benchmarks. The counter is target specific so they are
+/// defined in the binary.
+#[cfg(feature = "crypto-bench")]
+mod bench_cycles {
+    // Espressif's custom performance CSRs. These do not exist in Rust, so we have to
+    // define them here. They correspond to the equivalent in:
+    // https://github.com/espressif/esp-idf/blob/95e1386d5567123d092c8151e3c942e2ec9de6a1/components/riscv/include/riscv/rv_utils.h#L46-L48
+
+    /// `pcer` event select.
+    #[cfg(target_arch = "riscv32")]
+    mod pcer {
+        riscv::write_csr_as_usize_rv32!(safe 0x7E0);
+    }
+    /// `pcmr` mode enable.
+    #[cfg(target_arch = "riscv32")]
+    mod pcmr {
+        riscv::write_csr_as_usize_rv32!(safe 0x7E1);
+    }
+    /// `pccr` the counter itself.
+    #[cfg(target_arch = "riscv32")]
+    mod pccr {
+        riscv::read_csr_as_usize_rv32!(0x7E2);
+    }
+
+    /// Enables the cycle counter.
+    #[cfg(target_arch = "riscv32")]
+    pub fn init() {
+        pcer::write(1);
+        pcmr::write(1);
+    }
+
+    /// Reads the current CPU cycle count.
+    #[cfg(target_arch = "riscv32")]
+    pub fn read() -> u32 {
+        u32::try_from(pccr::read()).unwrap_or(u32::MAX)
+    }
+
+    /// CCOUNT is always available so nothing to do.
+    #[cfg(target_arch = "xtensa")]
+    pub fn init() {}
+
+    /// Reads the CCOUNT cycle register.
+    #[cfg(target_arch = "xtensa")]
+    pub fn read() -> u32 {
+        esp_hal::xtensa_lx::timer::get_cycle_count()
+    }
 }
 
 #[panic_handler]

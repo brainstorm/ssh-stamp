@@ -12,7 +12,7 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/brainstorm/ssh-stamp"
 
 [dependencies]
-ssh-stamp = { path = ".." }
+ssh-stamp = { path = "..", default-features = false }
 ssh-stamp-hal = { path = "../ssh-stamp-hal" }
 ota = { path = "../ota" }
 
@@ -52,8 +52,11 @@ static_cell = { workspace = true }
 portable-atomic = { version = "1" }
 cfg-if = "1"
 
+[target.'cfg(target_arch = "riscv32")'.dependencies]
+riscv = { version = "0.16", optional = true }
+
 [features]
-default = ["board-esp32c6-devkitc"]
+default = ["board-esp32c6-devkitc", "mlkem"]
 sftp-ota = ["ssh-stamp/sftp-ota"]
 can = ["ssh-stamp/can"]
 # Bench bring-up variant of `can`: run the TWAI controller in self-test
@@ -63,6 +66,12 @@ can = ["ssh-stamp/can"]
 # reliability expects.
 can-no-ack = ["can"]
 ipv6 = ["ssh-stamp/ipv6"]
+
+mlkem = ["ssh-stamp/mlkem"]
+mem-probe = ["ssh-stamp/mem-probe", "esp-alloc/internal-heap-stats"]
+crypto-bench = ["ssh-stamp/crypto-bench", "dep:riscv"]
+bench-net = ["ssh-stamp/bench-net"]
+bench-loopback = []
 
 # Board features — select a specific PCB. Each enables the corresponding
 # board definition in ssh-stamp-esp32-boards AND the IC feature it targets.
