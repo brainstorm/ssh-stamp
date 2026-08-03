@@ -39,7 +39,8 @@ use ssh_stamp::config::{SSHStampConfig, UartPins};
 use ssh_stamp::platform::PlatformServices;
 use ssh_stamp::store;
 use ssh_stamp::{
-    app, mem_probe,
+    app,
+    mem_probe::{self, Checkpoint},
     settings::{DEFAULT_IP, HEAP_SIZE},
 };
 #[cfg(feature = "can")]
@@ -169,7 +170,7 @@ async fn main(spawner: Spawner) -> ! {
        }
     }
 
-    mem_probe::bench_boot();
+    mem_probe::checkpoint(Checkpoint::Boot);
     // Run the crypto benches before the network stack, if enabled.
     #[cfg(feature = "crypto-bench")]
     {
@@ -214,7 +215,7 @@ async fn main(spawner: Spawner) -> ! {
     #[cfg(not(feature = "can"))]
     let platform = EspPlatform::new();
 
-    mem_probe::bench_peripherals_ready();
+    mem_probe::checkpoint(Checkpoint::PeripheralsReady);
     bench::log_heap("peripherals");
     debug!("Initialising radio");
 
@@ -241,7 +242,7 @@ async fn main(spawner: Spawner) -> ! {
         }
     }
 
-    mem_probe::bench_wifi_up();
+    mem_probe::checkpoint(Checkpoint::WifiUp);
     bench::log_heap("wifi_up");
     if let Err(e) = app::run_app(stack.unwrap(), uart_buf, config, &platform).await {
         error!("run_app exited with error: {e}");
