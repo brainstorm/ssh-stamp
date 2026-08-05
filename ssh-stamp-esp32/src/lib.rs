@@ -32,7 +32,7 @@ pub use flash::{EspOtaWriter, FlashBuffer, get_flash_n_buffer, init as flash_ini
 pub use hash::EspHmac;
 pub use network::{EspWifi, accept_requests, dhcp_server, net_up, wifi_up};
 pub use platform::EspPlatform;
-pub use rng::{EspRng, register_custom_rng};
+pub use rng::{EspRng, fill_bytes as rng_fill_bytes, register_custom_rng};
 pub use timer::EspTimer;
 pub use uart::{BufferedUart, EspUartPins, UART_BUF, UART_SIGNAL, uart_task};
 

@@ -70,7 +70,8 @@ mod ota_tlv_tests {
             let mut buffer = [0u8; MAX_TLV_SIZE as usize];
             let used = sshwire::write_ssh(&mut buffer, variant).expect("Failed to create SSH sink");
 
-            let decoded =
+            // sunset 0.6's read_ssh also reports how many bytes it consumed.
+            let (decoded, _) =
                 sshwire::read_ssh::<Tlv>(&buffer[..used], None).expect("Failed to decode TLV");
             match (variant, decoded) {
                 (Tlv::FirmwareBlob { size: s1 }, Tlv::FirmwareBlob { size: s2 }) => {

@@ -45,20 +45,20 @@ build-doc = "doc --target riscv32imac-unknown-none-elf --no-deps --lib -p ssh-st
 
 [target.xtensa-esp32-none-elf] # ESP32
 runner = "espflash flash --baud=921600 --monitor --chip esp32"
-rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32"']
+rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32"', '--cfg', 'getrandom_backend="custom"']
 [target.riscv32imc-unknown-none-elf] # ESP32-C2 / ESP32-C3
 runner = "espflash flash --baud=921600 --monitor"
-rustflags = ["-C", "force-frame-pointers"]
+rustflags = ["-C", "force-frame-pointers", '--cfg', 'getrandom_backend="custom"']
 [target.riscv32imac-unknown-none-elf] # ESP32C6
 runner = "espflash flash --baud=921600 --partition-table ssh-stamp-esp32/partitions.csv --monitor"
-rustflags = ["-C", "force-frame-pointers"]
+rustflags = ["-C", "force-frame-pointers", '--cfg', 'getrandom_backend="custom"']
 
 [target.xtensa-esp32s2-none-elf] # ESP32-S2
 runner = "espflash flash --baud=921600 --monitor --chip esp32s2"
-rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s2"']
+rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s2"', '--cfg', 'getrandom_backend="custom"']
 [target.xtensa-esp32s3-none-elf] # ESP32-S3
 runner = "espflash flash --baud=921600 --monitor --chip esp32s3"
-rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s3"']
+rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s3"', '--cfg', 'getrandom_backend="custom"']
 
 
 # https://docs.espressif.com/projects/rust/esp-hal/1.0.0-beta.1/esp32c6/esp_hal/index.html#additional-configuration
