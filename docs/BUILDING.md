@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 # Building
 
 Everything is driven by `cargo xtask`, which knows every board, chip,

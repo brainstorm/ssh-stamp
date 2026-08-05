@@ -150,7 +150,7 @@ impl SSHStampConfig {
 
     pub(crate) fn generate_wifi_ssid() -> Result<String<32>> {
         let mut rnd = [0u8; 16];
-        getrandom::getrandom(&mut rnd).map_err(|_| sunset::Error::msg("RNG failed"))?;
+        getrandom::fill(&mut rnd).map_err(|_| sunset::Error::msg("RNG failed"))?;
         let mut ssid = String::<32>::new();
         for &byte in &rnd {
             let _ = ssid.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
@@ -160,7 +160,7 @@ impl SSHStampConfig {
 
     pub(crate) fn generate_wifi_password() -> Result<String<63>> {
         let mut rnd = [0u8; 24];
-        getrandom::getrandom(&mut rnd).map_err(|_| sunset::Error::msg("RNG failed"))?;
+        getrandom::fill(&mut rnd).map_err(|_| sunset::Error::msg("RNG failed"))?;
         let mut pw = String::<63>::new();
         for &byte in &rnd {
             let _ = pw.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
@@ -209,7 +209,7 @@ impl SSHStampConfig {
 
 fn random_mac() -> Result<[u8; 6]> {
     let mut mac = [0u8; 6];
-    getrandom::getrandom(&mut mac).map_err(|_| sunset::Error::msg("RNG failed"))?;
+    getrandom::fill(&mut mac).map_err(|_| sunset::Error::msg("RNG failed"))?;
     // unicast, locally administered
     mac[0] = (mac[0] & 0xfc) | 0x02;
     Ok(mac)
