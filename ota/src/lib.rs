@@ -66,7 +66,7 @@ mod ota_tlv_tests {
                 ota_type: OTA_TYPE_VALUE_SSH_STAMP,
             },
         ];
-        for variant in variants.iter() {
+        for variant in &variants {
             let mut buffer = [0u8; MAX_TLV_SIZE as usize];
             let used = sshwire::write_ssh(&mut buffer, variant).expect("Failed to create SSH sink");
 
@@ -257,6 +257,103 @@ mod ota_tlv_tests {
         assert_eq!(header.ota_type, Some(OTA_TYPE_VALUE_SSH_STAMP));
         assert_eq!(header.firmware_blob_size, Some(2048));
         assert_eq!(header.sha256_checksum, None);
+    }
+
+    #[test]
+    fn target_chip_round_trip() {
+        let variant = Tlv::TargetChip {
+            chip: TargetChipName::try_from("esp32c6").unwrap(),
+        };
+        let mut buffer = [0u8; MAX_TLV_SIZE as usize];
+        let used = sshwire::write_ssh(&mut buffer, &variant).expect("Failed to encode TLV");
+
+        // type + length + "esp32c6"
+        assert_eq!(used, 1 + 1 + 7);
+        assert_eq!(buffer[0], TARGET_CHIP);
+        assert_eq!(buffer[1], 7);
+
+        let (decoded, _) =
+            sshwire::read_ssh::<Tlv>(&buffer[..used], None).expect("Failed to decode TLV");
+        match decoded {
+            Tlv::TargetChip { chip } => assert_eq!(chip.as_str(), "esp32c6"),
+            other => panic!("Decoded the wrong variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn target_chip_is_serialized_right_after_ota_type() {
+        // The whole point of the TLV is early rejection, so it must land in
+        // the first bytes a device sees rather than after the checksum.
+        let mut buffer = [0u8; 512];
+        let used = OtaHeader::new(OTA_TYPE_VALUE_SSH_STAMP, &[7u8; 32], 2048, Some("esp32c6"))
+            .serialize(&mut buffer);
+
+        assert_eq!(buffer[0], OTA_TYPE);
+        assert_eq!(buffer[6], TARGET_CHIP);
+
+        let (header, consumed) =
+            OtaHeader::deserialize(&buffer[..used]).expect("Failed to deserialize header");
+        assert_eq!(consumed, used);
+        assert_eq!(
+            header.target_chip.as_ref().map(heapless::String::as_str),
+            Some("esp32c6")
+        );
+        assert_eq!(header.sha256_checksum, Some([7u8; 32]));
+        assert_eq!(header.firmware_blob_size, Some(2048));
+    }
+
+    #[test]
+    fn header_without_target_chip_stays_readable() {
+        // Images packed before the TLV existed must keep working.
+        let mut buffer = [0u8; 512];
+        let used =
+            OtaHeader::new(OTA_TYPE_VALUE_SSH_STAMP, &[7u8; 32], 2048, None).serialize(&mut buffer);
+
+        let (header, _) =
+            OtaHeader::deserialize(&buffer[..used]).expect("Failed to deserialize header");
+        assert_eq!(header.target_chip, None);
+        assert_eq!(header.firmware_blob_size, Some(2048));
+    }
+
+    #[test]
+    fn target_chip_before_ota_type_is_rejected() {
+        let mut buffer = [0u8; 512];
+        let mut offset = 0;
+
+        let target = Tlv::TargetChip {
+            chip: TargetChipName::try_from("esp32c6").unwrap(),
+        };
+        offset += sshwire::write_ssh(&mut buffer[offset..], &target)
+            .expect("Failed to write Target Chip TLV");
+
+        let ota_type_tlv = Tlv::OtaType {
+            ota_type: OTA_TYPE_VALUE_SSH_STAMP,
+        };
+        offset += sshwire::write_ssh(&mut buffer[offset..], &ota_type_tlv)
+            .expect("Failed to write OTA Type TLV");
+
+        assert!(OtaHeader::deserialize(&buffer[..offset]).is_err());
+    }
+
+    #[test]
+    fn overlong_target_chip_is_rejected() {
+        // Hand-rolled: the encoder cannot produce this, a hostile packer can.
+        let mut buffer = [0u8; 512];
+        buffer[0] = TARGET_CHIP;
+        let too_long = MAX_TARGET_CHIP_LEN + 1;
+        buffer[1] = u8::try_from(too_long).expect("test length fits in a u8");
+        for slot in &mut buffer[2..=(2 + MAX_TARGET_CHIP_LEN)] {
+            *slot = b'x';
+        }
+        let len = 2 + too_long;
+
+        assert!(sshwire::read_ssh::<Tlv>(&buffer[..len], None).is_err());
+    }
+
+    #[test]
+    fn non_utf8_target_chip_is_rejected() {
+        let buffer = [TARGET_CHIP, 2, 0xff, 0xfe];
+        assert!(sshwire::read_ssh::<Tlv>(&buffer, None).is_err());
     }
 
     // TODO: Test more error cases, such as incomplete TLVs

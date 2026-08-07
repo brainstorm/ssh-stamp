@@ -24,6 +24,7 @@ const WRITE_FAILED: i32 = 7;
 const SEEK_FAILED: i32 = 8;
 const CHECKSUM_MISMATCH: i32 = 9;
 const FILE_TOO_LARGE: i32 = 10;
+const BAD_TARGET: i32 = 11;
 
 fn main() {
     let matches = Command::new("packer")
@@ -37,6 +38,11 @@ fn main() {
         .arg(
             clap::arg!(-p --pack "(default) Packs a binary file as an OTA file. Will save to <file>.ota")
                 .action(ArgAction::SetTrue)
+                .conflicts_with("unpack"),
+        )
+        .arg(
+            clap::arg!(-t --target <CHIP> "Chip the firmware was built for, e.g. esp32c6. Lets the device refuse a mismatched image on the first bytes of the transfer instead of after the whole upload")
+                .required(false)
                 .conflicts_with("unpack"),
         )
         .get_matches();
@@ -62,7 +68,18 @@ fn main() {
         std::process::exit(unpack_ota(file_path));
     }
 
-    std::process::exit(pack_bin(file_path));
+    let target_chip = matches.get_one::<String>("target").map(String::as_str);
+    if let Some(chip) = target_chip
+        && (chip.is_empty() || chip.len() > tlv::MAX_TARGET_CHIP_LEN)
+    {
+        eprintln!(
+            "Error: target chip '{chip}' must be between 1 and {} bytes",
+            tlv::MAX_TARGET_CHIP_LEN
+        );
+        std::process::exit(BAD_TARGET);
+    }
+
+    std::process::exit(pack_bin(file_path, target_chip));
 }
 
 fn unpack_ota(file_path: PathBuf) -> i32 {
@@ -141,7 +158,7 @@ fn unpack_ota(file_path: PathBuf) -> i32 {
 }
 
 // TODO: Optimize memory usage by streaming the file instead of reading it all at once
-fn pack_bin(file_path: PathBuf) -> i32 {
+fn pack_bin(file_path: PathBuf, target_chip: Option<&str>) -> i32 {
     println!("Packing {} as OTA...", file_path.display());
 
     let firmware_size = match file_path.metadata() {
@@ -196,8 +213,20 @@ fn pack_bin(file_path: PathBuf) -> i32 {
     // More than enough for the header
     let mut buf = [0u8; 512];
 
-    let header_len =
-        OtaHeader::new(ota_type, firmware_sha256.as_slice(), firmware_size).serialize(&mut buf);
+    match target_chip {
+        Some(chip) => println!("Target chip: {chip}"),
+        None => println!(
+            "Target chip: not recorded (device cannot screen this image; pass --target to enable it)"
+        ),
+    }
+
+    let header_len = OtaHeader::new(
+        ota_type,
+        firmware_sha256.as_slice(),
+        firmware_size,
+        target_chip,
+    )
+    .serialize(&mut buf);
 
     println!("OTA header length: {} bytes", header_len);
 

@@ -21,7 +21,7 @@ The SSH connection can be established via WiFi, enabling untethered (and secure)
 
 ## Using
 
-Refer to [building](./docs/BUILDING.md) if you are not using our binary releases and [using](./docs/USING.md) documentation.
+Refer to [building](./docs/BUILDING.md) if you are not using our binary releases and [using](./docs/USING.md) documentation. Once a device is up, it can update itself [over SFTP](./docs/OTA.md).
 
 ## Targets
 
