@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: 2026 Marko Malenic <mmalenic1@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Standalone host automation + measurement runner for ssh-stamp benchmarking.
+# Kept OUT of the main workspace on purpose (own empty [workspace] below) so its
+# host-only deps (clap, serial2, ...) never pollute the firmware's Cargo.lock or
+# build graph. It drives `cargo`/`espflash`/`ssh` as SUBPROCESSES and reads the
+# device's `@BENCH key=value` serial lines directly — no linked firmware/probe
+# libraries and no CPU halts.
+#
+# Invoke via the root alias: `cargo xtask <subcommand>` (see `.cargo/config.toml`).
+
+[workspace]  # <-- explicit empty workspace so the parent workspace doesn't absorb this
+
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+# Reads the firmware ELF's sections and symbols in-process, so the size gate
+# needs no `llvm-tools` / `cargo-binutils` install.
+object = { version = "0.37", default-features = false, features = [
+    "read",
+    "elf",
+    "std",
+] }
+# Renders bench-report.md from a template, keeping the report's prose out of
+# Rust string literals.
+minijinja = { version = "2", default-features = false, features = [
+    "builtins",
+    "serde",
+] }
+# The stack table's whole job is to point at the function to shrink, which a
+# `_RNvMs3_NtCs5u2jx46vKKx_6ml_kem...` cannot do. rustc's own demangler, so v0
+# and legacy symbols both resolve the way the compiler means them to.
+rustc-demangle = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serial2 = "0.2"
+# esp-println's `colors` feature (on by default) wraps every log line in ANSI
+# escapes, so the last `key=value` on a `@BENCH` line arrives as `t_us=424474^[[0m`.
+# Stripping is a solved problem; a hand-rolled scanner would only cover CSI.
+strip-ansi-escapes = "0.2"
+toml = "0.8"
+xshell = "0.2"
