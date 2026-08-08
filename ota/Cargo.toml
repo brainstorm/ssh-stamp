@@ -10,12 +10,13 @@ edition = "2024"
 [features]
 default = []
 std = []
+sftp = ["dep:sunset-sftp"]
 
 [dependencies]
 ssh-stamp-hal = { path = "../ssh-stamp-hal" }
 sunset.workspace = true
 sunset-async.workspace = true
-sunset-sftp.workspace = true
+sunset-sftp = { workspace = true, optional = true }
 
 log.workspace = true
 sha2.workspace = true
@@ -40,3 +41,4 @@ workspace = true
 [[bin]]
 name = "packer"
 path = "src/bin/packer.rs"
+required-features = ["std"]

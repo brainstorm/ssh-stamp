@@ -26,10 +26,13 @@ use sunset_async::SunsetMutex;
 
 use crate::config::SSHStampConfig;
 use crate::handle::{self, SessionType};
+use crate::mem_probe::{Checkpoint, checkpoint, mark_kex_start, replay_checkpoints};
 use crate::platform::PlatformServices;
 use crate::serial::BufferedSerial;
 use crate::serve;
-use crate::settings::{SSH_STAMP_IDENT, UART_BUFFER_SIZE, WIFI_PASSWORD_CHARS};
+use crate::settings::{
+    SSH_STAMP_IDENT, TCP_RX_BUF, TCP_TX_BUF, UART_BUFFER_SIZE, WIFI_PASSWORD_CHARS,
+};
 
 /// Ensures a `WiFi` password exists, persists a freshly-generated one if not,
 /// prints the SSH hostkey fingerprint, and returns a ready-to-use
@@ -112,9 +115,11 @@ where
     U: BufferedSerial,
     P: PlatformServices,
 {
-    let mut rx_buffer = [0u8; 1536];
-    let mut tx_buffer = [0u8; 1536];
+    let mut rx_buffer = [0u8; TCP_RX_BUF];
+    let mut tx_buffer = [0u8; TCP_TX_BUF];
 
+    checkpoint(Checkpoint::TcpListening);
+    replay_checkpoints();
     loop {
         debug!("HSM: accepting TCP on port 22");
         let mut tcp_socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
@@ -129,6 +134,9 @@ where
             continue;
         }
         debug!("HSM: TCP connected on port 22");
+
+        mark_kex_start();
+        checkpoint(Checkpoint::TcpAccept);
 
         let mut inbuf = [0u8; UART_BUFFER_SIZE];
         let mut outbuf = [0u8; UART_BUFFER_SIZE];
@@ -153,7 +161,7 @@ where
         match select3(server, connection, bridge).await {
             Either3::First(r) | Either3::Second(r) | Either3::Third(r) => {
                 if let Err(e) = r {
-                    debug!("Session ended: {e}");
+                    warn!("Session ended: {e}");
                 }
             }
         }

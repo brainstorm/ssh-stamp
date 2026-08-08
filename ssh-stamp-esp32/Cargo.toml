@@ -70,7 +70,6 @@ ipv6 = ["ssh-stamp/ipv6"]
 mlkem = ["ssh-stamp/mlkem"]
 mem-probe = ["ssh-stamp/mem-probe", "esp-alloc/internal-heap-stats"]
 crypto-bench = ["ssh-stamp/crypto-bench", "dep:riscv"]
-bench-net = ["ssh-stamp/bench-net"]
 bench-loopback = []
 
 # Board features — select a specific PCB. Each enables the corresponding

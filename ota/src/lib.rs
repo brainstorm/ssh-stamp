@@ -24,15 +24,15 @@
 /// internal state, storage and target reset.
 ///
 /// Entry point for this crate when used as an OTA server on the device.
-#[cfg(target_os = "none")]
+#[cfg(all(target_os = "none", feature = "sftp"))]
 pub use sftpserver::run_ota_server;
 /// Module handling OTA update metadata and header parsing
 ///
 /// It will be called from the sftpserver module to handle the OTA update process
-#[cfg(target_os = "none")]
+#[cfg(all(target_os = "none", feature = "sftp"))]
 mod handler;
 /// Module implementing the OTA SFTP server
-#[cfg(target_os = "none")]
+#[cfg(all(target_os = "none", feature = "sftp"))]
 mod sftpserver;
 
 /// Module defining TLV types and constants for OTA updates
@@ -66,7 +66,7 @@ mod ota_tlv_tests {
                 ota_type: OTA_TYPE_VALUE_SSH_STAMP,
             },
         ];
-        for variant in variants.iter() {
+        for variant in &variants {
             let mut buffer = [0u8; MAX_TLV_SIZE as usize];
             let used = sshwire::write_ssh(&mut buffer, variant).expect("Failed to create SSH sink");
 

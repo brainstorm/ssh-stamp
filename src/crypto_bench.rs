@@ -8,13 +8,13 @@
 //!
 
 #[cfg(feature = "crypto-bench")]
+use crate::bench_emit;
+#[cfg(feature = "crypto-bench")]
 use core::hint::black_box;
 #[cfg(feature = "crypto-bench")]
 use log::info;
 #[cfg(feature = "crypto-bench")]
 use ml_kem::{B32, DecapsulationKey, EncapsulationKey, Key, MlKem768, Seed, kem::KeyExport};
-#[cfg(feature = "crypto-bench")]
-use crate::bench_emit;
 
 /// Runs the crypto benchmark table `iterations` times, emitting benchmark logs on the board.
 ///

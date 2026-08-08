@@ -4,13 +4,12 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use embedded_storage::ReadStorage;
-use embedded_storage::nor_flash::NorFlash;
+use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 
 use pretty_hex::PrettyHex;
 use sha2::Digest;
 
-use log::{debug, error};
+use log::{debug, error, warn};
 
 use sunset::error::Error as SunsetError;
 
@@ -61,7 +60,7 @@ pub fn load_or_create<F>(
     default_uart_pins: UartPins,
 ) -> Result<SSHStampConfig, SunsetError>
 where
-    F: NorFlash + ReadStorage,
+    F: NorFlash,
 {
     match load(flash, buf) {
         Ok(mut c) => {
@@ -76,7 +75,7 @@ where
             }
             return Ok(c);
         }
-        Err(e) => debug!("Existing config bad, making new. {e}"),
+        Err(e) => warn!("Existing config bad, making new. {e}"),
     }
 
     create(flash, buf, default_mac, default_uart_pins)
@@ -108,7 +107,7 @@ where
 /// Returns an error if flash read fails, config is invalid, or hash mismatch.
 pub fn load<F>(flash: &mut F, buf: &mut [u8]) -> Result<SSHStampConfig, SunsetError>
 where
-    F: ReadStorage,
+    F: ReadNorFlash,
 {
     // If at some point you target a 64bit arch these can truncate and cause
     // corruption of the bootloader or the ota partition.
@@ -187,4 +186,59 @@ where
 
     debug!("flash save done");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::settings::KEY_SLOTS;
+    use core::str::FromStr;
+    use embedded_storage_inmemory::MemFlash;
+    use heapless::String;
+    use sunset::packets::Ed25519PubKey;
+    use sunset::sshwire::Blob;
+
+    type TestFlash = MemFlash<{ CONFIG_OFFSET + CONFIG_AREA_SIZE }, CONFIG_AREA_SIZE, 4>;
+
+    fn round_trip(config: &SSHStampConfig) {
+        let mut flash = TestFlash::new(0);
+        let mut buf = [0u8; CONFIG_AREA_SIZE];
+        save(&mut flash, &mut buf, config).unwrap();
+        let loaded = load(&mut flash, &mut buf).unwrap();
+        assert_eq!(&loaded, config);
+    }
+
+    fn test_config() -> SSHStampConfig {
+        SSHStampConfig::new([0x02; 6], UartPins { rx: 10, tx: 11 }).unwrap()
+    }
+
+    #[test]
+    fn config_with_round_trip() {
+        round_trip(&test_config());
+    }
+
+    #[test]
+    fn config_with_wifi_round_trip() {
+        let mut config = test_config();
+        config.pubkeys = [Some(Ed25519PubKey {
+            key: Blob([0x5a; 32]),
+        }); KEY_SLOTS];
+        config.wifi_sta_ssid = String::from_str(&"s".repeat(32)).unwrap();
+        config.wifi_sta_pw = String::from_str(&"p".repeat(63)).unwrap();
+
+        round_trip(&config);
+
+        let mut buf = [0u8; CONFIG_AREA_SIZE];
+        let written = sshwire::write_ssh(
+            &mut buf,
+            &FlashConfig {
+                version: SSHStampConfig::CURRENT_VERSION,
+                config: OwnOrBorrow::Borrow(&config),
+                hash: config_hash(&config).unwrap(),
+            },
+        )
+        .unwrap();
+        assert!(written <= FlashConfig::BUF_SIZE);
+        assert!(written <= CONFIG_AREA_SIZE);
+    }
 }

@@ -19,16 +19,16 @@ use crate::handle::{
     EventContext, SessionType, defunct, first_auth, hostkeys, open_session, password_auth,
     pubkey_auth, session_env, session_exec, session_pty, session_shell, session_subsystem,
 };
+use crate::mem_probe::{Checkpoint, checkpoint, log_kex_elapsed};
 use crate::platform::PlatformServices;
 use crate::settings::UART_BUFFER_SIZE;
 use sunset::{ChanHandle, ServEvent};
-use sunset_async::SunsetMutex;
+use sunset_async::{ProgressHolder, SSHServer, SunsetMutex};
 
 use core::result::Result;
 
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
-use sunset_async::{ProgressHolder, SSHServer};
 
 /// Handles the SSH connection loop, processing events from clients.
 ///
@@ -79,6 +79,8 @@ pub async fn connection_loop<P: PlatformServices>(
                 session_shell(ev, &mut ctx, config, chan_pipe, platform).await?;
             }
             ServEvent::FirstAuth(_) => {
+                checkpoint(Checkpoint::KexComplete);
+                log_kex_elapsed("accept->firstauth");
                 first_auth(ev, config).await?;
             }
             ServEvent::Hostkeys(_) => {
@@ -91,6 +93,7 @@ pub async fn connection_loop<P: PlatformServices>(
                 pubkey_auth(ev, &mut ctx, config).await?;
             }
             ServEvent::OpenSession(_) => {
+                checkpoint(Checkpoint::ChannelOpen);
                 open_session(ev, &mut ctx)?;
             }
             ServEvent::SessionEnv(_) => {
@@ -105,7 +108,10 @@ pub async fn connection_loop<P: PlatformServices>(
             ServEvent::Defunct => {
                 defunct()?;
             }
-            ServEvent::Authenticated | ServEvent::PollAgain => {}
+            ServEvent::Authenticated => {
+                checkpoint(Checkpoint::AuthSuccess);
+            }
+            ServEvent::PollAgain => {}
         }
     }
 }
