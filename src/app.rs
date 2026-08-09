@@ -11,6 +11,7 @@
 //! every MCU.
 
 use core::cell::RefCell;
+use core::fmt::Write as _;
 use core::result::Result;
 
 use embassy_futures::select::{Either3, select3};
@@ -28,7 +29,9 @@ use sunset_async::SunsetMutex;
 
 use crate::config::SSHStampConfig;
 use crate::handle::{self, NoticeQueue, SessionType};
+use crate::json;
 use crate::notices::Notices;
+use crate::notices::band_label;
 use crate::platform::PlatformServices;
 use crate::serial::BufferedSerial;
 use crate::serve;
@@ -87,6 +90,8 @@ pub async fn prepare_ap_config<P: PlatformServices>(
     let channel = if guard.wifi_ap_band == 0 { 1 } else { 36 };
 
     info!("WIFI AP band: {band:?} (channel {channel})");
+
+    emit_boot_json(&guard, mac);
 
     Ok(WifiApConfigStatic {
         ap_ssid: guard.wifi_ap_ssid.clone(),
@@ -189,6 +194,55 @@ fn generate_wifi_password() -> Result<String<63>, sunset::Error> {
         let _ = pw.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
     }
     Ok(pw)
+}
+
+/// Prints the provisioning details as a single JSON object.
+///
+/// The same facts as the `info!` lines above, in a form a script can read.
+/// This is the only place they are available before a client can connect:
+/// the WPA2 PSK is generated on first boot and printed nowhere else.
+///
+/// One line, so a consumer can pick it out of everything else on the
+/// console — the ESP32 ROM bootloader prelude, esp-idf boot messages, the
+/// log lines around it — by matching the leading marker. See `docs/USING.md`.
+///
+/// Secrets: unlike the SSH-side summary, the PSK *is* included. It has to
+/// be — nobody can associate to the AP without it, and this is a local
+/// serial cable, not a network peer.
+///
+/// The AP address is absent: it comes from the network stack, which is not
+/// up yet. The port emits a separate `net_up` object once it is.
+fn emit_boot_json(config: &SSHStampConfig, mac: [u8; 6]) {
+    let fingerprint = match config.hostkey {
+        SignKey::Ed25519(_) => config.hostkey.pubkey().fingerprint().ok(),
+        SignKey::AgentEd25519(_) => None,
+    };
+    let mut fp = String::<64>::new();
+    if let Some(f) = &fingerprint {
+        let _ = write!(fp, "{f}");
+    }
+
+    // Goes through `info!` like everything else, so the line carries the
+    // logger's prefix. Consumers strip it; see the `grep -o` in USING.md.
+    info!(
+        concat!(
+            r#"{{"ssh_stamp":{},"event":"boot","wifi_ap":{{"ssid":"{}","psk":"{}","band":"{}"}},"#,
+            r#""mac":"{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}","#,
+            r#""hostkey_fingerprint":"{}","first_login":{}}}"#
+        ),
+        json::VERSION,
+        json::Esc(&config.wifi_ap_ssid),
+        json::Esc(&config.wifi_ap_pw),
+        band_label(config.wifi_ap_band),
+        mac[0],
+        mac[1],
+        mac[2],
+        mac[3],
+        mac[4],
+        mac[5],
+        json::Esc(&fp),
+        config.first_login,
+    );
 }
 
 fn print_hostkey_fingerprint(hostkey: &SignKey) {

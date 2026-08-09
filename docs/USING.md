@@ -67,6 +67,125 @@ Notes:
 
 If your SSH client doesn't forward environment variables by default, use the `-o SendEnv=VAR` option as shown above or configure `SendEnv` in your SSH client config.
 
+# Machine-readable output
+
+Everything below is also emitted as JSON, one object per line, for scripting
+provisioning instead of scraping prose. Every object starts with the same
+marker:
+
+```text
+{"ssh_stamp":1,"event":"boot", ...}
+```
+
+`ssh_stamp` is the schema version. It only changes if the meaning of existing
+fields changes — new fields get added without bumping it, so **ignore keys you
+do not recognise** and your parser will keep working across upgrades.
+
+## On the serial console
+
+The console is shared with the ESP32 ROM bootloader, the second-stage
+bootloader and the ordinary log, none of which is JSON, and the log adds an
+`INFO - ` prefix in front of our line. Select the JSON with the marker and
+strip the prefix in one step:
+
+```
+espflash monitor | grep --line-buffered -ao '{"ssh_stamp".*}' | jq -c .
+```
+
+`-a` treats the stream as text (the ROM prelude contains binary at the wrong
+baud rate), `-o` prints only the matched JSON rather than the whole line, and
+`--line-buffered` stops grep holding output back while you wait.
+
+Two objects are emitted at startup. `boot` carries the provisioning details:
+
+```json
+{"ssh_stamp":1,"event":"boot","wifi_ap":{"ssid":"ssh-stamp-a1b2","psk":"hunter2hunter2","band":"2.4GHz"},"mac":"40:4c:ca:12:34:56","hostkey_fingerprint":"SHA256:abcdef","first_login":true}
+```
+
+and `net_up` follows once the network stack has an address, which is not known
+at boot:
+
+```json
+{"ssh_stamp":1,"event":"net_up","role":"ap","ssid":"ssh-stamp-a1b2","ip":"192.168.4.1"}
+```
+
+So a first-boot provisioning script can pick up what it needs directly:
+
+```
+PSK=$(espflash monitor | grep -ao '{"ssh_stamp".*}' \
+        | jq -r --unbuffered 'select(.event=="boot") | .wifi_ap.psk' | head -1)
+```
+
+Note `boot` **does** contain the WPA2 PSK in the clear. It has to: nothing can
+associate with the AP without it, and it is generated on first boot and
+printed nowhere else. This is a local serial cable rather than a network peer
+— but it does mean a captured console log is a credential.
+
+## Over SSH
+
+Set `SSH_STAMP_NOTICES=json` and the session messages become JSON on stderr
+instead of prose:
+
+```
+export SSH_STAMP_NOTICES=json
+ssh -o SendEnv=SSH_STAMP_NOTICES root@192.168.4.1 2>&1 >/dev/null | jq -c .
+```
+
+Note the `2>&1 >/dev/null` ordering: it sends stderr to the pipe and discards
+stdout, so `jq` sees the messages and not the target's UART traffic.
+
+**Send `SSH_STAMP_NOTICES` before any other `SSH_STAMP_*` variable.** The
+switch discards anything already queued — otherwise prose from before the
+switch would be interleaved into the JSON stream and break the parse — so a
+change made by a variable sent earlier goes unreported:
+
+```
+# Right: the SSID change is reported as JSON
+ssh -o SendEnv=SSH_STAMP_NOTICES -o SendEnv=SSH_STAMP_WIFI_AP_SSID root@192.168.4.1
+# Wrong: the SSID change is applied, but silently
+ssh -o SendEnv=SSH_STAMP_WIFI_AP_SSID -o SendEnv=SSH_STAMP_NOTICES root@192.168.4.1
+```
+
+```json
+{"ssh_stamp":1,"event":"config_changed","key":"wifi_ap_ssid","from":"ssh-stamp-a1b2","to":"SshStampSSID"}
+{"ssh_stamp":1,"event":"config_secret_changed","key":"wifi_ap_psk","len":24}
+{"ssh_stamp":1,"event":"config_saved","text":"config: saved to flash"}
+{"ssh_stamp":1,"event":"config","uart":{"rx":17,"tx":16},"wifi_ap":{"ssid":"SshStampSSID","psk_set":true,"band":"2.4GHz"},"wifi_sta":null,"mac":"40:4c:ca:12:34:56","mac_random":false,"ipv4":{"dhcp":true},"authorised_keys":{"used":1,"slots":1},"first_login":false}
+{"ssh_stamp":1,"event":"bridge","text":"bridge connected"}
+```
+
+The configuration arrives as one `config` object rather than a line per field,
+so it can be indexed directly:
+
+```
+$ ... | jq -r 'select(.event=="config") | .wifi_ap.ssid'
+SshStampSSID
+```
+
+Did a provisioning change actually take?
+
+```
+$ ... | jq -r 'select(.event=="config_changed") | "\(.key): \(.from) -> \(.to)"'
+wifi_ap_ssid: ssh-stamp-a1b2 -> SshStampSSID
+```
+
+Why was one rejected?
+
+```
+$ ... | jq -r 'select(.event=="rejected") | "\(.what): \(.reason)"'
+SSH_STAMP_WIFI_BAND: must be 2.4g, 5g or auto
+```
+
+Two things are deliberately not in the JSON:
+
+- **Secrets.** Over SSH a changed password reports only
+  `config_secret_changed` with its length, and the summary reports
+  `"psk_set":true`. The console `boot` object is the sole exception, for the
+  reason above.
+- **The pre-authentication banner.** `SSH_STAMP_NOTICES` is an environment
+  variable, and those arrive after authentication, so the device cannot know
+  you wanted JSON at the point it sends the banner. It is always prose.
+
 # Device messages
 
 ## Before you log in

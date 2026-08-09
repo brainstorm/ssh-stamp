@@ -36,6 +36,7 @@ use embassy_sync::blocking_mutex::Mutex as BlockingMutex;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 
+use core::fmt::Write as _;
 use core::result::Result;
 
 use embedded_io_async::Write as _;
@@ -219,10 +220,10 @@ pub fn session_subsystem(
                 let can_active = false;
                 if can_active {
                     warn!("SFTP subsystem refused: a CAN session is active on this connection");
-                    notice!(
-                        ctx.notices,
-                        "sftp refused: a CAN session already owns this connection"
-                    );
+                    ctx.notices.lock(|n| {
+                        n.borrow_mut()
+                            .rejected("sftp", "a CAN session already owns this connection");
+                    });
                     a.fail()?;
                 } else if let Some(ch) = ctx.session.take() {
                     debug_assert_eq!(ch.num(), a.channel());
@@ -239,10 +240,12 @@ pub fn session_subsystem(
             #[cfg(not(feature = "sftp-ota"))]
             {
                 warn!("SFTP subsystem requested but not supported in this build");
-                notice!(
-                    ctx.notices,
-                    "sftp refused: this firmware was built without the sftp-ota feature"
-                );
+                ctx.notices.lock(|n| {
+                    n.borrow_mut().rejected(
+                        "sftp",
+                        "this firmware was built without the sftp-ota feature",
+                    );
+                });
                 a.fail()?;
             }
         } else if a.command()?.to_lowercase().as_str() == "can" {
@@ -267,10 +270,10 @@ pub fn session_subsystem(
             #[cfg(not(feature = "can"))]
             {
                 warn!("CAN subsystem requested but not supported in this build");
-                notice!(
-                    ctx.notices,
-                    "can refused: this firmware was built without the can feature"
-                );
+                ctx.notices.lock(|n| {
+                    n.borrow_mut()
+                        .rejected("can", "this firmware was built without the can feature");
+                });
                 a.fail()?;
             }
         } else {
@@ -314,7 +317,7 @@ pub async fn session_shell<P: PlatformServices>(
                     // drop. Documented in docs/USING.md.
                     platform.reset();
                 }
-                notice!(ctx.notices, "config: saved to flash");
+                notice!(ctx.notices, "config_saved", "config: saved to flash");
             }
             debug_assert_eq!(ch.num(), a.channel());
             a.succeed()?;
@@ -473,22 +476,20 @@ pub fn notices_env(
     a: sunset::event::ServEnvironmentRequest<'_, '_>,
     ctx: &mut EventContext<'_>,
 ) -> Result<(), sunset::Error> {
-    match a.value()? {
-        "off" | "0" | "false" | "no" => {
-            ctx.notices.lock(|n| n.borrow_mut().disable());
-            debug!("Client turned notices off");
-            a.succeed()
-        }
-        "on" | "1" | "true" | "yes" => {
-            // Notices are on by default; accepting this makes the variable
-            // safe to set unconditionally in a wrapper script.
-            a.succeed()
-        }
+    let mode = match a.value()? {
+        "off" | "0" | "false" | "no" => notices::Mode::Off,
+        // Notices are prose by default; accepting "on" makes the variable
+        // safe to set unconditionally in a wrapper script.
+        "on" | "1" | "true" | "yes" => notices::Mode::Human,
+        "json" => notices::Mode::Json,
         other => {
-            warn!("SSH_STAMP_NOTICES must be on or off, got {other:?}");
-            a.fail()
+            warn!("SSH_STAMP_NOTICES must be on, off or json, got {other:?}");
+            return a.fail();
         }
-    }
+    };
+    debug!("Client set notice mode to {mode:?}");
+    ctx.notices.lock(|n| n.borrow_mut().set_mode(mode));
+    a.succeed()
 }
 
 /// Handles SSH environment variable requests.
@@ -559,10 +560,10 @@ pub async fn pubkey_env(
         match env_parser::parse_pubkey(a.value()?) {
             None => {
                 warn!("SSH_STAMP_PUBKEY contains invalid characters");
-                notice!(
-                    ctx.notices,
-                    "SSH_STAMP_PUBKEY rejected: not a valid ed25519 public key"
-                );
+                ctx.notices.lock(|n| {
+                    n.borrow_mut()
+                        .rejected("SSH_STAMP_PUBKEY", "not a valid ed25519 public key");
+                });
                 a.fail()?;
             }
             Some(trimmed) => {
@@ -570,6 +571,7 @@ pub async fn pubkey_env(
                     debug!("Added new pubkey from ENV");
                     notice!(
                         ctx.notices,
+                        "pubkey_added",
                         "config: authorised key added; first-login provisioning is now closed"
                     );
                     a.succeed()?;
@@ -580,7 +582,10 @@ pub async fn pubkey_env(
                     }
                 } else {
                     warn!("Failed to add new pubkey from ENV");
-                    notice!(ctx.notices, "SSH_STAMP_PUBKEY rejected: no free key slot");
+                    ctx.notices.lock(|n| {
+                        n.borrow_mut()
+                            .rejected("SSH_STAMP_PUBKEY", "no free key slot");
+                    });
                     a.fail()?;
                 }
             }
@@ -605,12 +610,13 @@ pub async fn wifi_ap_ssid_env(
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
         if let Some(s) = env_parser::parse_wifi_ap_ssid(a.value()?) {
-            notice!(
-                ctx.notices,
-                "config: wifi ap ssid {:?} -> {:?}",
-                config_guard.wifi_ap_ssid.as_str(),
-                s.as_str()
-            );
+            ctx.notices.lock(|n| {
+                n.borrow_mut().config_changed(
+                    "wifi_ap_ssid",
+                    config_guard.wifi_ap_ssid.as_str(),
+                    s.as_str(),
+                );
+            });
             config_guard.wifi_ap_ssid = s;
             debug!("Set wifi Access Point SSID from ENV");
             a.succeed()?;
@@ -618,10 +624,10 @@ pub async fn wifi_ap_ssid_env(
             *ctx.needs_reset = true;
         } else {
             warn!("SSH_STAMP_WIFI_AP_SSID invalid and/or too long");
-            notice!(
-                ctx.notices,
-                "SSH_STAMP_WIFI_AP_SSID rejected: empty or over 32 bytes"
-            );
+            ctx.notices.lock(|n| {
+                n.borrow_mut()
+                    .rejected("SSH_STAMP_WIFI_AP_SSID", "empty or over 32 bytes");
+            });
             a.fail()?;
         }
     } else {
@@ -643,11 +649,8 @@ pub async fn wifi_ap_psk_env(
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
         if let Some(s) = env_parser::parse_wifi_psk(a.value()?) {
-            notice!(
-                ctx.notices,
-                "config: wifi ap psk updated ({} chars)",
-                s.len()
-            );
+            ctx.notices
+                .lock(|n| n.borrow_mut().config_secret("wifi_ap_psk", s.len()));
             config_guard.wifi_ap_pw = s;
             debug!("Set WIFI AP PSK from ENV");
             a.succeed()?;
@@ -655,10 +658,10 @@ pub async fn wifi_ap_psk_env(
             *ctx.needs_reset = true;
         } else {
             warn!("SSH_STAMP_WIFI_AP_PSK invalid and/or not within 8-63 characters");
-            notice!(
-                ctx.notices,
-                "SSH_STAMP_WIFI_AP_PSK rejected: must be 8-63 characters"
-            );
+            ctx.notices.lock(|n| {
+                n.borrow_mut()
+                    .rejected("SSH_STAMP_WIFI_AP_PSK", "must be 8-63 characters");
+            });
             a.fail()?;
         }
     } else {
@@ -684,12 +687,13 @@ pub async fn wifi_band_env(
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
         if let Some(band) = env_parser::parse_wifi_band(a.value()?) {
-            notice!(
-                ctx.notices,
-                "config: wifi ap band {} -> {}",
-                band_label(config_guard.wifi_ap_band),
-                band_label(band)
-            );
+            ctx.notices.lock(|n| {
+                n.borrow_mut().config_changed(
+                    "wifi_ap_band",
+                    band_label(config_guard.wifi_ap_band),
+                    band_label(band),
+                );
+            });
             config_guard.wifi_ap_band = band;
             debug!("Set WIFI AP band from ENV: {band}");
             a.succeed()?;
@@ -697,10 +701,10 @@ pub async fn wifi_band_env(
             *ctx.needs_reset = true;
         } else {
             warn!("SSH_STAMP_WIFI_BAND must be 2.4g, 5g, or auto");
-            notice!(
-                ctx.notices,
-                "SSH_STAMP_WIFI_BAND rejected: must be 2.4g, 5g or auto"
-            );
+            ctx.notices.lock(|n| {
+                n.borrow_mut()
+                    .rejected("SSH_STAMP_WIFI_BAND", "must be 2.4g, 5g or auto");
+            });
             a.fail()?;
         }
     } else {
@@ -722,12 +726,13 @@ pub async fn wifi_sta_ssid_env(
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
         if let Some(s) = env_parser::parse_wifi_station_ssid(a.value()?) {
-            notice!(
-                ctx.notices,
-                "config: wifi station ssid {:?} -> {:?}",
-                config_guard.wifi_sta_ssid.as_str(),
-                s.as_str()
-            );
+            ctx.notices.lock(|n| {
+                n.borrow_mut().config_changed(
+                    "wifi_sta_ssid",
+                    config_guard.wifi_sta_ssid.as_str(),
+                    s.as_str(),
+                );
+            });
             config_guard.wifi_sta_ssid = s;
             debug!("Set wifi STATION SSID from ENV");
             a.succeed()?;
@@ -735,10 +740,10 @@ pub async fn wifi_sta_ssid_env(
             *ctx.needs_reset = true;
         } else {
             warn!("SSH_STAMP_WIFI_STA_SSID invalid and/or too long");
-            notice!(
-                ctx.notices,
-                "SSH_STAMP_WIFI_STA_SSID rejected: empty or over 32 bytes"
-            );
+            ctx.notices.lock(|n| {
+                n.borrow_mut()
+                    .rejected("SSH_STAMP_WIFI_STA_SSID", "empty or over 32 bytes");
+            });
             a.fail()?;
         }
     } else {
@@ -760,11 +765,8 @@ pub async fn wifi_sta_psk_env(
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
         if let Some(s) = env_parser::parse_wifi_psk(a.value()?) {
-            notice!(
-                ctx.notices,
-                "config: wifi station psk updated ({} chars)",
-                s.len()
-            );
+            ctx.notices
+                .lock(|n| n.borrow_mut().config_secret("wifi_sta_psk", s.len()));
             config_guard.wifi_sta_pw = s;
             debug!("Set wifi STATION PSK from ENV");
             a.succeed()?;
@@ -772,10 +774,10 @@ pub async fn wifi_sta_psk_env(
             *ctx.needs_reset = true;
         } else {
             warn!("SSH_STAMP_WIFI_STA_PSK invalid and/or not within 8-63 characters");
-            notice!(
-                ctx.notices,
-                "SSH_STAMP_WIFI_STA_PSK rejected: must be 8-63 characters"
-            );
+            ctx.notices.lock(|n| {
+                n.borrow_mut()
+                    .rejected("SSH_STAMP_WIFI_STA_PSK", "must be 8-63 characters");
+            });
             a.fail()?;
         }
     } else {
@@ -797,16 +799,16 @@ pub async fn wifi_mac_address_env(
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
         if let Some(mac) = env_parser::parse_mac_address(a.value()?) {
-            notice!(
-                ctx.notices,
-                "config: mac -> {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-                mac[0],
-                mac[1],
-                mac[2],
-                mac[3],
-                mac[4],
-                mac[5]
+            // Rendered here rather than passed as bytes: `config_changed`
+            // takes strings so both output modes share one representation.
+            let mut to = String::<17>::new();
+            let _ = write!(
+                to,
+                "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
             );
+            ctx.notices
+                .lock(|n| n.borrow_mut().config_changed("mac", "stored", &to));
             config_guard.mac = mac;
             debug!("Set MAC address from ENV: {mac:02X?}");
             a.succeed()?;
@@ -814,10 +816,10 @@ pub async fn wifi_mac_address_env(
             *ctx.needs_reset = true;
         } else {
             warn!("SSH_STAMP_WIFI_MAC_ADDRESS must be XX:XX:XX:XX:XX:XX format");
-            notice!(
-                ctx.notices,
-                "SSH_STAMP_WIFI_MAC_ADDRESS rejected: must be XX:XX:XX:XX:XX:XX"
-            );
+            ctx.notices.lock(|n| {
+                n.borrow_mut()
+                    .rejected("SSH_STAMP_WIFI_MAC_ADDRESS", "must be XX:XX:XX:XX:XX:XX");
+            });
             a.fail()?;
         }
     } else {
@@ -838,7 +840,10 @@ pub async fn wifi_mac_random_env(
 ) -> Result<(), sunset::Error> {
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
-        notice!(ctx.notices, "config: mac -> randomised each boot");
+        ctx.notices.lock(|n| {
+            n.borrow_mut()
+                .config_changed("mac", "stored", "randomised each boot");
+        });
         config_guard.mac = [0xFF; 6];
         debug!("Set MAC address to random mode");
         a.succeed()?;
@@ -964,7 +969,8 @@ where
                 let (chan_io, mut stderr) = ssh_server.stdio_stderr(ch).await?;
                 let (stdin, stdout) = chan_io.split();
 
-                let enabled = notices.lock(|n| n.borrow().enabled());
+                let mode = notices.lock(|n| n.borrow().mode());
+                let enabled = mode != notices::Mode::Off;
                 if enabled {
                     // Anything queued during session setup (config changes,
                     // rejected requests) had nowhere to go until now.
@@ -974,19 +980,37 @@ where
                         pending.clear();
                     }
                     let config_guard = config.lock().await;
-                    notices::config_summary(&mut stderr, &config_guard).await?;
+                    notices::config_summary(&mut stderr, mode, &config_guard).await?;
                     drop(config_guard);
-                    notices::emit(&mut stderr, format_args!("bridge connected")).await?;
+                    notices::emit(
+                        &mut stderr,
+                        mode,
+                        "bridge",
+                        format_args!("bridge connected"),
+                    )
+                    .await?;
                 }
 
                 info!("Starting bridge");
-                let outcome =
-                    serial_bridge(stdin, stdout, uart_buff, enabled.then_some(&mut stderr)).await;
+                let outcome = serial_bridge(
+                    stdin,
+                    stdout,
+                    uart_buff,
+                    enabled.then_some(&mut stderr),
+                    mode,
+                )
+                .await;
 
                 if enabled {
                     // Best effort: the channel is usually already going away,
                     // and failing to say goodbye must not mask `outcome`.
-                    let _ = notices::emit(&mut stderr, format_args!("bridge disconnected")).await;
+                    let _ = notices::emit(
+                        &mut stderr,
+                        mode,
+                        "bridge",
+                        format_args!("bridge disconnected"),
+                    )
+                    .await;
                 }
                 outcome?;
             }
