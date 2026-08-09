@@ -16,6 +16,7 @@
 
 use core::net::Ipv4Addr;
 use core::net::SocketAddrV4;
+use ssh_stamp::json;
 
 use edge_dhcp::io::{self, DEFAULT_SERVER_PORT};
 use edge_dhcp::server::{Server, ServerOptions};
@@ -151,6 +152,7 @@ impl NetworkProviderHal for EspWifi {
                             ap_config.ap_ssid.as_str(),
                             config.address,
                         );
+                        emit_net_up_json(ap_config.ap_ssid.as_str(), "ap", config.address);
                     }
                     break;
                 }
@@ -166,6 +168,7 @@ impl NetworkProviderHal for EspWifi {
                             "Connect to the AP `{}` with IP {}",
                             sta_ssid_static, config.address,
                         );
+                        emit_net_up_json(sta_ssid_static, "station", config.address);
                     }
                     break;
                 }
@@ -374,4 +377,19 @@ pub async fn dhcp_server(stack: Stack<'static>, ip: Ipv4Addr) {
         }
         Timer::after(Duration::from_millis(500)).await;
     }
+}
+
+/// Prints the network details as a single JSON object, mirroring the `boot`
+/// object emitted before the stack came up.
+///
+/// The address is only known here, so it cannot be part of `boot`. `role`
+/// distinguishes the device hosting its own AP from it having joined one.
+fn emit_net_up_json(ssid: &str, role: &str, address: Ipv4Cidr) {
+    info!(
+        r#"{{"ssh_stamp":{},"event":"net_up","role":"{}","ssid":"{}","ip":"{}"}}"#,
+        json::VERSION,
+        json::Esc(role),
+        json::Esc(ssid),
+        address.address(),
+    );
 }

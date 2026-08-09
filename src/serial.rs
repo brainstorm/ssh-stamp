@@ -49,10 +49,11 @@ pub async fn serial_bridge<U: BufferedSerial, N: Write>(
     chan_write: impl Write<Error = sunset::Error>,
     uart: &U,
     notice_sink: Option<&mut N>,
+    notice_mode: notices::Mode,
 ) -> Result<(), sunset::Error> {
     debug!("Starting serial <--> SSH bridge");
     select(
-        uart_to_ssh(uart, chan_write, notice_sink),
+        uart_to_ssh(uart, chan_write, notice_sink, notice_mode),
         ssh_to_uart(chan_read, uart),
     )
     .await;
@@ -64,6 +65,7 @@ async fn uart_to_ssh<U: BufferedSerial, N: Write>(
     uart_buf: &U,
     mut chan_write: impl Write<Error = sunset::Error>,
     mut notice_sink: Option<&mut N>,
+    notice_mode: notices::Mode,
 ) -> Result<(), sunset::Error> {
     let mut ssh_tx_buf = [0u8; 512];
     loop {
@@ -75,6 +77,8 @@ async fn uart_to_ssh<U: BufferedSerial, N: Write>(
             if let Some(sink) = notice_sink.as_deref_mut() {
                 let _ = notices::emit(
                     sink,
+                    notice_mode,
+                    "uart_overrun",
                     format_args!("warning: UART RX overrun, {dropped} bytes lost"),
                 )
                 .await;
