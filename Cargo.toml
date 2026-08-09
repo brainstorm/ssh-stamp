@@ -168,3 +168,22 @@ sftp-ota = []
 
 # Enables CAN bus tunnelling over SSH via the "can" subsystem
 can = ["dep:embedded-can"]
+
+# Build against the local sunset checkout rather than crates.io.
+#
+# `Runner::disconnect()` / `SSHServer::disconnect()` are not in a published
+# sunset release yet; ssh-stamp uses them to tell a client why a connection
+# was refused before authentication completes, where there is no channel to
+# write to (see src/notices.rs).
+#
+# Patching rather than pointing each dependency at a path keeps the version
+# requirements above intact and, more importantly, redirects the `sunset`
+# that `sunset-async` and `sunset-sftp` depend on as well — a path override
+# on `sunset` alone would leave two incompatible copies in the graph.
+#
+# Revert to plain crates.io once a release carries the disconnect API.
+[patch.crates-io]
+sunset = { path = "../sunset" }
+sunset-async = { path = "../sunset/async" }
+sunset-sftp = { path = "../sunset/sftp" }
+sunset-sshwire-derive = { path = "../sunset/sshwire-derive" }

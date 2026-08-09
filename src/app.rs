@@ -10,11 +10,14 @@
 //! here. Everything from "accept a TCP connection" downward is the same on
 //! every MCU.
 
+use core::cell::RefCell;
 use core::result::Result;
 
 use embassy_futures::select::{Either3, select3};
 use embassy_net::{IpListenEndpoint, Stack, tcp::TcpSocket};
-use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
+use embassy_sync::{
+    blocking_mutex::Mutex as BlockingMutex, blocking_mutex::raw::NoopRawMutex, channel::Channel,
+};
 use heapless::String;
 use log::{debug, error, info, warn};
 use ssh_stamp_hal::{BandMode, WifiApConfigStatic};
@@ -24,7 +27,8 @@ use sunset::SignKey;
 use sunset_async::SunsetMutex;
 
 use crate::config::SSHStampConfig;
-use crate::handle::{self, SessionType};
+use crate::handle::{self, NoticeQueue, SessionType};
+use crate::notices::Notices;
 use crate::platform::PlatformServices;
 use crate::serial::BufferedSerial;
 use crate::serve;
@@ -134,17 +138,35 @@ where
         let ssh_server = serve::ssh_wait_for_initialisation(&mut inbuf, &mut outbuf);
 
         let chan_pipe = Channel::<NoopRawMutex, SessionType, 1>::new();
+        // Fresh per connection: notices are session-scoped, and so is the
+        // client's decision to switch them off.
+        let notices: NoticeQueue = BlockingMutex::new(RefCell::new(Notices::new()));
         #[cfg(feature = "can")]
         let can_queue = Channel::<NoopRawMutex, ChanHandle, 1>::new();
         #[cfg(feature = "can")]
+        let connection = serve::connection_loop(
+            &ssh_server,
+            &chan_pipe,
+            config,
+            platform,
+            &can_queue,
+            &notices,
+        );
+        #[cfg(not(feature = "can"))]
         let connection =
-            serve::connection_loop(&ssh_server, &chan_pipe, config, platform, &can_queue);
-        #[cfg(not(feature = "can"))]
-        let connection = serve::connection_loop(&ssh_server, &chan_pipe, config, platform);
+            serve::connection_loop(&ssh_server, &chan_pipe, config, platform, &notices);
         #[cfg(feature = "can")]
-        let bridge = handle::ssh_client(uart, &ssh_server, &chan_pipe, platform, &can_queue);
+        let bridge = handle::ssh_client(
+            uart,
+            &ssh_server,
+            &chan_pipe,
+            platform,
+            &can_queue,
+            &notices,
+            config,
+        );
         #[cfg(not(feature = "can"))]
-        let bridge = handle::ssh_client(uart, &ssh_server, &chan_pipe, platform);
+        let bridge = handle::ssh_client(uart, &ssh_server, &chan_pipe, platform, &notices, config);
 
         let (mut rsock, mut wsock) = tcp_socket.split();
         let server = ssh_server.run(&mut rsock, &mut wsock);

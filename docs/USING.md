@@ -67,6 +67,92 @@ Notes:
 
 If your SSH client doesn't forward environment variables by default, use the `-o SendEnv=VAR` option as shown above or configure `SendEnv` in your SSH client config.
 
+# Device messages
+
+## Before you log in
+
+The device sends an SSH banner, which your client prints before it tries to
+authenticate. On a device that has not been claimed yet:
+
+```
+$ ssh root@192.168.4.1
+ssh-stamp: first-login provisioning is OPEN - this device accepts any client.
+ssh-stamp: claim it by sending SSH_STAMP_PUBKEY.
+```
+
+and on one that has been:
+
+```
+ssh-stamp: 1 authorised key(s); provisioning is closed.
+```
+
+If the stored configuration has provisioning closed but no authorised key —
+so nothing could ever log in — the device says so and disconnects with
+`SSH_DISCONNECT_NO_MORE_AUTH_METHODS_AVAILABLE`, rather than letting you
+hunt for a key problem that does not exist.
+
+Note this needs a sunset with the banner and disconnect send paths; see the
+`[patch.crates-io]` section in the workspace `Cargo.toml`.
+
+## Once you are in
+
+A shell session is a transparent pipe to the target UART, so the device
+cannot explain itself on stdout without corrupting that stream. It uses SSH
+stderr instead, and every line is prefixed `ssh-stamp:`.
+
+```
+$ ssh root@192.168.4.1
+ssh-stamp: config: wifi ap ssid "ssh-stamp-a1b2" -> "SshStampSSID"
+ssh-stamp: config: saved to flash
+ssh-stamp: --- configuration ---
+ssh-stamp: uart: rx=GPIO17 tx=GPIO16
+ssh-stamp: wifi ap: ssid="SshStampSSID" psk=set band=2.4GHz
+ssh-stamp: wifi station: not configured
+ssh-stamp: mac: 40:4c:ca:12:34:56
+ssh-stamp: ipv4: dhcp
+ssh-stamp: authorised keys: 1/4
+ssh-stamp: ---------------------
+ssh-stamp: bridge connected
+<target UART output from here on>
+```
+
+Because the two streams are separate, redirection picks what you want:
+
+```
+ssh root@192.168.4.1 > capture.bin    # UART bytes only, byte-for-byte
+ssh root@192.168.4.1 2>/dev/null      # UART bytes only, messages discarded
+ssh root@192.168.4.1 2>notes.txt      # both, kept apart
+```
+
+If your client merges the streams and you cannot separate them afterwards
+(`ssh -t` does this), turn the messages off at the device:
+
+```
+export SSH_STAMP_NOTICES=off
+ssh -o SendEnv=SSH_STAMP_NOTICES root@192.168.4.1
+```
+
+Messages reported this way include: which UART pins are in use, a summary of
+the running configuration, every configuration change as `old -> new`, why a
+`SSH_STAMP_*` variable was rejected, why an `sftp` or `can` subsystem request
+was refused, bridge connect/disconnect, and UART RX overruns — the last of
+which tells you a capture has a hole in it.
+
+Two deliberate limits:
+
+- **Secrets are never printed.** The summary reports whether a PSK is set,
+  not what it is. An authenticated client could be told, but a PSK echoed
+  into a terminal ends up in scroll buffers and pasted bug reports.
+- **A change that triggers a reboot cannot be acknowledged.** WiFi changes
+  reset the device before the shell channel opens, so the client sees the
+  connection drop with no explanation. Reconnect and the summary will show
+  the new values.
+
+Messages are queued during session setup and delivered when the shell opens,
+so a configuration change made by the same `ssh` invocation that opens the
+shell is reported. Sessions that never open a shell (`sftp`, or the `can`
+subsystem alone) get no messages.
+
 # UART pins
 
 UART RX/TX pins are defined per-board in `boards/*.toml` files inside the

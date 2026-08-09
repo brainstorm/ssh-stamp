@@ -7,32 +7,43 @@
 //! Every incoming SSH event is dispatched here by the connection loop in
 //! [`serve`](crate::serve). The main entry point is [`session_env`], which
 //! routes environment variable requests to handlers like [`pubkey_env`] and
-//! [`wifi_ssid_env`].
+//! [`wifi_ap_ssid_env`].
 //!
 //! First-boot provisioning also flows through here: when `first_login` is true,
 //! the device accepts any SSH connection (empty password) and allows the
 //! client to set `SSH_STAMP_PUBKEY`. Subsequent connections require that key.
+//!
+//! Handlers report back to the client by queueing a [`notice!`](crate::notice)
+//! on [`EventContext::notices`]; see [`crate::notices`] for why those go to
+//! SSH stderr rather than the session's stdout.
 
 use heapless::String;
 use log::{debug, info, warn};
 
 use crate::config::SSHStampConfig;
+use crate::notice;
+use crate::notices::{self, NoticeDrain, Notices, PreAuth, band_label};
 use crate::platform::PlatformServices;
 use crate::serial::{BufferedSerial, serial_bridge};
 
 #[cfg(feature = "can")]
 use crate::can::can_bridge;
 
+use core::cell::RefCell;
 #[cfg(feature = "can")]
 use embassy_futures::select::{Either, select};
+use embassy_sync::blocking_mutex::Mutex as BlockingMutex;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 
 use core::result::Result;
 
+use embedded_io_async::Write as _;
 use sunset::packets::PubKey;
-use sunset::{ChanFail, ChanHandle, ServEvent};
-use sunset_async::{ChanInOut, SSHServer, SunsetMutex};
+use sunset::{ChanFail, ChanHandle, DisconnectReason, ServEvent};
+#[cfg(feature = "can")]
+use sunset_async::ChanInOut;
+use sunset_async::{SSHServer, SunsetMutex};
 
 pub mod env_parser {
     use super::String;
@@ -155,8 +166,19 @@ pub enum SessionType {
     Sftp(ChanHandle),
 }
 
+/// Per-connection queue of messages bound for the client's stderr.
+///
+/// Shared between the connection loop (which produces most notices during
+/// session setup) and the bridge (which drains them once a channel exists).
+pub type NoticeQueue = BlockingMutex<NoopRawMutex, RefCell<Notices>>;
+
 pub struct EventContext<'a> {
     pub session: &'a mut Option<ChanHandle>,
+    /// Messages to hand the client once there is a channel to write on.
+    pub notices: &'a NoticeQueue,
+    /// Set by [`first_auth`] for the connection loop to send once the
+    /// session mutex is free; see [`PreAuth`].
+    pub pre_auth: &'a mut Option<PreAuth>,
     pub auth_checked: &'a mut bool,
     pub config_changed: &'a mut bool,
     pub needs_reset: &'a mut bool,
@@ -197,6 +219,10 @@ pub fn session_subsystem(
                 let can_active = false;
                 if can_active {
                     warn!("SFTP subsystem refused: a CAN session is active on this connection");
+                    notice!(
+                        ctx.notices,
+                        "sftp refused: a CAN session already owns this connection"
+                    );
                     a.fail()?;
                 } else if let Some(ch) = ctx.session.take() {
                     debug_assert_eq!(ch.num(), a.channel());
@@ -213,6 +239,10 @@ pub fn session_subsystem(
             #[cfg(not(feature = "sftp-ota"))]
             {
                 warn!("SFTP subsystem requested but not supported in this build");
+                notice!(
+                    ctx.notices,
+                    "sftp refused: this firmware was built without the sftp-ota feature"
+                );
                 a.fail()?;
             }
         } else if a.command()?.to_lowercase().as_str() == "can" {
@@ -237,6 +267,10 @@ pub fn session_subsystem(
             #[cfg(not(feature = "can"))]
             {
                 warn!("CAN subsystem requested but not supported in this build");
+                notice!(
+                    ctx.notices,
+                    "can refused: this firmware was built without the can feature"
+                );
                 a.fail()?;
             }
         } else {
@@ -275,8 +309,12 @@ pub async fn session_shell<P: PlatformServices>(
                 drop(config_guard);
                 if *ctx.needs_reset {
                     info!("Configuration saved. Rebooting to apply WiFi changes...");
+                    // Nothing to notify on: the reset happens before this
+                    // channel opens, so the client just sees the connection
+                    // drop. Documented in docs/USING.md.
                     platform.reset();
                 }
+                notice!(ctx.notices, "config: saved to flash");
             }
             debug_assert_eq!(ch.num(), a.channel());
             a.succeed()?;
@@ -302,10 +340,17 @@ pub async fn session_shell<P: PlatformServices>(
 pub async fn first_auth(
     ev: ServEvent<'_, '_>,
     config: &SunsetMutex<SSHStampConfig>,
+    ctx: &mut EventContext<'_>,
 ) -> Result<(), sunset::Error> {
     if let ServEvent::FirstAuth(mut a) = ev {
         debug!("ServEvent::FirstAuth");
         let config_guard = config.lock().await;
+
+        // Fires once per connection, before any key is offered, so this is
+        // the one point where the device can describe itself to a client
+        // that may never authenticate. Sent by the connection loop, which
+        // is not holding the session mutex.
+        *ctx.pre_auth = Some(notices::preauth_for(&config_guard));
 
         a.enable_password_auth(false)?;
 
@@ -412,6 +457,40 @@ pub fn open_session(
     Ok(())
 }
 
+/// Handles `SSH_STAMP_NOTICES` environment variable requests.
+///
+/// Notices already ride on SSH stderr, so a client that wants them out of
+/// the way can simply redirect. This exists for clients that cannot split
+/// the two streams — `ssh -t`, and anything merging them before ssh-stamp
+/// sees the difference.
+///
+/// Needs no authentication: it only decides whether the device talks, and
+/// silence is always safe to grant.
+///
+/// # Errors
+/// Returns an error if SSH protocol operations fail.
+pub fn notices_env(
+    a: sunset::event::ServEnvironmentRequest<'_, '_>,
+    ctx: &mut EventContext<'_>,
+) -> Result<(), sunset::Error> {
+    match a.value()? {
+        "off" | "0" | "false" | "no" => {
+            ctx.notices.lock(|n| n.borrow_mut().disable());
+            debug!("Client turned notices off");
+            a.succeed()
+        }
+        "on" | "1" | "true" | "yes" => {
+            // Notices are on by default; accepting this makes the variable
+            // safe to set unconditionally in a wrapper script.
+            a.succeed()
+        }
+        other => {
+            warn!("SSH_STAMP_NOTICES must be on or off, got {other:?}");
+            a.fail()
+        }
+    }
+}
+
 /// Handles SSH environment variable requests.
 ///
 /// # Errors
@@ -480,11 +559,19 @@ pub async fn pubkey_env(
         match env_parser::parse_pubkey(a.value()?) {
             None => {
                 warn!("SSH_STAMP_PUBKEY contains invalid characters");
+                notice!(
+                    ctx.notices,
+                    "SSH_STAMP_PUBKEY rejected: not a valid ed25519 public key"
+                );
                 a.fail()?;
             }
             Some(trimmed) => {
                 if config_guard.add_pubkey(trimmed).is_ok() {
                     debug!("Added new pubkey from ENV");
+                    notice!(
+                        ctx.notices,
+                        "config: authorised key added; first-login provisioning is now closed"
+                    );
                     a.succeed()?;
                     if config_guard.first_login {
                         config_guard.first_login = false;
@@ -493,6 +580,7 @@ pub async fn pubkey_env(
                     }
                 } else {
                     warn!("Failed to add new pubkey from ENV");
+                    notice!(ctx.notices, "SSH_STAMP_PUBKEY rejected: no free key slot");
                     a.fail()?;
                 }
             }
@@ -517,6 +605,12 @@ pub async fn wifi_ap_ssid_env(
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
         if let Some(s) = env_parser::parse_wifi_ap_ssid(a.value()?) {
+            notice!(
+                ctx.notices,
+                "config: wifi ap ssid {:?} -> {:?}",
+                config_guard.wifi_ap_ssid.as_str(),
+                s.as_str()
+            );
             config_guard.wifi_ap_ssid = s;
             debug!("Set wifi Access Point SSID from ENV");
             a.succeed()?;
@@ -524,6 +618,10 @@ pub async fn wifi_ap_ssid_env(
             *ctx.needs_reset = true;
         } else {
             warn!("SSH_STAMP_WIFI_AP_SSID invalid and/or too long");
+            notice!(
+                ctx.notices,
+                "SSH_STAMP_WIFI_AP_SSID rejected: empty or over 32 bytes"
+            );
             a.fail()?;
         }
     } else {
@@ -545,6 +643,11 @@ pub async fn wifi_ap_psk_env(
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
         if let Some(s) = env_parser::parse_wifi_psk(a.value()?) {
+            notice!(
+                ctx.notices,
+                "config: wifi ap psk updated ({} chars)",
+                s.len()
+            );
             config_guard.wifi_ap_pw = s;
             debug!("Set WIFI AP PSK from ENV");
             a.succeed()?;
@@ -552,6 +655,10 @@ pub async fn wifi_ap_psk_env(
             *ctx.needs_reset = true;
         } else {
             warn!("SSH_STAMP_WIFI_AP_PSK invalid and/or not within 8-63 characters");
+            notice!(
+                ctx.notices,
+                "SSH_STAMP_WIFI_AP_PSK rejected: must be 8-63 characters"
+            );
             a.fail()?;
         }
     } else {
@@ -577,6 +684,12 @@ pub async fn wifi_band_env(
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
         if let Some(band) = env_parser::parse_wifi_band(a.value()?) {
+            notice!(
+                ctx.notices,
+                "config: wifi ap band {} -> {}",
+                band_label(config_guard.wifi_ap_band),
+                band_label(band)
+            );
             config_guard.wifi_ap_band = band;
             debug!("Set WIFI AP band from ENV: {band}");
             a.succeed()?;
@@ -584,6 +697,10 @@ pub async fn wifi_band_env(
             *ctx.needs_reset = true;
         } else {
             warn!("SSH_STAMP_WIFI_BAND must be 2.4g, 5g, or auto");
+            notice!(
+                ctx.notices,
+                "SSH_STAMP_WIFI_BAND rejected: must be 2.4g, 5g or auto"
+            );
             a.fail()?;
         }
     } else {
@@ -605,6 +722,12 @@ pub async fn wifi_sta_ssid_env(
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
         if let Some(s) = env_parser::parse_wifi_station_ssid(a.value()?) {
+            notice!(
+                ctx.notices,
+                "config: wifi station ssid {:?} -> {:?}",
+                config_guard.wifi_sta_ssid.as_str(),
+                s.as_str()
+            );
             config_guard.wifi_sta_ssid = s;
             debug!("Set wifi STATION SSID from ENV");
             a.succeed()?;
@@ -612,6 +735,10 @@ pub async fn wifi_sta_ssid_env(
             *ctx.needs_reset = true;
         } else {
             warn!("SSH_STAMP_WIFI_STA_SSID invalid and/or too long");
+            notice!(
+                ctx.notices,
+                "SSH_STAMP_WIFI_STA_SSID rejected: empty or over 32 bytes"
+            );
             a.fail()?;
         }
     } else {
@@ -633,6 +760,11 @@ pub async fn wifi_sta_psk_env(
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
         if let Some(s) = env_parser::parse_wifi_psk(a.value()?) {
+            notice!(
+                ctx.notices,
+                "config: wifi station psk updated ({} chars)",
+                s.len()
+            );
             config_guard.wifi_sta_pw = s;
             debug!("Set wifi STATION PSK from ENV");
             a.succeed()?;
@@ -640,6 +772,10 @@ pub async fn wifi_sta_psk_env(
             *ctx.needs_reset = true;
         } else {
             warn!("SSH_STAMP_WIFI_STA_PSK invalid and/or not within 8-63 characters");
+            notice!(
+                ctx.notices,
+                "SSH_STAMP_WIFI_STA_PSK rejected: must be 8-63 characters"
+            );
             a.fail()?;
         }
     } else {
@@ -661,6 +797,16 @@ pub async fn wifi_mac_address_env(
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
         if let Some(mac) = env_parser::parse_mac_address(a.value()?) {
+            notice!(
+                ctx.notices,
+                "config: mac -> {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                mac[0],
+                mac[1],
+                mac[2],
+                mac[3],
+                mac[4],
+                mac[5]
+            );
             config_guard.mac = mac;
             debug!("Set MAC address from ENV: {mac:02X?}");
             a.succeed()?;
@@ -668,6 +814,10 @@ pub async fn wifi_mac_address_env(
             *ctx.needs_reset = true;
         } else {
             warn!("SSH_STAMP_WIFI_MAC_ADDRESS must be XX:XX:XX:XX:XX:XX format");
+            notice!(
+                ctx.notices,
+                "SSH_STAMP_WIFI_MAC_ADDRESS rejected: must be XX:XX:XX:XX:XX:XX"
+            );
             a.fail()?;
         }
     } else {
@@ -688,6 +838,7 @@ pub async fn wifi_mac_random_env(
 ) -> Result<(), sunset::Error> {
     let mut config_guard = config.lock().await;
     if *ctx.auth_checked || config_guard.first_login {
+        notice!(ctx.notices, "config: mac -> randomised each boot");
         config_guard.mac = [0xFF; 6];
         debug!("Set MAC address to random mode");
         a.succeed()?;
@@ -736,6 +887,33 @@ pub fn session_exec(ev: ServEvent<'_, '_>) -> Result<(), sunset::Error> {
     Ok(())
 }
 
+/// Logs why the peer ended the connection.
+///
+/// Without this the console cannot tell a client saying goodbye from a
+/// connection that simply dropped, which is the difference between normal
+/// operation and a fault worth chasing.
+///
+/// # Errors
+/// Returns an error if SSH protocol operations fail.
+pub fn disconnected(ev: ServEvent<'_, '_>) -> Result<(), sunset::Error> {
+    if let ServEvent::Disconnected(d) = ev {
+        // Remote-supplied text. It only reaches the local log, but do not
+        // pass it anywhere that treats it as trusted.
+        let desc = d.desc().unwrap_or("<not valid utf-8>");
+        match d.reason() {
+            // What OpenSSH sends on a normal exit; not worth an info line.
+            Some(DisconnectReason::SSH_DISCONNECT_BY_APPLICATION) => {
+                debug!("Client disconnected: {desc}");
+            }
+            Some(reason) => info!("Client disconnected, {reason:?}: {desc}"),
+            None => {
+                info!("Client disconnected, reason {}: {desc}", d.reason_code());
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Returns a `BadUsage` error for unhandled events.
 ///
 /// # Errors
@@ -767,22 +945,50 @@ pub async fn ssh_client<'a, 'b, U, P>(
     )]
     platform: &'b P,
     #[cfg(feature = "can")] can_queue: &'b Channel<NoopRawMutex, ChanHandle, 1>,
+    notices: &'b NoticeQueue,
+    config: &'b SunsetMutex<SSHStampConfig>,
 ) -> Result<(), sunset::Error>
 where
     U: BufferedSerial,
     P: PlatformServices,
 {
     debug!("Preparing bridge");
+    let mut pending = NoticeDrain::new();
     let session = async {
         let session_type = chan_pipe.receive().await;
         debug!("Checking bridge session type");
         match session_type {
             SessionType::Bridge(ch) => {
                 info!("Handling bridge session");
-                let chan_io: ChanInOut<'_> = ssh_server.stdio(ch).await?;
+                // stderr, not stdout: stdout is the target's UART, verbatim.
+                let (chan_io, mut stderr) = ssh_server.stdio_stderr(ch).await?;
                 let (stdin, stdout) = chan_io.split();
+
+                let enabled = notices.lock(|n| n.borrow().enabled());
+                if enabled {
+                    // Anything queued during session setup (config changes,
+                    // rejected requests) had nowhere to go until now.
+                    notices.lock(|n| n.borrow_mut().flush_into(&mut pending));
+                    if !pending.is_empty() {
+                        stderr.write_all(pending.as_bytes()).await?;
+                        pending.clear();
+                    }
+                    let config_guard = config.lock().await;
+                    notices::config_summary(&mut stderr, &config_guard).await?;
+                    drop(config_guard);
+                    notices::emit(&mut stderr, format_args!("bridge connected")).await?;
+                }
+
                 info!("Starting bridge");
-                serial_bridge(stdin, stdout, uart_buff).await?;
+                let outcome =
+                    serial_bridge(stdin, stdout, uart_buff, enabled.then_some(&mut stderr)).await;
+
+                if enabled {
+                    // Best effort: the channel is usually already going away,
+                    // and failing to say goodbye must not mask `outcome`.
+                    let _ = notices::emit(&mut stderr, format_args!("bridge disconnected")).await;
+                }
+                outcome?;
             }
             #[cfg(feature = "sftp-ota")]
             SessionType::Sftp(ch) => {

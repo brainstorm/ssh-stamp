@@ -87,7 +87,9 @@
 //! [`prepare_ap_config`]: app::prepare_ap_config
 //! [`run_app`]: app::run_app
 
-#![no_std]
+// `not(test)` so the host test harness (which needs std) can run the
+// platform-agnostic unit tests; the same arrangement as the `ota` crate.
+#![cfg_attr(not(test), no_std)]
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 #![deny(unused_imports)]
@@ -101,6 +103,7 @@ pub mod can;
 pub mod config;
 pub mod errors;
 pub mod handle;
+pub mod notices;
 pub mod platform;
 pub mod serial;
 pub mod serve;
