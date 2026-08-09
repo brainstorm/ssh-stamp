@@ -140,6 +140,7 @@ pub mod config;
 pub mod errors;
 pub mod handle;
 pub mod mem_probe;
+pub mod notices;
 pub mod platform;
 pub mod serial;
 pub mod serve;

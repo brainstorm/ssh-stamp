@@ -12,6 +12,8 @@ use embassy_futures::select::select;
 use embedded_io_async::{Read, Write};
 use log::{debug, warn};
 
+use crate::notices;
+
 /// Platform-agnostic buffered serial bridge.
 ///
 /// The serial bridge is the inner loop that pumps bytes between the SSH
@@ -40,26 +42,43 @@ pub trait BufferedSerial: Sync {
 /// the connection drops.
 /// # Errors
 /// Returns an error if the SSH connection fails.
-pub async fn serial_bridge<U: BufferedSerial>(
+/// `notice_sink` receives out-of-band messages for the user, on SSH stderr.
+/// `None` disables them for this session; see [`crate::notices`].
+pub async fn serial_bridge<U: BufferedSerial, N: Write>(
     chan_read: impl Read<Error = sunset::Error>,
     chan_write: impl Write<Error = sunset::Error>,
     uart: &U,
+    notice_sink: Option<&mut N>,
 ) -> Result<(), sunset::Error> {
     debug!("Starting serial <--> SSH bridge");
-    select(uart_to_ssh(uart, chan_write), ssh_to_uart(chan_read, uart)).await;
+    select(
+        uart_to_ssh(uart, chan_write, notice_sink),
+        ssh_to_uart(chan_read, uart),
+    )
+    .await;
     debug!("Stopping serial <--> SSH bridge");
     Ok(())
 }
 
-async fn uart_to_ssh<U: BufferedSerial>(
+async fn uart_to_ssh<U: BufferedSerial, N: Write>(
     uart_buf: &U,
     mut chan_write: impl Write<Error = sunset::Error>,
+    mut notice_sink: Option<&mut N>,
 ) -> Result<(), sunset::Error> {
     let mut ssh_tx_buf = [0u8; 512];
     loop {
         let dropped = uart_buf.check_dropped_bytes();
         if dropped > 0 {
             warn!("UART RX dropped {dropped} bytes");
+            // The user's capture now has a hole in it. A console warning
+            // they cannot see is no use; tell the client.
+            if let Some(sink) = notice_sink.as_deref_mut() {
+                let _ = notices::emit(
+                    sink,
+                    format_args!("warning: UART RX overrun, {dropped} bytes lost"),
+                )
+                .await;
+            }
         }
         let n = uart_buf.read(&mut ssh_tx_buf).await;
         chan_write.write_all(&ssh_tx_buf[..n]).await?;
