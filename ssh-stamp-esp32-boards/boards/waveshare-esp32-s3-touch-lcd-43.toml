@@ -21,3 +21,11 @@ can_rx = 19
 i2c_sda = 8
 i2c_scl = 9
 writes = [[0x24, 0x01], [0x38, 0x20]]
+
+# Consumed by `cargo xtask`; the BSP build script ignores this section.
+# `can` is on by default because the onboard TJA1051 transceiver is the
+# reason to pick this board; add `--features can-no-ack` for bench work
+# without an acknowledging CAN node attached.
+[build]
+chip = "esp32s3"
+features = ["can"]

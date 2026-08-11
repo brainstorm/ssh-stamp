@@ -3,45 +3,28 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [alias]
-# All ESP32 targets build the binary in the ssh-stamp-esp32 crate.
-# Board features select a specific PCB and imply the IC feature.
-# `--no-default-features` prevents the default board from clashing.
+# Every build goes through the xtask runner: `cargo xtask <command>`.
+# Board/chip/toolchain knowledge lives in xtask/targets.toml and the
+# `[build]` section of each ssh-stamp-*-boards/boards/*.toml, instead of one
+# alias per board*feature combination (see issue #116).
 #
-# Boards with a BSP entry use a board-<name> feature:
-build-esp32c5 = "build --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c5-devkitc"
-build-esp32c61 = "build --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c61-devkitc"
-build-esp32c6 = "build --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c6-devkitc"
-build-esp32c6-generic = "build --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c6-generic"
-build-esp32s2 = "build --profile esp32s2 --target xtensa-esp32s2-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32-s2-saola -Z build-std=core,alloc"
-build-esp32s3-touch-lcd-43 = "build --release --target xtensa-esp32s3-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-waveshare-esp32-s3-touch-lcd-43,can -Z build-std=core,alloc"
-# Bench variant: CAN in no-acknowledge mode (exactly one frame per write with no ACKing node attached)
-build-esp32s3-touch-lcd-43-noack = "build --release --target xtensa-esp32s3-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-waveshare-esp32-s3-touch-lcd-43,can-no-ack -Z build-std=core,alloc"
+#   cargo xtask list
+#   cargo xtask build esp32c6-devkitc
+#   cargo xtask run waveshare-esp32-s3-touch-lcd-43 --features can-no-ack
+#   cargo xtask ci
+xtask = "run --package xtask --"
 
-run-esp32c5 = "run --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c5-devkitc"
-run-esp32c61 = "run --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c61-devkitc"
-run-esp32c6 = "run --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c6-devkitc"
-run-esp32c6-generic = "run --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c6-generic"
-run-esp32s2 = "run --profile esp32s2 --target xtensa-esp32s2-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32-s2-saola"
-run-esp32s3-touch-lcd-43 = "run --release --target xtensa-esp32s3-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-waveshare-esp32-s3-touch-lcd-43,can -Z build-std=core,alloc"
-run-esp32s3-touch-lcd-43-noack = "run --release --target xtensa-esp32s3-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-waveshare-esp32-s3-touch-lcd-43,can-no-ack -Z build-std=core,alloc"
+# The OTA image packer is a host tool, not a build target.
+packer = "run --package ota --bin packer"
 
-# IC-only targets (no BSP entry yet) build the library only — the binary hits
-# the `compile_error!("No board feature selected.")` guard until a board module
-# is added to ssh-stamp-esp32-boards. Use `--lib` so the alias succeeds.
-build-esp32 = "build --release --target xtensa-esp32-none-elf -p ssh-stamp-esp32 --lib --no-default-features --features esp32 -Z build-std=core,alloc"
-build-esp32c2 = "build --release --target riscv32imc-unknown-none-elf -p ssh-stamp-esp32 --lib --no-default-features --features esp32c2"
-build-esp32c3 = "build --release --target riscv32imc-unknown-none-elf -p ssh-stamp-esp32 --lib --no-default-features --features esp32c3"
-build-esp32s3 = "build --release --target xtensa-esp32s3-none-elf -p ssh-stamp-esp32 --lib --no-default-features --features esp32s3 -Z build-std=core,alloc"
-
-# Test alias
-test-ota = "test --package ota --target x86_64-unknown-linux-gnu"
-
-# ota packer aliases
-build-packer = "build --package ota --bin packer --target x86_64-unknown-linux-gnu"
-packer = "run --package ota --bin packer --target x86_64-unknown-linux-gnu"
-
-# doc aliases (cannot use "doc" — shadows cargo's built-in command)
-build-doc = "doc --target riscv32imac-unknown-none-elf --no-deps --lib -p ssh-stamp -p ssh-stamp-hal -p ssh-stamp-esp32 -p ssh-stamp-esp32-boards -p ota --no-default-features --features ssh-stamp-esp32/board-esp32c6-devkitc"
+# NOTE: there is deliberately no `[build] target` or `[unstable] build-std`
+# here. Both used to be global, which forced *every* cargo invocation —
+# including host tools like xtask and the packer — to cross-compile to
+# riscv32imac. xtask now passes `--target` and `-Zbuild-std` per chip, so
+# host tooling builds for the host on any OS without a hardcoded triple.
+# Editors wanting cross-compilation diagnostics should set the target in
+# their own rust-analyzer config, e.g.:
+#   "rust-analyzer.cargo.target": "riscv32imac-unknown-none-elf"
 
 [target.xtensa-esp32-none-elf] # ESP32
 runner = "espflash flash --baud=921600 --monitor --chip esp32"
@@ -49,7 +32,7 @@ rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32"', '--cfg', '
 [target.riscv32imc-unknown-none-elf] # ESP32-C2 / ESP32-C3
 runner = "espflash flash --baud=921600 --monitor"
 rustflags = ["-C", "force-frame-pointers", '--cfg', 'getrandom_backend="custom"']
-[target.riscv32imac-unknown-none-elf] # ESP32C6
+[target.riscv32imac-unknown-none-elf] # ESP32-C5 / C6 / C61
 runner = "espflash flash --baud=921600 --partition-table ssh-stamp-esp32/partitions.csv --monitor"
 rustflags = ["-C", "force-frame-pointers", '--cfg', 'getrandom_backend="custom"']
 
@@ -70,10 +53,3 @@ ESP_LOG = "info"
 #ESP_HAL_CONFIG_STACK_GUARD_OFFSET=4096
 #ESP_HAL_CONFIG_STACK_GUARD_VALUE=3740121773
 #ESP_HAL_CONFIG_IMPL_CRITICAL_SECTION=true
-
-
-[build]
-target = "riscv32imac-unknown-none-elf"
-
-[unstable]
-build-std = ["core", "alloc"]

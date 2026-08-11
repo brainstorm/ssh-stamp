@@ -1,0 +1,82 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Build registry for `cargo xtask`.
+#
+# Nothing here is vendor-specific by construction: a platform is "some cargo
+# package that produces a firmware binary", and a chip is "some MCU with a
+# Rust target triple". Supporting a non-Espressif MCU means adding a
+# `[platforms.<vendor>]` entry pointing at that vendor's crate plus one
+# `[chips.<name>]` entry per MCU — no changes to the xtask code itself.
+#
+# Boards are NOT listed here. They are discovered by scanning each platform's
+# `boards` directory, so `boards/*.toml` stays the single source of truth for
+# what boards exist (each declares its chip in a `[build]` section).
+
+[platforms.espressif]
+package = "ssh-stamp-esp32"
+bin = "ssh-stamp-esp32"
+boards = "ssh-stamp-esp32-boards/boards"
+board-feature-prefix = "board-"
+
+# Chips without a board entry are still buildable as a library
+# (`cargo xtask build esp32c3`), which is what CI does to keep them honest
+# until someone contributes a BSP for a concrete PCB.
+
+[chips.esp32]
+platform = "espressif"
+target = "xtensa-esp32-none-elf"
+toolchain = "esp"
+build-std = true
+
+[chips.esp32c2]
+platform = "espressif"
+target = "riscv32imc-unknown-none-elf"
+
+[chips.esp32c3]
+platform = "espressif"
+target = "riscv32imc-unknown-none-elf"
+
+[chips.esp32c5]
+platform = "espressif"
+target = "riscv32imac-unknown-none-elf"
+
+[chips.esp32c6]
+platform = "espressif"
+target = "riscv32imac-unknown-none-elf"
+
+[chips.esp32c61]
+platform = "espressif"
+target = "riscv32imac-unknown-none-elf"
+
+[chips.esp32s2]
+platform = "espressif"
+target = "xtensa-esp32s2-none-elf"
+toolchain = "esp"
+build-std = true
+# The S2 runs out of RAM at opt-level 3; see the profile in the root manifest.
+profile = "esp32s2"
+
+[chips.esp32s3]
+platform = "espressif"
+target = "xtensa-esp32s3-none-elf"
+toolchain = "esp"
+build-std = true
+
+# Single-target jobs (clippy, rustdoc) need one representative board.
+[defaults]
+board = "esp32c6-devkitc"
+# Toolchain for chips that do not name one. Pinned rather than inherited so
+# builds match CI even when a contributor has a rustup directory override
+# (e.g. `rustup override set esp`, needed for Xtensa) in this repo: the
+# Xtensa fork is a linked toolchain with no prebuilt RISC-V core, so
+# inheriting it would silently force `-Zbuild-std` on RISC-V targets.
+toolchain = "stable"
+doc-packages = [
+    "ssh-stamp",
+    "ssh-stamp-hal",
+    "ssh-stamp-esp32",
+    "ssh-stamp-esp32-boards",
+    "ota",
+]
