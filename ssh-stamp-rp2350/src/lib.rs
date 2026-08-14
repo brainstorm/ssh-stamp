@@ -33,5 +33,5 @@ pub mod uart;
 pub use flash::{ConfigFlash, FlashBuffer, get_flash_n_buffer};
 pub use net::{W6300Ethernet, W6300Spi};
 pub use platform::{Rp2350OtaWriter, Rp2350Platform};
-pub use rng::register_custom_rng;
+pub use rng::{entropy_task, pool_level, prime_pool};
 pub use uart::{BufferedUart, UART_BUF, UART_SIGNAL, uart_task};

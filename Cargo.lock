@@ -873,8 +873,6 @@ dependencies = [
 [[package]]
 name = "embassy-net-wiznet"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "336e290ec0eedc19e9d0a948d2f715ea187de79da517a0a24e55553c1a185ab8"
 dependencies = [
  "embassy-futures",
  "embassy-net-driver-channel",

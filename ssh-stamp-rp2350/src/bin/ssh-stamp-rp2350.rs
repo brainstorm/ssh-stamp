@@ -27,16 +27,17 @@ use embassy_rp::trng::{InterruptHandler as TrngInterruptHandler, Trng};
 use embassy_rp::uart::{BufferedInterruptHandler, BufferedUart as RpBufferedUart};
 use embassy_rp::usb::{Driver as UsbDriver, InterruptHandler as UsbInterruptHandler};
 use embassy_rp::{dma, trng};
-use embassy_time::{Delay, Timer};
+use embassy_time::{Delay, Timer, with_timeout};
 use embedded_alloc::LlffHeap as Heap;
 use embedded_hal_bus::spi::ExclusiveDevice;
-use log::{debug, error, info};
+use embassy_usb_logger::ReceiverHandler as _;
+use log::{debug, error, info, warn};
 use ssh_stamp::config::{SSHStampConfig, UartPins};
 use ssh_stamp::platform::PlatformServices;
 use ssh_stamp::{app, store};
 use ssh_stamp_hal::NetworkProviderHal;
 use ssh_stamp_rp2350::{
-    BufferedUart, Rp2350Platform, UART_BUF, W6300Ethernet, flash, net, register_custom_rng,
+    BufferedUart, Rp2350Platform, UART_BUF, W6300Ethernet, entropy_task, flash, net, prime_pool,
     uart_task,
 };
 use ssh_stamp_rp2350_boards::Board;
@@ -58,10 +59,70 @@ bind_interrupts!(struct Irqs {
     DMA_IRQ_0 => dma::InterruptHandler<DMA_CH0>, dma::InterruptHandler<DMA_CH1>;
 });
 
+/// How long to wait for one TRNG generation attempt.
+const TRNG_TIMEOUT: embassy_time::Duration = embassy_time::Duration::from_secs(3);
+/// How many attempts before declaring the TRNG dead. The first one after
+/// power-on usually fails while the ring oscillator settles.
+const TRNG_ATTEMPTS: u32 = 5;
+
+/// Entropy to bank before starting anything that consumes it.
+const ENTROPY_PRIME_BYTES: usize = 256;
+/// Ceiling on the boot-time entropy wait.
+const ENTROPY_PRIME_TIMEOUT: embassy_time::Duration = embassy_time::Duration::from_secs(30);
+
+/// Liveness beacon: blinks the onboard LED and logs a counter.
+///
+/// Two jobs. The LED shows the executor is still scheduling even when the
+/// USB log is unreadable, which is the difference between "wedged" and
+/// "waiting". The log line repeats forever, so a host that attaches late
+/// still sees output — the boot banner alone is missed by anyone who does
+/// not have the port open within the first couple of seconds.
+#[embassy_executor::task]
+async fn heartbeat_task(mut led: Output<'static>) {
+    let mut n: u32 = 0;
+    loop {
+        led.toggle();
+        // The LED is the point; logging every tick just floods the console.
+        debug!("alive {n}");
+        n = n.wrapping_add(1);
+        Timer::after_secs(2).await;
+    }
+}
+
+/// Reboots into the ROM bootloader when the host sends `b`.
+///
+/// The RP2350 has no reset line exposed over USB, so reflashing otherwise
+/// means physically holding BOOTSEL while power-cycling. During bring-up
+/// that is the slowest step in the loop by a wide margin. `reset_to_usb_boot`
+/// is the same call `picotool reboot -f -u` relies on.
+///
+/// Only reachable by whoever already has the USB cable, which is the same
+/// person who could press the button.
+struct BootselOnB;
+
+impl embassy_usb_logger::ReceiverHandler for BootselOnB {
+    async fn handle_data(&self, data: &[u8]) {
+        if data.contains(&b'b') {
+            info!("host asked for BOOTSEL, rebooting into the bootloader");
+            // Give the line a moment to reach the host before the USB
+            // device disappears.
+            Timer::after_millis(100).await;
+            embassy_rp::rom_data::reset_to_usb_boot(0, 0);
+        }
+    }
+
+    fn new() -> Self {
+        Self
+    }
+}
+
 /// USB CDC logger: `log::*` shows up on /dev/ttyACM0.
+///
+/// Also accepts `b` on the same port to reboot into the bootloader; see
+/// [`BootselOnB`].
 #[embassy_executor::task]
 async fn logger_task(driver: UsbDriver<'static, USB>) {
-    embassy_usb_logger::run!(4096, log::LevelFilter::Info, driver);
+    embassy_usb_logger::run!(4096, log::LevelFilter::Debug, driver, BootselOnB);
 }
 
 #[embassy_executor::main]
@@ -82,10 +143,88 @@ async fn main(spawner: Spawner) -> ! {
     Timer::after_secs(2).await;
     info!("ssh-stamp rp2350: booting (W6300-EVB-Pico2)");
 
-    let mut trng = Trng::new(p.TRNG, Irqs, trng::Config::default());
-    let seed = trng.blocking_next_u64();
-    let mac = mac_address(&mut trng);
-    register_custom_rng(trng);
+    // GPIO25 is the Pico 2's onboard LED and is not otherwise claimed by
+    // this board (UART uses 0/1, the W6300 uses 15-19 and 22).
+    spawner.spawn(heartbeat_task(Output::new(p.PIN_25, Level::Low)).expect("heartbeat spawn"));
+
+
+    // Async, not `blocking_next_u64()`/`blocking_fill_bytes()`. embassy-rp's
+    // blocking TRNG path is
+    //
+    //     while trng_busy_register.read().trng_busy() {}
+    //
+    // with no yield and no timeout, so on a cooperative executor a TRNG that
+    // never finishes a generation starves every other task — USB included,
+    // which is what made this look like a dead board rather than a stuck
+    // call. The async version waits on TRNG_IRQ and yields, so the rest of
+    // the firmware keeps running and a stall is visible instead of fatal.
+    // A longer inverter chain than the default `One`. The ring oscillator
+    // runs slower with more jitter per sample, which is what the hardware
+    // autocorrelation test wants: with the default this board failed that
+    // test constantly, and each failure costs a soft reset and re-init, so
+    // measured throughput was ~2.4 bytes/second — unusable for SSH.
+    let mut trng_config = trng::Config::default();
+    trng_config.inverter_chain_length = trng::InverterChainLength::Four;
+    let mut trng = Trng::new(p.TRNG, Irqs, trng_config);
+
+    // Retried, because the first generation after power-on routinely takes
+    // far longer than later ones: the hardware fails its autocorrelation
+    // test a few times while the ring oscillator settles, and each failure
+    // costs a soft reset and re-init inside the driver. A single short
+    // attempt reports weak entropy on a chip that is merely still warming
+    // up, and weak entropy is not something an SSH host key should be
+    // built on.
+    let mut seed_bytes = [0u8; 8];
+    let mut entropy_ok = false;
+    for attempt in 1..=TRNG_ATTEMPTS {
+        if with_timeout(TRNG_TIMEOUT, trng.fill_bytes(&mut seed_bytes))
+            .await
+            .is_ok()
+        {
+            entropy_ok = true;
+            debug!(
+                "TRNG ready after {attempt} attempt(s), {}ms",
+                embassy_time::Instant::now().as_millis()
+            );
+            break;
+        }
+        warn!("TRNG attempt {attempt}/{TRNG_ATTEMPTS} produced nothing in {}ms",
+            TRNG_TIMEOUT.as_millis());
+    }
+    if !entropy_ok {
+        error!(
+            "TRNG never produced entropy. Keys generated this boot are NOT \
+             safe; re-flash or replace the board before trusting it."
+        );
+    }
+    let seed = u64::from_le_bytes(seed_bytes);
+    debug!("TRNG ok={entropy_ok}");
+
+    let mac = mac_address(&mut trng).await;
+    info!(
+        "MAC {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+        mac[0],
+        mac[1],
+        mac[2],
+        mac[3],
+        mac[4],
+        mac[5]
+    );
+    // The TRNG is owned by the pool task from here on; nothing else may
+    // touch it, since every other access path into embassy-rp's driver is
+    // a blocking one. See `rng`'s module docs.
+    spawner.spawn(entropy_task(trng).expect("entropy task spawn failed"));
+
+    // Wait for real entropy before anything can consume it. A key exchange
+    // needs more than one TRNG generation, so bringing the SSH server up
+    // against a nearly-empty pool gives handshakes that die at userauth
+    // with no explanation on either side.
+    let level = prime_pool(ENTROPY_PRIME_BYTES, ENTROPY_PRIME_TIMEOUT).await;
+    if level < ENTROPY_PRIME_BYTES {
+        warn!("entropy pool only reached {level}/{ENTROPY_PRIME_BYTES} bytes; SSH may fail");
+    } else {
+        info!("entropy pool ready ({level} bytes)");
+    }
 
     // Board selection — the generated select_board! macro expands to the
     // active board's struct as B. Pin numbers come from boards/*.toml via
@@ -162,7 +301,14 @@ async fn main(spawner: Spawner) -> ! {
         app::print_hostkey_fingerprint(&guard.hostkey);
     }
 
-    let mut ethernet = W6300Ethernet::new(spawner, mac, seed, spi, int, reset);
+    // The persisted MAC, not the one just generated. `mac` is only the
+    // first-boot default handed to `load_or_create`; on every later boot the
+    // stored value is what the config holds, and using the generated one
+    // would give the board a different address on each power cycle —
+    // churning ARP entries and DHCP leases for no reason. It also keeps the
+    // address stable when the TRNG comes up cold and the default is zeros.
+    let stored_mac = { config.lock().await.mac };
+    let mut ethernet = W6300Ethernet::new(spawner, stored_mac, seed, spi, int, reset);
     let stack = match ethernet.bring_up().await {
         Ok(stack) => stack,
         Err(e) => {
@@ -185,15 +331,38 @@ async fn main(spawner: Spawner) -> ! {
 /// The W6300 has no MAC in eFuse, so the first boot mints one at random and
 /// `store` persists it alongside the rest of the config; later boots load
 /// that value and never reach this default.
-fn mac_address(trng: &mut Trng<'static, TRNG>) -> [u8; 6] {
+async fn mac_address(trng: &mut Trng<'static, TRNG>) -> [u8; 6] {
     let mut mac = [0u8; 6];
-    trng.blocking_fill_bytes(&mut mac);
+    // Async for the same reason as the seed above; a zero MAC from a failed
+    // read is still a working (if unlovely) locally-administered address.
+    if with_timeout(TRNG_TIMEOUT, trng.fill_bytes(&mut mac)).await.is_err() {
+        error!("TRNG stalled while generating a MAC");
+    }
     // Locally administered, unicast.
     mac[0] = (mac[0] | 0b0000_0010) & 0b1111_1110;
     mac
 }
 
 #[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    loop {}
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    // A silent `loop {}` here is indistinguishable from a hang: the board
+    // stops, USB stays enumerated because the host does not notice a device
+    // that merely went quiet, and nothing says why. Reset instead, so a
+    // panic shows up as a reboot the host can see (and logs restart), and
+    // try to say what happened on the way out.
+    // Deliberately does not log. The logger writes through a pipe guarded
+    // by `critical_section`, which is not reentrant: if the panic happened
+    // while that guard was held — anywhere inside the logging path, or in
+    // any other critical section — logging from here deadlocks and the
+    // board hangs instead of resetting. A hang is the one outcome a panic
+    // handler must not produce, because it is indistinguishable from the
+    // firmware simply stopping.
+    let _ = info;
+
+    // Spin before resetting so a panic during early boot does not reboot so
+    // fast that the board is hard to catch in BOOTSEL.
+    for _ in 0..20_000_000 {
+        core::hint::spin_loop();
+    }
+    cortex_m::peripheral::SCB::sys_reset()
 }
