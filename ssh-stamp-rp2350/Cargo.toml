@@ -52,7 +52,7 @@ once_cell = { workspace = true }
 portable-atomic = { workspace = true }
 log = { workspace = true }
 sunset-async = { workspace = true }
-getrandom = { version = "0.2.10", features = ["custom"] }
+getrandom = { version = "0.4" }
 
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
@@ -70,11 +70,19 @@ default = ["board-w6300-evb-pico2"]
 ipv6 = ["ssh-stamp/ipv6"]
 
 # Board features — select a specific PCB. Each enables the corresponding
-# board definition in ssh-stamp-rp2350-boards.
+# board definition in ssh-stamp-rp2350-boards AND the IC feature it targets.
 board-w6300-evb-pico2 = [
     "dep:ssh-stamp-rp2350-boards",
     "ssh-stamp-rp2350-boards/board-w6300-evb-pico2",
+    "rp2350",
 ]
+
+# IC feature — selects the chip only; activated automatically by board
+# features. Unlike the Espressif crate this platform covers a single MCU
+# (embassy-rp is pinned to `rp235xa`), so the feature turns nothing on; it
+# exists so `cargo xtask build rp2350` can build the library without
+# committing to a PCB, the same way the bare ESP32 chips do.
+rp2350 = []
 
 [lints]
 workspace = true

@@ -7,17 +7,7 @@ License: CC0-1.0
 Files: docs/img/connecting_to_ssh_stamp.png
        docs/img/openwrt_ssh_helloworld.png
        docs/img/ssh_stamp_openwrt_setup.png
+       docs/img/ssh_stamp_architecture.svg
+       docs/img/ssh_stamp_architecture_light.svg
 Copyright: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
 License: GPL-3.0-or-later
-
-Files: docs/nlnet/zero_commons_logo.svg
-Copyright: NLnet Foundation
-License: CC-BY-4.0
-
-Files: docs/svd/esp32c6.svd
-Copyright: 2024 Espressif Systems (Shanghai) PTE LTD
-License: Apache-2.0
-
-Files: REUSE_ERRORS.txt
-Copyright: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
-License: CC0-1.0

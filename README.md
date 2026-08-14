@@ -25,13 +25,19 @@ Refer to [building](./docs/BUILDING.md) if you are not using our binary releases
 
 ## Targets
 
-At present only Espressif ICs are supported but other targets (i.e Raspberry Pico2 or Dabao-1x) are planned in the future.
+Espressif ICs are supported over WiFi, and the RP2350 over wired Ethernet on the [WIZnet W6300-EVB-Pico2](./ssh-stamp-rp2350/README.md). Other targets (i.e Dabao-1x) are planned in the future.
+
+`cargo xtask list` shows every board and chip the tree can build; see [building](./docs/BUILDING.md).
 
 ## Acknowledgement
 
-This project was funded through the NGI0 Commons Fund, a fund established by NLnet with financial support from the European Commission's Next Generation Internet programme, under the aegis of DG Communications Networks, Content and Technology under grant agreement No 101135429.
+[This project][nlnet-grant] was funded through the NGI0 Commons Fund, a fund established by NLnet with financial support from the European Commission's Next Generation Internet programme, under the aegis of DG Communications Networks, Content and Technology under grant agreement No 101135429.
 
-![nlnet_foundation](./docs/nlnet/nlnet_foundation.svg)
-![nlnet_zero_commons](./docs/nlnet/zero_commons_logo.svg)
+<table>
+    <tr>
+        <td align="center" width="50%"><img src="https://nlnet.nl/logo/banner.svg" alt="NLnet foundation logo" style="width:90%"></td>
+        <td align="center"><img src="https://nlnet.nl/image/logos/NGI0_tag.svg" alt="NGI0 logo" style="width:90%"></td>
+    </tr>
+</table>
 
 [nlnet-grant]: https://nlnet.nl/project/SSH-Stamp/

@@ -26,3 +26,7 @@ sck = 17
 io0 = 18
 io1 = 19
 rst = 22
+
+# Consumed by `cargo xtask`; the BSP build script ignores this section.
+[build]
+chip = "rp2350"

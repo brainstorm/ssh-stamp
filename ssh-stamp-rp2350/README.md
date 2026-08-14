@@ -27,9 +27,13 @@ cargo install elf2uf2-rs --locked
 
 ## Build and flash
 
+Builds go through the workspace's `xtask` runner, same as every other
+target; `w6300-evb-pico2` is the board name it knows this PCB by (`cargo
+xtask list` shows the rest).
+
 ```
-cargo build-rp2350                      # release build
-cargo run-rp2350                        # flash + attach via probe-rs (SWD)
+cargo xtask build w6300-evb-pico2       # release build
+cargo xtask run w6300-evb-pico2         # flash + attach via probe-rs (SWD)
 ```
 
 Logs come out of the Pico 2's **USB port as a CDC serial device**, so no
@@ -57,7 +61,7 @@ Pins live in the [`ssh-stamp-rp2350-boards`](../ssh-stamp-rp2350-boards)
 BSP crate — same arrangement as `ssh-stamp-esp32-boards`. Each PCB is one
 `boards/*.toml`, and `build.rs` generates the `take_uart_pins!`,
 `take_ethernet_pins!` and `select_board!` macros the binary uses; nothing
-here hard-codes a GPIO number. `cargo build-doc` renders the generated
+here hard-codes a GPIO number. `cargo xtask doc` renders the generated
 board catalog.
 
 | Signal         | GPIO | How it is driven                              |
@@ -117,7 +121,7 @@ outside it, so a store bug cannot scribble on the firmware.
 
 No WiFi AP fallback exists here — DHCP is the only way in.
 
-1. `cargo run-rp2350`, watch USB CDC for `W6300: IPv4 <addr>`.
+1. `cargo xtask run w6300-evb-pico2`, watch USB CDC for `W6300: IPv4 <addr>`.
 2. `ssh -o SendEnv=SSH_STAMP_PUBKEY root@<addr>` with `SSH_STAMP_PUBKEY`
    set to your public key. The host key fingerprint is printed at boot;
    compare it on first connect.

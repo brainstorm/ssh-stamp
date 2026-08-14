@@ -8,29 +8,18 @@ repos:
       - id: rustfmt
         name: rustfmt
         description: Check if all files follow the rustfmt style
-        entry: cargo fmt --all -- --check --color always
+        entry: cargo xtask fmt --check
         language: system
         pass_filenames: false
-      # `--workspace` cannot work here: the members target different
-      # architectures (RISC-V, Xtensa, Cortex-M) and one is a host-side
-      # crate, so a single invocation would try to build them all for
-      # whichever target happens to be the default. Lint each where it
-      # actually runs instead.
-      - id: clippy-esp32
-        name: clippy (esp32)
-        description: Lint the ESP32 firmware on its own target
-        entry: cargo clippy --release --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features --features board-esp32c6-devkitc -- -D warnings -A clippy::default_trait_access
-        language: system
-        pass_filenames: false
-      - id: clippy-rp2350
-        name: clippy (rp2350)
-        description: Lint the RP2350 firmware on its own target
-        entry: cargo clippy --release --target thumbv8m.main-none-eabihf -p ssh-stamp-rp2350 --bin ssh-stamp-rp2350 --no-default-features --features board-w6300-evb-pico2 -- -D warnings -A clippy::default_trait_access
-        language: system
-        pass_filenames: false
-      - id: clippy-host
-        name: clippy (host tools)
-        description: Lint the host-side crates (BSP codegen, OTA packer)
-        entry: cargo clippy --target x86_64-unknown-linux-gnu -p ssh-stamp-board-codegen -p ota --all-targets -- -D warnings
+      # No `--workspace` here: the members target different architectures
+      # (RISC-V, Xtensa, Cortex-M) and some are host-side crates, so a
+      # single invocation would try to build them all for whichever target
+      # happened to be the default. `xtask clippy` with no argument walks
+      # the `clippy-targets` list in xtask/targets.toml instead, linting
+      # each crate on the target it actually builds for.
+      - id: clippy
+        name: clippy
+        description: Lint every platform plus the host crates
+        entry: cargo xtask clippy
         language: system
         pass_filenames: false

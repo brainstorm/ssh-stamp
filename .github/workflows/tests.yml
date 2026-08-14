@@ -17,8 +17,8 @@ permissions:
   contents: read
 
 jobs:
-  packer:
-    name: OTA tests
+  host:
+    name: Host test suites
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -28,22 +28,6 @@ jobs:
       - name: Setup Stable Rust Toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
-          target: riscv32imac-unknown-none-elf
           toolchain: stable
       - name: Package test
-        run: cargo test-ota
-
-  board-codegen:
-    name: BSP codegen tests
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-      - name: Setup Stable Rust Toolchain
-        uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: stable
-      - name: Codegen test
-        run: cargo test-codegen
+        run: cargo xtask test

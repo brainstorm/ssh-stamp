@@ -25,7 +25,7 @@
 
 use embassy_executor::Spawner;
 use embassy_net::{
-    ConfigV4, Config as NetConfig, Ipv4Address, Ipv4Cidr, StaticConfigV4, Stack, StackResources,
+    Config as NetConfig, ConfigV4, Ipv4Address, Ipv4Cidr, Stack, StackResources, StaticConfigV4,
 };
 use embassy_net_wiznet::chip::W6300;
 use embassy_net_wiznet::{Device, Runner, State};
@@ -110,16 +110,14 @@ async fn probe_w6300<SPI: SpiDevice>(spi: &mut SPI) {
     const PHYSR_ADDR: u16 = 0x3000;
 
     let mut version = [0u8];
-    match raw_read(spi, COMMON, VERSION_ADDR, &mut version).await {
-        Ok(()) => info!(
-            "W6300 probe: VERSION=0x{:02x} (expect 0x11)",
-            version[0]
-        ),
-        Err(_) => {
-            warn!("W6300 probe: VERSION read failed (SPI error)");
-            return;
-        }
+    if raw_read(spi, COMMON, VERSION_ADDR, &mut version)
+        .await
+        .is_err()
+    {
+        warn!("W6300 probe: VERSION read failed (SPI error)");
+        return;
     }
+    info!("W6300 probe: VERSION=0x{:02x} (expect 0x11)", version[0]);
 
     // Sampled rather than read once: the PHY may still be negotiating, and
     // a bit that never sets is the interesting case.
@@ -251,8 +249,14 @@ impl NetworkProviderHal for W6300Ethernet {
         // Bounded and logged rather than a bare await: these two calls
         // block forever on a board with no cable, an unsupported PHY bit or
         // no DHCP server, and a silent hang gives no clue which it was.
-        info!("W6300: waiting for link (up to {}s)", LINK_TIMEOUT.as_secs());
-        if with_timeout(LINK_TIMEOUT, stack.wait_link_up()).await.is_err() {
+        info!(
+            "W6300: waiting for link (up to {}s)",
+            LINK_TIMEOUT.as_secs()
+        );
+        if with_timeout(LINK_TIMEOUT, stack.wait_link_up())
+            .await
+            .is_err()
+        {
             error!(
                 "W6300: no link after {}s. The driver reads bit 0 of PHYSR; \
                  compare the probe values above against what the other end \

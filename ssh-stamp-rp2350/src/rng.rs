@@ -38,6 +38,21 @@
 //! raw TRNG output as before — no new construction is introduced here — and
 //! an empty pool returns an error rather than blocking. A failed handshake
 //! is recoverable; a wedged board is not.
+//!
+//! # Wiring this into `getrandom`
+//!
+//! getrandom 0.4 no longer selects its backend with a cargo feature and no
+//! longer offers `register_custom_getrandom!`. Instead the `custom` backend
+//! is chosen per target with `--cfg getrandom_backend="custom"` (set in
+//! `.cargo/config.toml` for `thumbv8m.main-none-eabihf`), and getrandom
+//! links an `extern "Rust"` symbol that must be defined exactly once in the
+//! whole program.
+//!
+//! Defining that symbol requires `unsafe`, so it lives in the port binary
+//! (`src/bin/ssh-stamp-rp2350.rs`) — which is also where getrandom's own
+//! documentation says it belongs — and simply forwards to
+//! [`getrandom_fill_bytes`] below. That keeps this crate
+//! `#![forbid(unsafe_code)]`.
 
 use core::cell::RefCell;
 
@@ -46,7 +61,6 @@ use embassy_rp::trng::Trng;
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::{Duration, Timer, with_timeout};
-use getrandom::register_custom_getrandom;
 use log::{debug, info, warn};
 use ssh_stamp_hal::{HalError, RngHal};
 
@@ -112,8 +126,6 @@ impl Pool {
 }
 
 static POOL: Mutex<CriticalSectionRawMutex, RefCell<Pool>> = Mutex::new(RefCell::new(Pool::new()));
-
-register_custom_getrandom!(rp2350_getrandom_custom_func);
 
 /// Keeps the entropy pool topped up. Spawn once, early.
 ///
@@ -201,13 +213,17 @@ impl RngHal for Rp2350Rng {
     }
 }
 
-/// `getrandom` backend.
+/// Safe half of the `getrandom` custom backend: fills `buf` from the
+/// entropy pool.
+///
+/// The binary's `__getrandom_v03_custom` shim forwards here; see the module
+/// docs for why the split exists.
 ///
 /// # Errors
 ///
 /// Returns an error if the pool is empty — see the module docs for why this
 /// fails instead of waiting.
-pub fn rp2350_getrandom_custom_func(buf: &mut [u8]) -> Result<(), getrandom::Error> {
+pub fn getrandom_fill_bytes(buf: &mut [u8]) -> Result<(), getrandom::Error> {
     if POOL.lock(|p| p.borrow_mut().take(buf)) {
         Ok(())
     } else {

@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 ## First boot & provisioning
 
 Once the flash process finishes successfully, follow the steps below:
@@ -63,8 +69,9 @@ If your SSH client doesn't forward environment variables by default, use the `-o
 
 # UART pins
 
-UART RX/TX pins are defined per-board in `boards/*.toml` files inside the
-`ssh-stamp-esp32-boards` crate. Each board feature (e.g.
+UART RX/TX pins are defined per-board in `boards/*.toml` files inside each
+platform's BSP crate — `ssh-stamp-esp32-boards` for the Espressif boards,
+`ssh-stamp-rp2350-boards` for the RP2350 ones. Each board feature (e.g.
 `board-esp32c6-devkitc`) selects a specific PCB and its pin assignments.
 The TOML files are the single source of truth — no other file in the
 repository hard-codes UART pin numbers.
@@ -72,8 +79,14 @@ repository hard-codes UART pin numbers.
 To see the available boards and their pin assignments, run:
 
 ```
-cargo build-doc
+cargo xtask doc
 ```
 
-Then open `target/riscv32imac-unknown-none-elf/doc/ssh_stamp_esp32_boards/index.html`,
-which contains the auto-generated per-board pin assignment table.
+(`cargo xtask list` gives the same board list as a quick terminal summary.)
+
+Then open the auto-generated per-board pin assignment table for the
+platform you care about — rustdoc cross-compiles, so each lands under its
+own target triple:
+
+- `target/riscv32imac-unknown-none-elf/doc/ssh_stamp_esp32_boards/index.html`
+- `target/thumbv8m.main-none-eabihf/doc/ssh_stamp_rp2350_boards/index.html`

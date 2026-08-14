@@ -1,0 +1,108 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Build registry for `cargo xtask`.
+#
+# Nothing here is vendor-specific by construction: a platform is "some cargo
+# package that produces a firmware binary", and a chip is "some MCU with a
+# Rust target triple". Supporting a non-Espressif MCU means adding a
+# `[platforms.<vendor>]` entry pointing at that vendor's crate plus one
+# `[chips.<name>]` entry per MCU — no changes to the xtask code itself.
+#
+# Boards are NOT listed here. They are discovered by scanning each platform's
+# `boards` directory, so `boards/*.toml` stays the single source of truth for
+# what boards exist (each declares its chip in a `[build]` section).
+
+[platforms.espressif]
+package = "ssh-stamp-esp32"
+bin = "ssh-stamp-esp32"
+boards = "ssh-stamp-esp32-boards/boards"
+board-feature-prefix = "board-"
+# Jobs that need one target rather than all of them (rustdoc, clippy) build
+# this platform against this board.
+default-board = "esp32c6-devkitc"
+# Library crates rendered by `cargo xtask doc`. The crates shared by every
+# platform are listed here, on the platform that has to be documented
+# anyway, so no crate is rendered twice into two per-triple doc trees.
+doc-packages = [
+    "ssh-stamp",
+    "ssh-stamp-hal",
+    "ssh-stamp-esp32",
+    "ssh-stamp-esp32-boards",
+    "ota",
+]
+
+[platforms.raspberrypi]
+package = "ssh-stamp-rp2350"
+bin = "ssh-stamp-rp2350"
+boards = "ssh-stamp-rp2350-boards/boards"
+board-feature-prefix = "board-"
+default-board = "w6300-evb-pico2"
+doc-packages = ["ssh-stamp-rp2350", "ssh-stamp-rp2350-boards"]
+
+# Chips without a board entry are still buildable as a library
+# (`cargo xtask build esp32c3`), which is what CI does to keep them honest
+# until someone contributes a BSP for a concrete PCB.
+
+[chips.esp32]
+platform = "espressif"
+target = "xtensa-esp32-none-elf"
+toolchain = "esp"
+build-std = true
+
+[chips.esp32c2]
+platform = "espressif"
+target = "riscv32imc-unknown-none-elf"
+
+[chips.esp32c3]
+platform = "espressif"
+target = "riscv32imc-unknown-none-elf"
+
+[chips.esp32c5]
+platform = "espressif"
+target = "riscv32imac-unknown-none-elf"
+
+[chips.esp32c6]
+platform = "espressif"
+target = "riscv32imac-unknown-none-elf"
+
+[chips.esp32c61]
+platform = "espressif"
+target = "riscv32imac-unknown-none-elf"
+
+[chips.esp32s2]
+platform = "espressif"
+target = "xtensa-esp32s2-none-elf"
+toolchain = "esp"
+build-std = true
+# The S2 runs out of RAM at opt-level 3; see the profile in the root manifest.
+profile = "esp32s2"
+
+[chips.esp32s3]
+platform = "espressif"
+target = "xtensa-esp32s3-none-elf"
+toolchain = "esp"
+build-std = true
+
+# Cortex-M33 with the FPU and DSP extensions enabled, which is what the
+# RP2350's Arm cores boot into. Upstream ships a prebuilt core for the
+# triple, so no build-std and no toolchain override.
+[chips.rp2350]
+platform = "raspberrypi"
+target = "thumbv8m.main-none-eabihf"
+
+[defaults]
+# Crates that build and test for the host rather than for a chip: the OTA
+# packer and the codegen the BSP build scripts run. `cargo xtask clippy`
+# reaches them under the reserved target name `host`, because `--workspace`
+# cannot work here — the members target different architectures (RISC-V,
+# Xtensa, Cortex-M) and a single invocation would try to build them all for
+# whichever target happened to be the default.
+host-packages = ["ota", "ssh-stamp-board-codegen"]
+# Toolchain for chips that do not name one. Pinned rather than inherited so
+# builds match CI even when a contributor has a rustup directory override
+# (e.g. `rustup override set esp`, needed for Xtensa) in this repo: the
+# Xtensa fork is a linked toolchain with no prebuilt RISC-V core, so
+# inheriting it would silently force `-Zbuild-std` on RISC-V targets.
+toolchain = "stable"

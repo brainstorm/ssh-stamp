@@ -28,9 +28,9 @@ use embassy_rp::uart::{BufferedInterruptHandler, BufferedUart as RpBufferedUart}
 use embassy_rp::usb::{Driver as UsbDriver, InterruptHandler as UsbInterruptHandler};
 use embassy_rp::{dma, trng};
 use embassy_time::{Delay, Timer, with_timeout};
+use embassy_usb_logger::ReceiverHandler as _;
 use embedded_alloc::LlffHeap as Heap;
 use embedded_hal_bus::spi::ExclusiveDevice;
-use embassy_usb_logger::ReceiverHandler as _;
 use log::{debug, error, info, warn};
 use ssh_stamp::config::{SSHStampConfig, UartPins};
 use ssh_stamp::platform::PlatformServices;
@@ -147,7 +147,6 @@ async fn main(spawner: Spawner) -> ! {
     // this board (UART uses 0/1, the W6300 uses 15-19 and 22).
     spawner.spawn(heartbeat_task(Output::new(p.PIN_25, Level::Low)).expect("heartbeat spawn"));
 
-
     // Async, not `blocking_next_u64()`/`blocking_fill_bytes()`. embassy-rp's
     // blocking TRNG path is
     //
@@ -188,8 +187,10 @@ async fn main(spawner: Spawner) -> ! {
             );
             break;
         }
-        warn!("TRNG attempt {attempt}/{TRNG_ATTEMPTS} produced nothing in {}ms",
-            TRNG_TIMEOUT.as_millis());
+        warn!(
+            "TRNG attempt {attempt}/{TRNG_ATTEMPTS} produced nothing in {}ms",
+            TRNG_TIMEOUT.as_millis()
+        );
     }
     if !entropy_ok {
         error!(
@@ -203,12 +204,7 @@ async fn main(spawner: Spawner) -> ! {
     let mac = mac_address(&mut trng).await;
     info!(
         "MAC {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-        mac[0],
-        mac[1],
-        mac[2],
-        mac[3],
-        mac[4],
-        mac[5]
+        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
     );
     // The TRNG is owned by the pool task from here on; nothing else may
     // touch it, since every other access path into embassy-rp's driver is
@@ -326,6 +322,33 @@ async fn main(spawner: Spawner) -> ! {
     platform.reset();
 }
 
+/// `getrandom` custom backend.
+///
+/// getrandom 0.4 picks its entropy backend by cfg rather than by cargo
+/// feature: this target is built with `--cfg getrandom_backend="custom"`
+/// (see `.cargo/config.toml`), which makes getrandom link this symbol. It
+/// must be defined exactly once in the whole program, so it lives in the
+/// binary — as getrandom's own docs recommend — and forwards to the pool
+/// that [`entropy_task`] keeps filled from the TRNG.
+///
+/// This is what feeds the SSH host key, so it must be a real entropy
+/// source, never a stub.
+#[unsafe(no_mangle)]
+#[allow(unsafe_code)]
+unsafe extern "Rust" fn __getrandom_v03_custom(
+    dest: *mut u8,
+    len: usize,
+) -> Result<(), getrandom::Error> {
+    // SAFETY: getrandom guarantees `dest` is valid for writes of `len`
+    // bytes. The buffer may be uninitialised, so it is zeroed before a
+    // slice is formed over it, as getrandom's documentation prescribes.
+    let buf = unsafe {
+        core::ptr::write_bytes(dest, 0, len);
+        core::slice::from_raw_parts_mut(dest, len)
+    };
+    ssh_stamp_rp2350::rng_fill_bytes(buf)
+}
+
 /// Derive a stable locally-administered MAC.
 ///
 /// The W6300 has no MAC in eFuse, so the first boot mints one at random and
@@ -335,7 +358,10 @@ async fn mac_address(trng: &mut Trng<'static, TRNG>) -> [u8; 6] {
     let mut mac = [0u8; 6];
     // Async for the same reason as the seed above; a zero MAC from a failed
     // read is still a working (if unlovely) locally-administered address.
-    if with_timeout(TRNG_TIMEOUT, trng.fill_bytes(&mut mac)).await.is_err() {
+    if with_timeout(TRNG_TIMEOUT, trng.fill_bytes(&mut mac))
+        .await
+        .is_err()
+    {
         error!("TRNG stalled while generating a MAC");
     }
     // Locally administered, unicast.

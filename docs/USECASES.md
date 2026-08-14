@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 # Example usecases
 
 The following depicts a typical OpenWrt router with a (prototype) SSH Stamp connected to its UART. After ssh-ing into the SSH Stamp, one can interact with the router's UART "off band", to i.e:

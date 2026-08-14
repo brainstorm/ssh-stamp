@@ -17,7 +17,6 @@ use embassy_net::{IpListenEndpoint, Stack, tcp::TcpSocket};
 use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
 use heapless::String;
 use log::{debug, error, info, warn};
-use ssh_key::HashAlg;
 use ssh_stamp_hal::{BandMode, WifiApConfigStatic};
 #[cfg(feature = "can")]
 use sunset::ChanHandle;
@@ -162,7 +161,7 @@ where
 
 fn generate_wifi_password() -> Result<String<63>, sunset::Error> {
     let mut rnd = [0u8; 24];
-    getrandom::getrandom(&mut rnd).map_err(|_| sunset::Error::msg("RNG failed"))?;
+    getrandom::fill(&mut rnd).map_err(|_| sunset::Error::msg("RNG failed"))?;
     let mut pw = String::<63>::new();
     for &byte in &rnd {
         let _ = pw.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
@@ -179,7 +178,7 @@ pub fn print_hostkey_fingerprint(hostkey: &SignKey) {
     match hostkey {
         SignKey::Ed25519(_) => {
             let pubkey = hostkey.pubkey();
-            match pubkey.fingerprint(HashAlg::Sha256) {
+            match pubkey.fingerprint() {
                 Ok(fp) => info!("SSH hostkey fingerprint: {fp}"),
                 Err(e) => warn!("Failed to compute fingerprint: {e:?}"),
             }
