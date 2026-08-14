@@ -28,6 +28,10 @@ members = [
     "ota",
     "xtask",
 ]
+# Third-party code we only carry a patch against. Excluded so `cargo fmt
+# --all` and the workspace lints leave it alone: it has to stay diffable
+# against the upstream release it came from.
+exclude = ["vendor/embassy-net-wiznet"]
 
 [workspace.lints.clippy]
 mem_forget = "warn"
@@ -179,7 +183,8 @@ sftp-ota = []
 # Enables CAN bus tunnelling over SSH via the "can" subsystem
 can = ["dep:embedded-can"]
 
-# Local fix for embassy-net-wiznet 0.3.0, which is the newest release.
+# Hardened embassy-net-wiznet 0.3.0, vendored under vendor/ (see the README
+# there for the delta and how to retire it).
 #
 # `read_frame` trusts the 2-byte length the chip puts in front of each
 # received frame: it computes `len - 2` (underflow panic with this
@@ -192,6 +197,11 @@ can = ["dep:embedded-can"]
 # `write_frame` additionally spins forever if the chip never reports free
 # TX space, wedging the driver task.
 #
-# Drop this once the fixes are upstream.
+# In-tree rather than a git dependency because patching one crate out of
+# embassy's monorepo pulls its sibling path deps from git too: that drags in
+# a second `embassy-time-driver`, and cargo refuses two packages claiming
+# the same `links = "embassy-time"` as embassy-rp's.
+#
+# Drop this once a release carries both fixes.
 [patch.crates-io]
-embassy-net-wiznet = { path = "../embassy-net-wiznet" }
+embassy-net-wiznet = { path = "vendor/embassy-net-wiznet" }

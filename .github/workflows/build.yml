@@ -70,10 +70,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+      # Both triples: `xtask clippy` walks one board per platform.
       - name: Setup Stable Rust Toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
-          target: riscv32imac-unknown-none-elf
+          target: riscv32imac-unknown-none-elf,thumbv8m.main-none-eabihf
           toolchain: stable
           components: rust-src, clippy, rustfmt
       - name: Clippy
@@ -102,10 +103,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      # Both triples: `xtask doc` renders one tree per platform.
       - name: Setup Stable Rust Toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
-          target: riscv32imac-unknown-none-elf
+          target: riscv32imac-unknown-none-elf,thumbv8m.main-none-eabihf
           toolchain: stable
       - name: Build all docs
         run: cargo xtask doc
