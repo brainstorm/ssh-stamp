@@ -169,6 +169,10 @@ async fn main(spawner: Spawner) -> ! {
     }
     .expect("Could not load or create SSHStampConfig");
 
+    // Line settings for the bridge; the UART task is configured with them
+    // below, so `SSH_STAMP_UART_*` changes take effect on the next boot.
+    let uart_params = flash_config.uart_params;
+
     static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
     let config: &'static SunsetMutex<SSHStampConfig> = CONFIG.init(SunsetMutex::new(flash_config));
 
@@ -203,8 +207,9 @@ async fn main(spawner: Spawner) -> ! {
             let interrupt_spawner = interrupt_executor.start(Priority::Priority1);
         }
     }
-    interrupt_spawner
-        .spawn(uart_task(uart_buf, peripherals.UART1, pins).expect("uart_task spawn failed"));
+    interrupt_spawner.spawn(
+        uart_task(uart_buf, peripherals.UART1, pins, uart_params).expect("uart_task spawn failed"),
+    );
 
     #[cfg(feature = "can")]
     let can_buf: &'static BufferedCan = {

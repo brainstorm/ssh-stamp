@@ -9,31 +9,92 @@
 use core::str::FromStr;
 use heapless::String;
 
+/// UART parity bit setting.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Parity {
+    /// No parity bit (default).
+    #[default]
+    None,
+    /// Even parity.
+    Even,
+    /// Odd parity.
+    Odd,
+}
+
+impl FromStr for Parity {
+    type Err = ();
+
+    /// Parses a parity setting from a string value.
+    ///
+    /// Accepts `"none"`/`"n"`, `"even"`/`"e"` or `"odd"`/`"o"` (case-insensitive).
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        if value.eq_ignore_ascii_case("none") || value.eq_ignore_ascii_case("n") {
+            Ok(Self::None)
+        } else if value.eq_ignore_ascii_case("even") || value.eq_ignore_ascii_case("e") {
+            Ok(Self::Even)
+        } else if value.eq_ignore_ascii_case("odd") || value.eq_ignore_ascii_case("o") {
+            Ok(Self::Odd)
+        } else {
+            Err(())
+        }
+    }
+}
+
+impl From<u8> for Parity {
+    /// Resolves a `Parity` from its on-wire `u8` representation.
+    ///
+    /// Unknown values fall back to `None` (the default).
+    fn from(value: u8) -> Self {
+        match value {
+            1 => Self::Even,
+            2 => Self::Odd,
+            _ => Self::None,
+        }
+    }
+}
+
+/// UART line parameters for the SSH-to-serial bridge.
+///
+/// Persisted in the device config and applied when the bridge's UART is
+/// brought up, so changes take effect on the next boot. Values are kept
+/// target-agnostic; each port maps them onto its own UART driver types.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UartParams {
+    /// Baud rate in bits per second.
+    pub baud: u32,
+    /// Data bits per frame (5-8).
+    pub data_bits: u8,
+    /// Parity bit setting.
+    pub parity: Parity,
+    /// Stop bits per frame (1 or 2).
+    pub stop_bits: u8,
+}
+
+impl Default for UartParams {
+    /// The classic 115200 8N1.
+    fn default() -> Self {
+        Self {
+            baud: 115_200,
+            data_bits: 8,
+            parity: Parity::None,
+            stop_bits: 1,
+        }
+    }
+}
+
 /// UART peripheral configuration.
 ///
 /// Pin numbers (`tx_pin`, `rx_pin`) are target-specific and must be set by
 /// the port binary before use. There are no cross-platform default values;
 /// each port crate defines pin assignments in its `src/bin/` entry point.
 /// See the `ssh-stamp-esp32` binary's module documentation for ESP32 defaults.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct UartConfig {
     pub tx_pin: u8,
     pub rx_pin: u8,
     pub cts_pin: Option<u8>,
     pub rts_pin: Option<u8>,
-    pub baud_rate: u32,
-}
-
-impl Default for UartConfig {
-    fn default() -> Self {
-        Self {
-            tx_pin: 0,
-            rx_pin: 0,
-            cts_pin: None,
-            rts_pin: None,
-            baud_rate: 115_200,
-        }
-    }
+    pub params: UartParams,
 }
 
 /// `WiFi` band mode for the access point.

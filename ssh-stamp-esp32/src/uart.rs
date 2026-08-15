@@ -23,14 +23,18 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pipe::Pipe};
 use esp_hal::Async;
 use esp_hal::gpio::AnyPin;
 use esp_hal::peripherals::UART1;
-use esp_hal::uart::{Config, RxConfig, Uart};
+use esp_hal::uart::{Config, DataBits, Parity, RxConfig, StopBits, Uart};
 use portable_atomic::{AtomicUsize, Ordering};
 use ssh_stamp::serial::BufferedSerial;
+use ssh_stamp_hal::{Parity as LineParity, UartParams};
 use static_cell::StaticCell;
 
 const INWARD_BUF_SZ: usize = 512;
 const OUTWARD_BUF_SZ: usize = 256;
 const UART_BUF_SZ: usize = 64;
+
+/// The ESP32 UART peripherals reject anything above 5 Mbaud.
+const MAX_BAUD: u32 = 5_000_000;
 
 /// Bidirectional pipe buffer for UART communications.
 pub struct BufferedUart {
@@ -151,18 +155,53 @@ pub static UART_BUF: StaticCell<BufferedUart> = StaticCell::new();
 /// to release [`uart_task`] from its initial wait.
 pub static UART_SIGNAL: Signal<CriticalSectionRawMutex, u8> = Signal::new();
 
+/// Translates the persisted, target-agnostic [`UartParams`] into an esp-hal
+/// [`Config`].
+///
+/// Values the peripheral cannot honour fall back to the 8N1 default instead of
+/// refusing to bring the bridge up, so a stale or corrupt stored config still
+/// leaves a usable serial console.
+fn esp_uart_config(params: UartParams) -> Config {
+    let data_bits = match params.data_bits {
+        5 => DataBits::_5,
+        6 => DataBits::_6,
+        7 => DataBits::_7,
+        _ => DataBits::_8,
+    };
+    let parity = match params.parity {
+        LineParity::Even => Parity::Even,
+        LineParity::Odd => Parity::Odd,
+        LineParity::None => Parity::None,
+    };
+    let stop_bits = if params.stop_bits == 2 {
+        StopBits::_2
+    } else {
+        StopBits::_1
+    };
+
+    Config::default()
+        .with_baudrate(params.baud.clamp(1, MAX_BAUD))
+        .with_data_bits(data_bits)
+        .with_parity(parity)
+        .with_stop_bits(stop_bits)
+}
+
 /// Embassy task that owns the hardware UART and pumps it through
 /// [`BufferedUart::run`]. Spawn from a higher-priority `InterruptExecutor`
 /// for lower latency.
+///
+/// `params` are the line settings from the device config, applied here since
+/// the UART is configured once for the lifetime of the boot.
 #[embassy_executor::task]
 pub async fn uart_task(
     uart_buf: &'static BufferedUart,
     uart1: UART1<'static>,
     pins: EspUartPins<'static>,
+    params: UartParams,
 ) {
     UART_SIGNAL.wait().await;
 
-    let uart_config = Config::default().with_rx(
+    let uart_config = esp_uart_config(params).with_rx(
         RxConfig::default()
             .with_fifo_full_threshold(16)
             .with_timeout(1),
