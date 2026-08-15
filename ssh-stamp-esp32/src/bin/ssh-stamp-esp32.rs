@@ -13,12 +13,13 @@
 //! Brings up ESP-specific peripherals (heap, flash, RNG, UART, radio), then
 //! hands control to the platform-agnostic [`ssh_stamp::app::run_app`].
 //!
-//! # UART Pin Assignments
+//! # Pin assignments
 //!
-//! UART pin numbers are defined per-board in `boards/*.toml` files in the
-//! `ssh-stamp-esp32-boards` crate. Select a board via a `board-<name>` feature
-//! (e.g. `board-esp32c6-devkitc`). See the `ssh-stamp-esp32-boards` crate
-//! documentation for the full list.
+//! UART, CAN and I2C pin numbers are defined per-board in `boards/*.toml`
+//! files in the `ssh-stamp-esp32-boards` crate. Select a board via a
+//! `board-<name>` feature (e.g. `board-esp32c6-devkitc`). That crate's front
+//! page carries the generated catalog: which GPIO each bus uses on each
+//! board, and which buses a board does not support yet.
 
 #![no_std]
 #![no_main]

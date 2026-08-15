@@ -137,8 +137,9 @@ impl BufferedSerial for BufferedUart {
 
 /// UART pins configuration.
 ///
-/// The pin numbers inside are target-specific. See the `ssh-stamp-esp32`
-/// binary's module documentation for the per-target GPIO assignment table.
+/// The pin numbers inside come from the selected board's TOML in the
+/// `ssh-stamp-esp32-boards` crate; its front page carries the generated pin
+/// catalog for every board of this platform.
 pub struct EspUartPins<'a> {
     pub rx: AnyPin<'a>,
     pub tx: AnyPin<'a>,

@@ -78,6 +78,12 @@ cargo xtask ci          # all of the above, for every board and chip
 1. Drop a `boards/<name>.toml` into the relevant BSP crate, with the pin map
    and a `[build]` section naming its chip:
    ```toml
+   [pins]
+   uart_rx = 10
+   uart_tx = 11
+   # can_tx / can_rx and i2c_sda / i2c_scl for the buses the board breaks
+   # out; leave out the ones it does not, they show up as `x` in the catalog
+
    [build]
    chip = "esp32c6"
    # features = ["can"]   # optional: features this board always needs
@@ -85,7 +91,10 @@ cargo xtask ci          # all of the above, for every board and chip
 2. Add the matching `board-<name>` feature in that platform's `Cargo.toml`.
 
 That is it — `cargo xtask list` picks it up by scanning the boards
-directory, so no alias, matrix entry or xtask code has to change.
+directory, so no alias, matrix entry or xtask code has to change. The pin
+catalog on the BSP crate's documentation front page is regenerated from the
+TOML files by `cargo xtask doc`, so the new board appears there too without
+anyone editing a table.
 
 ## Adding a chip or a new vendor
 
