@@ -169,7 +169,12 @@ fn generate_wifi_password() -> Result<String<63>, sunset::Error> {
     Ok(pw)
 }
 
-fn print_hostkey_fingerprint(hostkey: &SignKey) {
+/// Log the SSH host key fingerprint so it can be verified out-of-band on
+/// first connection.
+///
+/// Public because platforms without `WiFi` (wired Ethernet ports) never
+/// call [`prepare_ap_config`], but still want the fingerprint at boot.
+pub fn print_hostkey_fingerprint(hostkey: &SignKey) {
     match hostkey {
         SignKey::Ed25519(_) => {
             let pubkey = hostkey.pubkey();

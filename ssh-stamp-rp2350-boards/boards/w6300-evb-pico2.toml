@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# WIZnet W6300-EVB-Pico2 (RP2350A + W6300 Ethernet)
+url = "https://docs.wiznet.io/Product/Chip/Ethernet/W6300/w6300-evb-pico2"
+
+[pins]
+uart_rx = 1
+uart_tx = 0
+
+# Onboard WIZnet Ethernet controller.
+#
+# These pins are not on the RP2350's SPI0 function map (which wants
+# 16=RX, 17=CSn, 18=SCK, 19=TX), so the platform drives them with a PIO
+# state machine instead of the hardware SPI block.
+#
+# io2/io3 are wired on the PCB (GPIO20/21) for quad-SPI but are left out
+# here: the upstream driver is single-SPI only. Add them when
+# embassy-rs/embassy#4662 lands.
+[ethernet]
+chip = "w6300"
+int = 15
+cs = 16
+sck = 17
+io0 = 18
+io1 = 19
+rst = 22
+
+# Consumed by `cargo xtask`; the BSP build script ignores this section.
+[build]
+chip = "rp2350"

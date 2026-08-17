@@ -26,6 +26,10 @@ pub struct Platform {
     pub boards: String,
     /// Prefix turning a board name into its cargo feature.
     pub board_feature_prefix: String,
+    /// Board used by jobs that need one target rather than all of them.
+    pub default_board: String,
+    /// Library crates `cargo xtask doc` renders for this platform.
+    pub doc_packages: Vec<String>,
 }
 
 /// One MCU: the Rust target triple plus how it has to be built.
@@ -51,12 +55,15 @@ pub struct Chip {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Defaults {
-    pub board: String,
-    pub doc_packages: Vec<String>,
+    /// Crates that build for the host rather than for a chip.
+    pub host_packages: Vec<String>,
     /// Toolchain used when a chip does not name its own.
     #[serde(default)]
     pub toolchain: Option<String>,
 }
+
+/// Target name standing for "the host-side crates" rather than a chip.
+pub const HOST: &str = "host";
 
 /// A concrete PCB, discovered from a platform's boards directory.
 #[derive(Debug)]

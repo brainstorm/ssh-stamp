@@ -1,0 +1,88 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "ssh-stamp-rp2350"
+version = "0.1.0"
+edition = "2024"
+authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
+description = "RP2350 / Pico 2 port of ssh-stamp, Ethernet via WIZnet W6300 (W6300-EVB-Pico2)"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/brainstorm/ssh-stamp"
+
+[dependencies]
+ssh-stamp = { path = ".." }
+ssh-stamp-hal = { path = "../ssh-stamp-hal" }
+ssh-stamp-rp2350-boards = { path = "../ssh-stamp-rp2350-boards", optional = true }
+
+embassy-sync = { workspace = true }
+# Each platform crate picks its own executor arch; the workspace dep is
+# feature-free so ESP32 (arch-xtensa) and RP2350 (arch-cortex-m) do not
+# collide in the feature unifier.
+embassy-executor = { workspace = true, features = [
+    "platform-cortex-m",
+    "executor-thread",
+] }
+embassy-time = { workspace = true }
+embassy-futures = { workspace = true }
+embassy-net = { workspace = true }
+
+# W6300 MACRAW driver. Upstream is single-SPI only; the quad-SPI request
+# is embassy-rs/embassy#4662 (PR #5809), still open at time of writing.
+embassy-net-wiznet = "0.3"
+
+# RP2350A (Pico 2 form factor, which the W6300-EVB-Pico2 follows).
+# `critical-section-impl` supplies the global critical-section that
+# `sunset-async`'s SunsetMutex needs.
+embassy-rp = { version = "0.10", features = [
+    "rp235xa",
+    "critical-section-impl",
+    "time-driver",
+] }
+
+embedded-hal-async = "1"
+embedded-hal-bus = { version = "0.3", features = ["async"] }
+embedded-io-async = { workspace = true }
+embedded-storage = { workspace = true }
+
+heapless = { workspace = true }
+static_cell = { workspace = true }
+once_cell = { workspace = true }
+portable-atomic = { workspace = true }
+log = { workspace = true }
+sunset-async = { workspace = true }
+getrandom = { version = "0.4" }
+
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+# ssh-stamp pulls `extern crate alloc` (sunset, ed25519-dalek), so the
+# final binary has to provide a global allocator.
+embedded-alloc = "0.7"
+
+# Logging over the Pico 2's built-in USB: no debug probe or TTL adapter
+# needed, which matters because this board has no WiFi fallback if the
+# network never comes up.
+embassy-usb-logger = "0.6"
+
+[features]
+default = ["board-w6300-evb-pico2"]
+ipv6 = ["ssh-stamp/ipv6"]
+
+# Board features — select a specific PCB. Each enables the corresponding
+# board definition in ssh-stamp-rp2350-boards AND the IC feature it targets.
+board-w6300-evb-pico2 = [
+    "dep:ssh-stamp-rp2350-boards",
+    "ssh-stamp-rp2350-boards/board-w6300-evb-pico2",
+    "rp2350",
+]
+
+# IC feature — selects the chip only; activated automatically by board
+# features. Unlike the Espressif crate this platform covers a single MCU
+# (embassy-rp is pinned to `rp235xa`), so the feature turns nothing on; it
+# exists so `cargo xtask build rp2350` can build the library without
+# committing to a PCB, the same way the bare ESP32 chips do.
+rp2350 = []
+
+[lints]
+workspace = true

@@ -20,7 +20,7 @@ board-esp32-s2-saola = []
 board-waveshare-esp32-s3-touch-lcd-43 = []
 
 [build-dependencies]
-toml = "0.8"
+ssh-stamp-board-codegen = { path = "../ssh-stamp-board-codegen" }
 serde = { version = "1", features = ["derive"] }
 
 [lints]

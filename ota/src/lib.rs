@@ -66,7 +66,7 @@ mod ota_tlv_tests {
                 ota_type: OTA_TYPE_VALUE_SSH_STAMP,
             },
         ];
-        for variant in variants.iter() {
+        for variant in &variants {
             let mut buffer = [0u8; MAX_TLV_SIZE as usize];
             let used = sshwire::write_ssh(&mut buffer, variant).expect("Failed to create SSH sink");
 

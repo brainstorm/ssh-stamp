@@ -25,7 +25,9 @@ Refer to [building](./docs/BUILDING.md) if you are not using our binary releases
 
 ## Targets
 
-At present only Espressif ICs are supported but other targets (i.e Raspberry Pico2 or Dabao-1x) are planned in the future.
+Espressif ICs are supported over WiFi, and the RP2350 over wired Ethernet on the [WIZnet W6300-EVB-Pico2](./ssh-stamp-rp2350/README.md). Other targets (i.e Dabao-1x) are planned in the future.
+
+`cargo xtask list` shows every board and chip the tree can build; see [building](./docs/BUILDING.md).
 
 ## Acknowledgement
 

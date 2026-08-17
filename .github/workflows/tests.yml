@@ -17,8 +17,8 @@ permissions:
   contents: read
 
 jobs:
-  packer:
-    name: OTA tests
+  host:
+    name: Host test suites
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

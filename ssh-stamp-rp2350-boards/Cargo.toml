@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "ssh-stamp-rp2350-boards"
+version = "0.1.0"
+edition = "2024"
+authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
+description = "Board Support Package — per-PCB pin mappings for ssh-stamp-rp2350"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/brainstorm/ssh-stamp"
+
+[features]
+board-w6300-evb-pico2 = []
+
+[build-dependencies]
+ssh-stamp-board-codegen = { path = "../ssh-stamp-board-codegen" }
+serde = { version = "1", features = ["derive"] }
+
+[lints]
+workspace = true

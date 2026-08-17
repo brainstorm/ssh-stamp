@@ -38,17 +38,20 @@ jobs:
             { name: "esp32c6-generic", xtensa: false },
             { name: "esp32-s2-saola", xtensa: true },
             { name: "waveshare-esp32-s3-touch-lcd-43", xtensa: true },
+            { name: "w6300-evb-pico2", xtensa: false },
         ]
     steps:
       - name: Cache
         uses: mozilla-actions/sccache-action@v0.0.10
       - name: Checkout code
         uses: actions/checkout@v6
-      - name: Setup Rust toolchain for RISC-V
+      # Everything upstream ships a prebuilt core for: the RISC-V ESP32s and
+      # the Arm RP2350. Xtensa is the exception and needs the esp-rs fork.
+      - name: Setup Rust toolchain for RISC-V and Arm
         if: ${{ !matrix.target.xtensa }}
         uses: dtolnay/rust-toolchain@v1
         with:
-          target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
+          target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf,thumbv8m.main-none-eabihf
           toolchain: stable
           components: rust-src, clippy, rustfmt
       - name: Setup Rust toolchain for Xtensa
@@ -67,10 +70,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+      # Both triples: `xtask clippy` walks one board per platform.
       - name: Setup Stable Rust Toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
-          target: riscv32imac-unknown-none-elf
+          target: riscv32imac-unknown-none-elf,thumbv8m.main-none-eabihf
           toolchain: stable
           components: rust-src, clippy, rustfmt
       - name: Clippy
@@ -99,10 +103,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      # Both triples: `xtask doc` renders one tree per platform.
       - name: Setup Stable Rust Toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
-          target: riscv32imac-unknown-none-elf
+          target: riscv32imac-unknown-none-elf,thumbv8m.main-none-eabihf
           toolchain: stable
       - name: Build all docs
         run: cargo xtask doc

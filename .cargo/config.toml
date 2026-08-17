@@ -43,6 +43,18 @@ rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s2"', '--cfg',
 runner = "espflash flash --baud=921600 --monitor --chip esp32s3"
 rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s3"', '--cfg', 'getrandom_backend="custom"']
 
+[target.thumbv8m.main-none-eabihf] # RP2350 (W6300-EVB-Pico2)
+# probe-rs needs the chip name `RP235x`, not RP2350/RP235xA.
+runner = "probe-rs run --chip RP235x"
+# The RP2350 `.start_block` image definition the boot ROM looks for comes
+# from this crate's own memory.x (embassy-rp only ships link-rp.x for the
+# RP2040), so link.x is the only extra script needed here.
+rustflags = [
+    "-C", "link-arg=--nmagic",
+    "-C", "link-arg=-Tlink.x",
+    '--cfg', 'getrandom_backend="custom"',
+]
+
 
 # https://docs.espressif.com/projects/rust/esp-hal/1.0.0-beta.1/esp32c6/esp_hal/index.html#additional-configuration
 [env]

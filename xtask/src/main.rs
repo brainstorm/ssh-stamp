@@ -28,7 +28,7 @@ COMMANDS:
     list                    List known boards, chips and platforms
     build <target> [opts]   Build a board (binary) or a bare chip (library)
     run <target> [opts]     Build, flash and monitor a board
-    clippy [<target>]       Lint (defaults to the registry's default board)
+    clippy [<target>]       Lint one target, or every platform plus `host`
     fmt [--check]           Format the workspace
     doc                     Build the rustdoc for all library crates
     test                    Run the host-side test suites
@@ -44,6 +44,7 @@ EXAMPLES:
     cargo xtask build esp32c6-devkitc
     cargo xtask build esp32c3                       # chip only, library build
     cargo xtask run waveshare-esp32-s3-touch-lcd-43 --features can-no-ack
+    cargo xtask clippy w6300-evb-pico2
     cargo xtask build esp32c6-devkitc -- --timings
 ";
 
@@ -284,13 +285,26 @@ fn build(root: &Path, registry: &Registry, args: &Args, flash: bool) -> Result<(
     exec(root, cmd)
 }
 
+/// Lint one target, or — given no target — every platform's default board
+/// plus the host crates. A new platform is therefore linted the moment it
+/// is registered, with nothing else to remember to update.
 fn clippy(root: &Path, registry: &Registry, args: &Args) -> Result<(), String> {
-    let name = args
-        .positional
-        .first()
-        .cloned()
-        .unwrap_or_else(|| registry.defaults.board.clone());
-    let unit = resolve(registry, &name)?;
+    if let Some(name) = args.positional.first() {
+        return clippy_one(root, registry, name, args);
+    }
+
+    for platform in registry.platforms.values() {
+        clippy_one(root, registry, &platform.default_board, args)?;
+    }
+    clippy_host(root, registry, args)
+}
+
+fn clippy_one(root: &Path, registry: &Registry, name: &str, args: &Args) -> Result<(), String> {
+    if name == targets::HOST {
+        return clippy_host(root, registry, args);
+    }
+
+    let unit = resolve(registry, name)?;
     let platform = registry.platform_of(unit.chip)?;
 
     let mut features = unit.features;
@@ -315,6 +329,21 @@ fn clippy(root: &Path, registry: &Registry, args: &Args) -> Result<(), String> {
     exec(root, cmd)
 }
 
+/// Lint the host-side crates. `--all-targets` reaches their test code too,
+/// which the firmware crates have none of.
+fn clippy_host(root: &Path, registry: &Registry, args: &Args) -> Result<(), String> {
+    let mut cmd = cargo(registry.host_toolchain());
+    cmd.arg("clippy");
+    for package in &registry.defaults.host_packages {
+        cmd.args(["-p", package]);
+    }
+    cmd.arg("--all-targets")
+        .args(&args.passthrough)
+        .args(["--", "-D", "warnings"]);
+
+    exec(root, cmd)
+}
+
 fn fmt(root: &Path, registry: &Registry, args: &Args) -> Result<(), String> {
     let mut cmd = cargo(registry.host_toolchain());
     cmd.args(["fmt", "--all"]);
@@ -324,38 +353,47 @@ fn fmt(root: &Path, registry: &Registry, args: &Args) -> Result<(), String> {
     exec(root, cmd)
 }
 
+/// Render the rustdoc for every platform's library crates.
+///
+/// One invocation per platform, because rustdoc has to cross-compile and
+/// the platforms do not share a target triple. Output therefore lands in
+/// one `target/<triple>/doc/` tree per platform.
 fn doc(root: &Path, registry: &Registry) -> Result<(), String> {
-    let board = registry.defaults.board.clone();
-    let unit = resolve(registry, &board)?;
-    let platform = registry.platform_of(unit.chip)?;
+    for platform in registry.platforms.values() {
+        let unit = resolve(registry, &platform.default_board)?;
 
-    let mut cmd = cargo(registry.toolchain_for(unit.chip));
-    cmd.arg("doc")
-        .args(["--target", &unit.chip.target])
-        .args(["--no-deps", "--lib"]);
-    for package in &registry.defaults.doc_packages {
-        cmd.args(["-p", package]);
+        let mut cmd = cargo(registry.toolchain_for(unit.chip));
+        cmd.arg("doc")
+            .args(["--target", &unit.chip.target])
+            .args(["--no-deps", "--lib"]);
+        for package in &platform.doc_packages {
+            cmd.args(["-p", package]);
+        }
+        // Features must be qualified one by one: `pkg/a,b` would make `b` a
+        // feature of the workspace root package rather than of `pkg`.
+        let features: Vec<String> = unit
+            .features
+            .iter()
+            .map(|f| format!("{}/{f}", platform.package))
+            .collect();
+        cmd.arg("--no-default-features")
+            .args(["--features", &features.join(",")]);
+        if unit.chip.build_std {
+            cmd.arg("-Zbuild-std=core,alloc");
+        }
+        exec(root, cmd)?;
     }
-    // Features must be qualified one by one: `pkg/a,b` would make `b` a
-    // feature of the workspace root package rather than of `pkg`.
-    let features: Vec<String> = unit
-        .features
-        .iter()
-        .map(|f| format!("{}/{f}", platform.package))
-        .collect();
-    cmd.arg("--no-default-features")
-        .args(["--features", &features.join(",")]);
-    if unit.chip.build_std {
-        cmd.arg("-Zbuild-std=core,alloc");
-    }
-    exec(root, cmd)
+    Ok(())
 }
 
 fn test(root: &Path, registry: &Registry) -> Result<(), String> {
     // Host-side crates only; the firmware crates are no_std and cannot run
     // tests on the host.
     let mut cmd = cargo(registry.host_toolchain());
-    cmd.args(["test", "-p", "ota"]);
+    cmd.arg("test");
+    for package in &registry.defaults.host_packages {
+        cmd.args(["-p", package]);
+    }
     exec(root, cmd)
 }
 
@@ -403,6 +441,11 @@ fn list(registry: &Registry) {
     println!("\nPlatforms:");
     for (name, platform) in &registry.platforms {
         println!("    {name:<38} {}", platform.package);
+    }
+
+    println!("\nHost crates (`cargo xtask clippy host`, `cargo xtask test`):");
+    for package in &registry.defaults.host_packages {
+        println!("    {package}");
     }
 }
 

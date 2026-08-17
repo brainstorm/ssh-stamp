@@ -8,12 +8,18 @@ repos:
       - id: rustfmt
         name: rustfmt
         description: Check if all files follow the rustfmt style
-        entry: cargo fmt --all -- --check --color always
+        entry: cargo xtask fmt --check
         language: system
         pass_filenames: false
+      # No `--workspace` here: the members target different architectures
+      # (RISC-V, Xtensa, Cortex-M) and some are host-side crates, so a
+      # single invocation would try to build them all for whichever target
+      # happened to be the default. `xtask clippy` with no argument walks
+      # the `clippy-targets` list in xtask/targets.toml instead, linting
+      # each crate on the target it actually builds for.
       - id: clippy
         name: clippy
-        description: Run clippy with project lint rules
-        entry: cargo clippy --workspace -- -D warnings
+        description: Lint every platform plus the host crates
+        entry: cargo xtask clippy
         language: system
         pass_filenames: false

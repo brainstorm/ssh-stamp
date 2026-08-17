@@ -11,3 +11,10 @@ Files: docs/img/connecting_to_ssh_stamp.png
        docs/img/ssh_stamp_architecture_light.svg
 Copyright: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
 License: GPL-3.0-or-later
+
+Files: vendor/embassy-net-wiznet/*
+Copyright: The Embassy Project Contributors
+License: MIT OR Apache-2.0
+Comment: Upstream release 0.3.0 plus the local hardening described in
+ vendor/README.md. Covered here rather than by per-file headers so the
+ sources stay byte-diffable against the upstream release.
