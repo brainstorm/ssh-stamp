@@ -59,10 +59,21 @@ ssh -o SendEnv=SSH_STAMP_WIFI_BAND root@192.168.4.1
 ```
 Accepts `2.4g` (default), `5g`, or `auto`. The device resets after applying the change.
 
+- To set the UART bridge line parameters (defaults to 115200 8N1):
+```
+export SSH_STAMP_UART_BAUD="921600"
+export SSH_STAMP_UART_DATA_BITS="8"
+export SSH_STAMP_UART_PARITY="none"
+export SSH_STAMP_UART_STOP_BITS="1"
+ssh -o SendEnv='SSH_STAMP_UART_*' root@192.168.4.1
+```
+Accepted values: baud `300`-`5000000`, data bits `5`-`8`, parity `none`/`even`/`odd`, stop bits `1`/`2`. Each is persisted independently, so only the ones you send change.
+
 Notes:
 - `SSH_STAMP_PUBKEY` is accepted on first-boot to add the initial admin key.
 - `SSH_STAMP_WIFI_AP_SSID` and `SSH_STAMP_WIFI_AP_PSK` may be applied while authenticated via pubkey (or on first-boot). After a successful change the device persists the settings and performs a software reset so the new WiFi settings take effect.
 - `SSH_STAMP_WIFI_BAND` selects the AP radio band. Only the ESP32-C5 supports 5GHz; other chips ignore the setting and stay on 2.4GHz.
+- `SSH_STAMP_UART_*` is supported on every target. The bridge configures its UART once at boot, so the device also resets here: the new line settings are live on the next connection.
 - If you prefer a single-step provisioning, export all three env vars locally and forward them with `SendEnv` in the same SSH invocation.
 
 If your SSH client doesn't forward environment variables by default, use the `-o SendEnv=VAR` option as shown above or configure `SendEnv` in your SSH client config.

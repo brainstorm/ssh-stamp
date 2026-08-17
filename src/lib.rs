@@ -74,6 +74,10 @@
 //! and `SSH_STAMP_WIFI_PSK` env vars. Changes are persisted to flash and the
 //! device performs a software reset.
 //!
+//! The serial bridge line settings follow the same route through the
+//! `SSH_STAMP_UART_BAUD`, `SSH_STAMP_UART_DATA_BITS`, `SSH_STAMP_UART_PARITY`
+//! and `SSH_STAMP_UART_STOP_BITS` env vars, defaulting to 115200 8N1.
+//!
 //! ## Testing
 //!
 //! Host-side OTA TLV tests:
