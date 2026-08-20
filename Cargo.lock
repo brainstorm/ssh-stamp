@@ -908,6 +908,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "embedded-storage-inmemory"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f9d62933faa560308e912c975da0f5364b6ccd0f10fa675c5071023226986c9"
+dependencies = [
+ "embedded-storage",
+ "embedded-storage-async",
+]
+
+[[package]]
 name = "enumset"
 version = "1.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2464,6 +2474,8 @@ dependencies = [
  "embedded-io-async 0.7.0",
  "embedded-storage",
  "embedded-storage-async",
+ "embedded-storage-inmemory",
+ "esp-config",
  "getrandom",
  "heapless 0.9.3",
  "hex",
@@ -2482,7 +2494,6 @@ dependencies = [
  "subtle",
  "sunset",
  "sunset-async",
- "sunset-sftp",
  "sunset-sshwire-derive",
 ]
 

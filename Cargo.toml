@@ -17,7 +17,12 @@ license = "GPL-3.0-or-later"
 [lib]
 
 [workspace]
-members = ["ssh-stamp-hal", "ssh-stamp-esp32", "ssh-stamp-esp32-boards", "ota"]
+members = [
+    "ssh-stamp-hal",
+    "ssh-stamp-esp32",
+    "ssh-stamp-esp32-boards",
+    "ota"
+]
 
 [workspace.lints.clippy]
 mem_forget = "warn"
@@ -41,6 +46,8 @@ heapless = "0.9"
 
 # ESP32
 esp-hal = { version = "1.1", features = ["unstable", "log-04"] }
+# Build-time configuration.
+esp-config = { version = "0.7", default-features = false }
 
 # SSH protocol
 sunset = { version = "0.5.0", default-features = false, features = [
@@ -107,6 +114,7 @@ sha2 = { workspace = true }
 rustc-hash = { workspace = true }
 
 cfg-if = "1"
+esp-config = { workspace = true }
 ed25519-dalek = { version = "2", default-features = false }
 embassy-executor = { workspace = true }
 embassy-net = { workspace = true }
@@ -120,7 +128,6 @@ ssh-key = { version = "0.6", default-features = false, features = ["ed25519"] }
 sunset = { workspace = true }
 sunset-async = { workspace = true }
 sunset-sshwire-derive = { workspace = true }
-sunset-sftp = { workspace = true }
 getrandom = { version = "0.2.10", features = ["custom"] }
 embassy-sync = { workspace = true }
 heapless = { workspace = true }
@@ -136,6 +143,12 @@ snafu = { workspace = true }
 pastey = { workspace = true }
 pretty-hex = { workspace = true }
 
+[dev-dependencies]
+embedded-storage-inmemory = "0.1"
+
+[build-dependencies]
+esp-config = { version = "0.7", features = ["build"] }
+
 [profile.dev]
 opt-level = 0
 debug = 2
@@ -147,12 +160,13 @@ debug = 2
 debug-assertions = true
 incremental = false
 lto = 'fat'
-opt-level = 3
-overflow-checks = true
-
-[profile.esp32s2]
-inherits = "release"
 opt-level = "s"
+overflow-checks = true
+panic = "abort"
+
+[profile.bench]
+opt-level = 3
+
 
 [profile.dev.package.esp-storage]
 opt-level = "s"
@@ -161,10 +175,12 @@ opt-level = "s"
 opt-level = "s"
 
 [features]
+default = []
 ipv6 = []
 
 # Enables the SFTP OTA Subsystem. Use packer to pack a binary and PUT it over sftp
-sftp-ota = []
+sftp-ota = ["ota/sftp"]
 
 # Enables CAN bus tunnelling over SSH via the "can" subsystem
 can = ["dep:embedded-can"]
+mem-probe = []
