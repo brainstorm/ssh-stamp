@@ -165,6 +165,12 @@ impl<W: OtaActions> SftpServer for SftpOtaServer<W> {
                     );
                     StatusCode::SSH_FX_OP_UNSUPPORTED
                 }
+                OtaError::TargetMismatch => {
+                    error!(
+                        "SftpServer Write operation refused: image is for a different chip - {e:?}"
+                    );
+                    StatusCode::SSH_FX_OP_UNSUPPORTED
+                }
                 _ => {
                     error!("SftpServer Write operation failed during OTA processing: {e:?}");
                     StatusCode::SSH_FX_FAILURE

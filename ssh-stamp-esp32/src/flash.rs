@@ -150,6 +150,10 @@ impl Default for EspOtaWriter {
 }
 
 impl OtaActions for EspOtaWriter {
+    // esp-hal derives this from the chip feature, so it cannot drift out of
+    // sync with what was actually built.
+    const TARGET_CHIP: &'static str = esp_hal::chip!();
+
     async fn try_validating_current_ota_partition() -> Result<(), HalError> {
         let Some(fb) = get_flash_n_buffer() else {
             error!("Flash storage not initialized");

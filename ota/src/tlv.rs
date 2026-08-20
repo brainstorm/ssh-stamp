@@ -23,6 +23,18 @@ pub type OtaTlvLen = u8;
 pub const OTA_TYPE_VALUE_SSH_STAMP: u32 = 0x7373_6873; // 'sshs' big endian in ASCII
 
 pub const CHECKSUM_LEN: u32 = 32;
+
+/// Maximum length in bytes of a target chip identifier, e.g. `esp32c6`.
+///
+/// Long enough for every name `esp_hal::chip!()` can produce with room to
+/// spare for non-Espressif ports.
+pub const MAX_TARGET_CHIP_LEN: usize = 16;
+
+/// Chip identifier an OTA image was built for, as written by the packer.
+///
+/// Compared verbatim against the running firmware's
+/// [`OtaActions::TARGET_CHIP`](ssh_stamp_hal::OtaActions::TARGET_CHIP).
+pub type TargetChipName = heapless::String<MAX_TARGET_CHIP_LEN>;
 /// Maximum size for LTV (Length-Type-Value) entries in OTA metadata. Used during the reading of OTA parameters.
 ///
 /// Calculated as: `size_of::<OtaTlvType>() + size_of::<OtaTlvLen>() + u8::MAX = 1 + 1 + 255 = 257`
@@ -64,6 +76,7 @@ where
 pub const OTA_TYPE: OtaTlvType = 0;
 pub const FIRMWARE_BLOB: OtaTlvType = 1;
 pub const SHA256_CHECKSUM: OtaTlvType = 2;
+pub const TARGET_CHIP: OtaTlvType = 3;
 
 /// `OTA_TLV` enum for OTA metadata LTV entries
 /// This TLV does not capture length as it will be captured during parsing
@@ -78,6 +91,15 @@ pub enum Tlv {
     Sha256Checksum {
         checksum: [u8; CHECKSUM_LEN as usize],
     },
+    /// Chip the image was built for, e.g. `esp32c6`.
+    ///
+    /// Optional, for backwards compatibility with images packed before this
+    /// TLV existed. When present it **SHOULD come immediately after
+    /// [`Tlv::OtaType`]**: a device rejects a foreign image the moment it
+    /// parses this record, so putting it first means a mismatched `put`
+    /// fails within the first handful of bytes instead of after a full
+    /// upload.
+    TargetChip { chip: TargetChipName },
     /// Contains the length in bytes of the firmware blob.
     /// The firmware blob follows immediately after this TLV.
     ///
@@ -99,6 +121,18 @@ impl SSHEncode for Tlv {
             Tlv::Sha256Checksum { checksum } => {
                 SHA256_CHECKSUM.enc(s)?;
                 enc_len_val(checksum, s)
+            }
+            Tlv::TargetChip { chip } => {
+                // Not `enc_len_val`: the payload is variable-length, so the
+                // length comes from the string rather than `size_of`.
+                TARGET_CHIP.enc(s)?;
+                OtaTlvLen::try_from(chip.len())
+                    .map_err(|_| WireError::PacketWrong)?
+                    .enc(s)?;
+                for byte in chip.as_bytes() {
+                    byte.enc(s)?;
+                }
+                Ok(())
             }
         }
     }
@@ -130,6 +164,24 @@ impl<'de> SSHDecode<'de> for Tlv {
                 dec_check_val_len::<S, u32>(s)?;
                 let ota_type = u32::dec(s)?;
                 Ok(Tlv::OtaType { ota_type })
+            }
+            TARGET_CHIP => {
+                let len = OtaTlvLen::dec(s)? as usize;
+                if len > MAX_TARGET_CHIP_LEN {
+                    error!("Target chip TLV is {len} bytes, maximum is {MAX_TARGET_CHIP_LEN}");
+                    return Err(WireError::PacketWrong);
+                }
+                let mut name = [0u8; MAX_TARGET_CHIP_LEN];
+                for element in &mut name[..len] {
+                    *element = u8::dec(s)?;
+                }
+                let name = core::str::from_utf8(&name[..len]).map_err(|_| {
+                    error!("Target chip TLV is not valid UTF-8");
+                    WireError::PacketWrong
+                })?;
+                let mut chip = TargetChipName::new();
+                chip.push_str(name).map_err(|_| WireError::PacketWrong)?;
+                Ok(Tlv::TargetChip { chip })
             }
             _ => {
                 error!("Unknown TLV type encountered: {tlv_type}");
@@ -256,14 +308,33 @@ pub struct OtaHeader {
     pub(crate) firmware_blob_size: Option<u32>,
     /// Expected sha256 checksum of the firmware, if provided
     pub sha256_checksum: Option<[u8; tlv::CHECKSUM_LEN as usize]>,
+    /// Chip this image was built for, if the packer recorded one.
+    ///
+    /// `None` for images packed before the [`Tlv::TargetChip`] record
+    /// existed; those cannot be screened and are accepted with a warning.
+    pub target_chip: Option<tlv::TargetChipName>,
 }
 
 impl OtaHeader {
     /// Creates a new OTA header with the provided parameters
     ///
     /// Used during packing of OTA files. Therefore, not needed in the embedded side.
+    ///
+    /// `target_chip` is optional: passing `None` produces an image without a
+    /// [`Tlv::TargetChip`] record, which any device will accept. Passing a
+    /// chip name lets a device reject the image immediately if it does not
+    /// match.
+    ///
+    /// # Panics
+    /// Panics if `target_chip` is longer than [`tlv::MAX_TARGET_CHIP_LEN`].
     #[cfg(not(target_os = "none"))]
-    pub fn new(ota_type: u32, sha256_checksum: &[u8], firmware_blob_size: u32) -> Self {
+    #[must_use]
+    pub fn new(
+        ota_type: u32,
+        sha256_checksum: &[u8],
+        firmware_blob_size: u32,
+        target_chip: Option<&str>,
+    ) -> Self {
         // TODO: Check that the sha256_checksum length is correct: 32 bytes
         let mut checksum_array = [0u8; tlv::CHECKSUM_LEN as usize];
         checksum_array.copy_from_slice(sha256_checksum);
@@ -271,6 +342,14 @@ impl OtaHeader {
             ota_type: Some(ota_type),
             firmware_blob_size: Some(firmware_blob_size),
             sha256_checksum: Some(checksum_array),
+            target_chip: target_chip.map(|chip| {
+                tlv::TargetChipName::try_from(chip).unwrap_or_else(|_| {
+                    panic!(
+                        "target chip {chip:?} exceeds {} bytes",
+                        tlv::MAX_TARGET_CHIP_LEN
+                    )
+                })
+            }),
         }
     }
 
@@ -285,6 +364,14 @@ impl OtaHeader {
             let tlv = tlv::Tlv::OtaType { ota_type };
             let used = sunset::sshwire::write_ssh(&mut buf[offset..], &tlv)
                 .expect("Failed to serialize OTA Type TLV");
+            offset += used;
+        }
+        // Straight after the OTA type, so a mismatched device bails out on
+        // the first write it receives.
+        if let Some(chip) = &self.target_chip {
+            let tlv = tlv::Tlv::TargetChip { chip: chip.clone() };
+            let used = sunset::sshwire::write_ssh(&mut buf[offset..], &tlv)
+                .expect("Failed to serialize Target Chip TLV");
             offset += used;
         }
         if let Some(checksum) = &self.sha256_checksum {
@@ -315,6 +402,7 @@ impl OtaHeader {
         let mut ota_type = None;
         let mut firmware_blob_size = None;
         let mut sha256_checksum = None;
+        let mut target_chip = None;
 
         while source.remaining() > 0 {
             match tlv::Tlv::dec(&mut source) {
@@ -335,6 +423,10 @@ impl OtaHeader {
                             Self::check_ota_is_first_tlv(ota_type)?;
                             sha256_checksum = Some(checksum);
                         }
+                        tlv::Tlv::TargetChip { chip } => {
+                            Self::check_ota_is_first_tlv(ota_type)?;
+                            target_chip = Some(chip);
+                        }
                         tlv::Tlv::FirmwareBlob { size } => {
                             Self::check_ota_is_first_tlv(ota_type)?;
                             firmware_blob_size = Some(size);
@@ -352,6 +444,7 @@ impl OtaHeader {
                 ota_type,
                 firmware_blob_size,
                 sha256_checksum,
+                target_chip,
             },
             source.used(),
         ))
@@ -359,7 +452,7 @@ impl OtaHeader {
 
     fn check_ota_is_first_tlv(ota_type: Option<u32>) -> Result<(), WireError> {
         if ota_type.is_none() {
-            error!("SHA256 Checksum TLV encountered before OTA Type TLV. Ignoring it");
+            error!("TLV encountered before the OTA Type TLV, which must come first");
             Err(sunset::sshwire::WireError::PacketWrong)
         } else {
             Ok(())

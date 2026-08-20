@@ -23,6 +23,14 @@ use crate::HalError;
 ///
 /// All methods return `HalError` on failure.
 pub trait OtaActions {
+    /// Identifier of the chip this firmware was built for, e.g. `"esp32c6"`.
+    ///
+    /// An incoming OTA image may carry the chip it was packed for; if the two
+    /// disagree the transfer is refused before any of it reaches flash. Use
+    /// the same spelling as the port's build tooling (`esp_hal::chip!()` on
+    /// Espressif parts) so a `packer --target` invocation is predictable.
+    const TARGET_CHIP: &'static str;
+
     /// Validate the current OTA partition.
     fn try_validating_current_ota_partition() -> impl Future<Output = Result<(), HalError>> + Send;
 

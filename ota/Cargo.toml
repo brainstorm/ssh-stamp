@@ -17,6 +17,7 @@ sunset.workspace = true
 sunset-async.workspace = true
 sunset-sftp.workspace = true
 
+heapless.workspace = true
 log.workspace = true
 sha2.workspace = true
 

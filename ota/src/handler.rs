@@ -66,6 +66,7 @@ impl<W: OtaActions> UpdateProcessor<W> {
                 ota_type: None,
                 firmware_blob_size: None,
                 sha256_checksum: None,
+                target_chip: None,
             },
             ota_writer,
             tlv_holder: [0; tlv::MAX_TLV_SIZE as usize],
@@ -186,6 +187,26 @@ impl<W: OtaActions> UpdateProcessor<W> {
                 self.tlv_holder.fill(0);
                 self.current_len = 0;
             }
+            tlv::Tlv::TargetChip { chip } => {
+                if self.header.ota_type.is_none() {
+                    error!("UpdateProcessor: Received Target Chip TLV before OTA Type TLV");
+                    self.state = UpdateProcessorState::Error(OtaError::IllegalOperation);
+                    return Err(OtaError::IllegalOperation);
+                }
+                if chip.as_str() != W::TARGET_CHIP {
+                    error!(
+                        "UpdateProcessor: image is built for {} but this device is {}, refusing it",
+                        chip.as_str(),
+                        W::TARGET_CHIP
+                    );
+                    self.state = UpdateProcessorState::Error(OtaError::TargetMismatch);
+                    return Err(OtaError::TargetMismatch);
+                }
+                debug!("Received Target Chip: {}", chip.as_str());
+                self.header.target_chip = Some(chip);
+                self.tlv_holder.fill(0);
+                self.current_len = 0;
+            }
             tlv::Tlv::FirmwareBlob { size } => {
                 self.handle_firmware_blob(size).await?;
             }
@@ -206,6 +227,16 @@ impl<W: OtaActions> UpdateProcessor<W> {
             self.state = UpdateProcessorState::Error(OtaError::IllegalOperation);
             return Err(OtaError::IllegalOperation);
         }
+
+        if self.header.target_chip.is_none() {
+            warn!(
+                "UpdateProcessor: image declares no target chip, cannot check it is built for {}. \
+                 Re-pack it with `packer --target {}`",
+                W::TARGET_CHIP,
+                W::TARGET_CHIP
+            );
+        }
+
         let max_size = W::get_ota_partition_size()
             .await
             .map_err(|_| OtaError::InternalError)?;
@@ -350,6 +381,7 @@ impl<W: OtaActions> UpdateProcessor<W> {
             ota_type: None,
             firmware_blob_size: None,
             sha256_checksum: None,
+            target_chip: None,
         };
     }
 
@@ -371,4 +403,6 @@ pub(crate) enum OtaError {
     VerificationFailed,
     /// Unknown TLV Type encountered during processing
     UnknownTlvType,
+    /// The image declares a target chip that is not the one running
+    TargetMismatch,
 }
