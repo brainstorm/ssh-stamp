@@ -1,69 +1,41 @@
-// SPDX-FileCopyrightText: 2026 Marko Malenic mmalenic1@gmail.com>
+// SPDX-FileCopyrightText: 2026 Marko Malenic <mmalenic1@gmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! `xtask bmf` — convert collected `results.json` into Bencher Metric Format.
-//!
-//! Milestone (d): [Bencher](https://bencher.dev) is the single system-of-record
-//! for the project's tracked metrics — boot time, KEX wall time, heap high-water,
-//! static stack frames, flash/RAM size, and sweep throughput. Its `json` adapter
-//! ingests an arbitrary benchmark → measure → value map (BMF), so this
-//! subcommand is the emitter: xtask produces the JSON, `bencher run --adapter
-//! json --file` uploads it, and configured thresholds fail the PR on a
-//! regression.
-//!
-//! The host crypto benches feed the *same* Bencher project through its
-//! `rust_criterion` adapter, so there is one dashboard and one alerting path
-//! rather than a second service for the host half.
-//!
-//! BMF shape (one object, sorted for stable diffs):
-//!
-//! ```json
-//! {
-//!   "kex/mlkem768x25519-sha256": { "latency-us": { "value": 285700.0, "lower_value": …, "upper_value": … } },
-//!   "boot/default":              { "latency-us": { "value": 412300.0 } },
-//!   "size/flash":                { "flash-bytes": { "value": 1046528.0 } }
-//! }
-//! ```
-//!
-//! The per-board dimension is Bencher's *Testbed*, supplied on the `bencher run`
-//! command line — not encoded here — so benchmark names stay board-agnostic. The
-//! one exception is `size`/`stack`, which are inherently per-SoC and per-profile:
-//! when a single invocation mixes either (a `size --all` dump, or the shipping
-//! and `release-min` profiles together) their names gain the segment that tells
-//! them apart, so neither can silently overwrite the other.
+//! `xtask bmf` converts the collected `results.json` into the Bencher Metric Format.
 
-use crate::results::{BenchResults, Results, SocSize, SocStack, SweepResults};
+use crate::cmd;
+use crate::results::{BenchRun, Results, SocSize, StackSnapshot};
 use crate::stats::Stats;
 use anyhow::{Context, Result, bail};
 use clap::Args as ClapArgs;
 use serde::Serialize;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::fs;
 use std::path::PathBuf;
 
-/// Bencher measure slugs. Direction (smaller/larger is better) and units are
-/// configured on the measure in the Bencher project; the BMF carries only the
-/// raw value, so these names are the join key. Bencher auto-creates a measure
-/// the first time it sees a new slug.
-const M_LATENCY_US: &str = "latency-us";
-const M_HEAP_B: &str = "heap-bytes";
-const M_STACK_B: &str = "stack-bytes";
-const M_FLASH_B: &str = "flash-bytes";
-const M_RAM_B: &str = "ram-bytes";
-const M_THROUGHPUT: &str = "throughput-kib-s";
+/// The bencher measurement fields.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum Measure {
+    FlashBytes,
+    HeapBytes,
+    LatencyUs,
+    RamBytes,
+    StackBytes,
+}
 
 #[derive(ClapArgs)]
 pub struct Args {
-    /// Results JSON file(s) to convert (repeatable). Produced by any of
-    /// `xtask bench` / `size` / `stack` / `sweep --json`.
+    /// Results JSON to convert.
     #[arg(long = "input", required = true)]
     inputs: Vec<PathBuf>,
-    /// Write the BMF JSON here (defaults to stdout).
+    /// Write the BMF JSON output to this path.
     #[arg(short = 'o', long)]
     output: Option<PathBuf>,
 }
 
-pub fn run(args: Args) -> Result<()> {
+pub fn run(args: &Args) -> Result<()> {
     let results = args
         .inputs
         .iter()
@@ -72,22 +44,21 @@ pub fn run(args: Args) -> Result<()> {
 
     let bmf = to_bmf(&results);
     if bmf.is_empty() {
-        bail!("no metrics extracted from the provided --input files");
+        bail!("no metrics found in the input files");
     }
 
     let json = serde_json::to_string_pretty(&bmf)?;
     match &args.output {
         Some(out) => {
-            std::fs::write(out, &json).with_context(|| format!("writing {}", out.display()))?;
-            eprintln!("wrote {} ({} benchmarks)", out.display(), bmf.len());
+            fs::write(out, &json).with_context(|| format!("writing {}", out.display()))?;
+            eprintln!("wrote {} benchmarks to {}", bmf.len(), out.display());
         }
         None => println!("{json}"),
     }
     Ok(())
 }
 
-/// One BMF metric: a point value, optionally with a lower/upper bound (the
-/// spread Bencher draws error bars from and can threshold on).
+/// One BMF metric.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 struct Metric {
     value: f64,
@@ -98,6 +69,7 @@ struct Metric {
 }
 
 impl Metric {
+    /// Construct using a single point with no range.
     fn point(value: f64) -> Self {
         Self {
             value,
@@ -106,6 +78,7 @@ impl Metric {
         }
     }
 
+    /// Construct using a value and a range.
     fn range(value: f64, lower: f64, upper: f64) -> Self {
         Self {
             value,
@@ -115,226 +88,171 @@ impl Metric {
     }
 }
 
-/// A BMF document: benchmark name → measure slug → metric. `BTreeMap`s keep the
-/// output deterministic (stable diffs, stable test assertions).
-type Bmf = BTreeMap<String, BTreeMap<String, Metric>>;
+/// The BMF document.
+type Bmf = BTreeMap<String, BTreeMap<Measure, Metric>>;
 
-/// Records `metric` under `bench`/`measure`, creating the benchmark on first use.
-fn insert(bmf: &mut Bmf, bench: impl Into<String>, measure: &str, metric: Metric) {
-    bmf.entry(bench.into())
-        .or_default()
-        .insert(measure.to_string(), metric);
+/// Inserts a `metric` under `bench` and `measure`. A duplicate only keeps the last value.
+fn insert(bmf: &mut Bmf, bench: impl Into<String>, measure: Measure, metric: Metric) {
+    bmf.entry(bench.into()).or_default().insert(measure, metric);
 }
 
-/// Converts every result record into the merged BMF document.
+/// Converts every result into the BMF document.
 fn to_bmf(results: &[Results]) -> Bmf {
-    // `size`/`stack` are per-SoC *and* per-profile; only disambiguate their names
-    // when a single document actually mixes one or the other (otherwise the
-    // testbed dimension already carries the board, the profile is implicit, and
-    // the plain name is cleaner). Without the profile segment a shipping and a
-    // `release-min` measurement of the same SoC collide on `size/flash` and the
-    // second silently overwrites the first.
-    let mixes = |f: fn(&Results) -> Vec<&str>| -> bool {
-        results.iter().flat_map(f).collect::<BTreeSet<_>>().len() > 1
-    };
-    let size_socs = mixes(|r| match r {
-        Results::Size(s) => s.entries.iter().map(|e| e.soc.as_str()).collect(),
-        _ => Vec::new(),
-    });
-    let size_profiles = mixes(|r| match r {
-        Results::Size(s) => s.entries.iter().map(|e| e.profile.as_str()).collect(),
-        _ => Vec::new(),
-    });
-    let stack_socs = mixes(|r| match r {
-        Results::Stack(s) => s.entries.iter().map(|e| e.soc.as_str()).collect(),
-        _ => Vec::new(),
-    });
-    let stack_profiles = mixes(|r| match r {
-        Results::Stack(s) => s.entries.iter().map(|e| e.profile.as_str()).collect(),
-        _ => Vec::new(),
-    });
-
     let mut bmf = Bmf::new();
-    for r in results {
-        match r {
-            Results::Bench(b) => bench_metrics(&mut bmf, b),
-            Results::Size(s) => {
-                for e in &s.entries {
-                    size_metrics(
-                        &mut bmf,
-                        e,
-                        prefix(&e.soc, size_socs, &e.profile, size_profiles),
-                    );
-                }
-            }
-            Results::Stack(s) => {
-                for e in &s.entries {
-                    stack_metrics(
-                        &mut bmf,
-                        e,
-                        prefix(&e.soc, stack_socs, &e.profile, stack_profiles),
-                    );
-                }
-            }
-            Results::Sweep(s) => sweep_metrics(&mut bmf, s),
+    let mut runs: Vec<&BenchRun> = Vec::new();
+    for result in results {
+        match result {
+            // Keep only the default run as `--heap` represents a probe only, not a bencer run.
+            Results::Bench(bench) => runs.extend(bench.default_run()),
+            Results::Size(size) => size.entries.iter().for_each(|e| size_metrics(&mut bmf, e)),
         }
     }
+
+    for run in &runs {
+        kex_metrics(&mut bmf, run);
+    }
+    if let Some(run) = reference_run(&runs) {
+        device_metrics(&mut bmf, run);
+    }
+
+    if let Some(stack) = maximum_stack(&runs) {
+        insert(
+            &mut bmf,
+            "stack/max",
+            Measure::StackBytes,
+            Metric::point(stack.max_bytes as f64),
+        );
+    }
+
     bmf
 }
 
-/// `kex/<negotiated-algorithm>` → `latency-us` (median, with min/max as the
-/// range) — keyed by what the sessions actually measured, not by the build
-/// variant, so the two arms of a `bench --kex` A/B chart as separate series;
-/// two result sets that negotiated the same algorithm are the same measurement
-/// and merge. `bridge/rtt` → the loopback round-trip latency (median, min/max).
-/// The build-shaped metrics stay variant-keyed: `boot/<variant>` → cold-boot
-/// latency plus a `wifi-assoc` sub-benchmark, and one `heap/<variant>/<label>`
-/// → `heap-bytes` per startup snapshot.
-fn bench_metrics(bmf: &mut Bmf, b: &BenchResults) {
-    if let Some(s) = Stats::from_micros(&b.kex_us) {
+/// The run whose measurements stand for the device.
+fn reference_run<'a>(runs: &[&'a BenchRun]) -> Option<&'a BenchRun> {
+    runs.iter()
+        .find(|run| run.kex_algorithm == cmd::REFERENCE_KEX)
+        .or(runs.first())
+        .copied()
+}
+
+/// The maximum stack size of any run.
+fn maximum_stack<'a>(runs: &[&'a BenchRun]) -> Option<&'a StackSnapshot> {
+    runs.iter()
+        .filter_map(|run| run.stack_max())
+        .max_by_key(|stack| stack.max_bytes)
+}
+
+/// Insert the metrics that are about the arm's own key exchange.
+fn kex_metrics(bmf: &mut Bmf, bench: &BenchRun) {
+    if let Some(stats) = Stats::from_micros(&bench.kex_us) {
         insert(
             bmf,
-            format!("kex/{}", b.kex_algorithm.as_deref().unwrap_or("unknown")),
-            M_LATENCY_US,
-            Metric::range(s.median, s.min, s.max),
+            format!("kex/{}", bench.kex_algorithm),
+            Measure::LatencyUs,
+            Metric::range(stats.median, stats.min, stats.max),
         );
     }
-    if let Some(s) = Stats::from_micros(&b.rtt_us) {
+}
+
+/// Insert the metrics that are about the device rather than the key exchange,
+/// from the one arm that speaks for it.
+fn device_metrics(bmf: &mut Bmf, bench: &BenchRun) {
+    if let Some(stats) = Stats::from_micros(&bench.rtt_us) {
         insert(
             bmf,
             "bridge/rtt",
-            M_LATENCY_US,
-            Metric::range(s.median, s.min, s.max),
+            Measure::LatencyUs,
+            Metric::range(stats.median, stats.min, stats.max),
         );
     }
-    if let Some(ready) = b.boot_t("bench_tcp_listening") {
-        insert(
-            bmf,
-            format!("boot/{}", b.variant),
-            M_LATENCY_US,
-            Metric::point(ready as f64),
-        );
+    if let Some(ready) = bench.boot_t(cmd::TCP_LISTENING) {
+        insert(bmf, "boot", Measure::LatencyUs, Metric::point(ready as f64));
     }
     if let (Some(peripherals), Some(wifi)) = (
-        b.boot_t("bench_peripherals_ready"),
-        b.boot_t("bench_wifi_up"),
+        bench.boot_t(cmd::PERIPHERALS_READY),
+        bench.boot_t(cmd::WIFI_UP),
     ) && wifi >= peripherals
     {
         insert(
             bmf,
-            format!("boot/{}/wifi-assoc", b.variant),
-            M_LATENCY_US,
+            "boot/wifi-association",
+            Measure::LatencyUs,
             Metric::point((wifi - peripherals) as f64),
         );
     }
-    for h in &b.heap {
+    for heap in &bench.heap {
         insert(
             bmf,
-            format!("heap/{}/{}", b.variant, h.label),
-            M_HEAP_B,
-            Metric::point(h.used_bytes as f64),
+            format!("heap/{}", heap.label),
+            Measure::HeapBytes,
+            Metric::point(heap.used_bytes as f64),
         );
     }
 }
 
-/// `size/flash` + `size/ram` → `flash-bytes` / `ram-bytes`.
-fn size_metrics(bmf: &mut Bmf, e: &SocSize, prefix: String) {
+/// Insert the size metrics from the results.
+fn size_metrics(bmf: &mut Bmf, size: &SocSize) {
     insert(
         bmf,
-        format!("{prefix}size/flash"),
-        M_FLASH_B,
-        Metric::point(e.flash_b as f64),
+        format!("{}/size/flash", size.profile),
+        Measure::FlashBytes,
+        Metric::point(size.flash_bytes as f64),
     );
     insert(
         bmf,
-        format!("{prefix}size/ram"),
-        M_RAM_B,
-        Metric::point(e.ram_b as f64),
+        format!("{}/size/ram", size.profile),
+        Measure::RamBytes,
+        Metric::point(size.ram_bytes as f64),
     );
-}
-
-/// `stack/max-frame` → `stack-bytes` (largest single static frame).
-fn stack_metrics(bmf: &mut Bmf, e: &SocStack, prefix: String) {
-    insert(
-        bmf,
-        format!("{prefix}stack/max-frame"),
-        M_STACK_B,
-        Metric::point(e.max_frame_b as f64),
-    );
-}
-
-/// `sweep/<knob>` → the recommended value's throughput and measured static RAM.
-fn sweep_metrics(bmf: &mut Bmf, s: &SweepResults) {
-    let Some(recommended) = s.recommended else {
-        return;
-    };
-    let Some(point) = s.points.iter().find(|p| p.value == recommended) else {
-        return;
-    };
-    let name = format!("sweep/{}", s.knob);
-    insert(
-        bmf,
-        name.clone(),
-        M_THROUGHPUT,
-        Metric::point(point.throughput_kib_s),
-    );
-    insert(bmf, name, M_RAM_B, Metric::point(point.ram_b as f64));
-}
-
-/// `"<soc>/"` and/or `"<profile>/"`, each included only when the document
-/// actually mixes them — otherwise the testbed carries the board and the single
-/// profile is implicit.
-fn prefix(soc: &str, mixes_socs: bool, profile: &str, mixes_profiles: bool) -> String {
-    [(soc, mixes_socs), (profile, mixes_profiles)]
-        .iter()
-        .filter(|(_, mixes)| *mixes)
-        .map(|(seg, _)| format!("{seg}/"))
-        .collect()
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp, clippy::unreadable_literal)]
 mod tests {
     use super::*;
+    use crate::cmd;
     use crate::results::{
-        BootCheckpoint, HeapSnapshot, SizeResults, StackResults, SweepLoad, SweepPoint,
+        BenchResults, BootCheckpoint, HeapSnapshot, RunOutcome, SizeResults,
     };
 
-    fn metric<'a>(bmf: &'a Bmf, bench: &str, measure: &str) -> &'a Metric {
-        bmf.get(bench)
-            .unwrap_or_else(|| panic!("missing benchmark {bench}"))
-            .get(measure)
-            .unwrap_or_else(|| panic!("missing measure {measure} on {bench}"))
+    fn metric<'a>(bmf: &'a Bmf, bench: &str, measure: Measure) -> &'a Metric {
+        bmf.get(bench).unwrap().get(&measure).unwrap()
     }
 
-    fn bench(kex: Vec<u64>) -> BenchResults {
-        BenchResults {
-            variant: "default".into(),
-            kex_algorithm: Some("mlkem768x25519-sha256".into()),
-            host: "h".into(),
-            user: "u".into(),
-            sessions_driven: 4,
-            failures: 0,
+    fn results(run: BenchRun) -> Results {
+        Results::Bench(BenchResults {
+            features: "f".into(),
+            runs: vec![RunOutcome::Ok {
+                heap_size: None,
+                run,
+            }],
+        })
+    }
+
+    fn bench(kex: Vec<u64>) -> BenchRun {
+        BenchRun {
+            kex_algorithm: "mlkem768x25519-sha256".into(),
             boot: vec![
                 BootCheckpoint {
-                    name: "bench_peripherals_ready".into(),
-                    t_abs_us: 50_000,
+                    label: cmd::PERIPHERALS_READY.into(),
+                    t_abs_us: 50000,
                 },
                 BootCheckpoint {
-                    name: "bench_wifi_up".into(),
-                    t_abs_us: 300_000,
+                    label: cmd::WIFI_UP.into(),
+                    t_abs_us: 300000,
                 },
                 BootCheckpoint {
-                    name: "bench_tcp_listening".into(),
-                    t_abs_us: 412_300,
+                    label: cmd::TCP_LISTENING.into(),
+                    t_abs_us: 412300,
                 },
             ],
-            sessions: vec![],
             heap: vec![HeapSnapshot {
                 label: "wifi_up".into(),
-                used_bytes: 53_900,
-                total_bytes: 73_728,
-                max_bytes: 54_000,
+                used_bytes: 53900,
+                total_bytes: 73728,
+                max_bytes: 54000,
             }],
+            stack: vec![],
             kex_us: kex,
             rtt_us: vec![],
         }
@@ -343,206 +261,245 @@ mod tests {
     fn size(soc: &str, flash: u64) -> SocSize {
         SocSize {
             soc: soc.into(),
+            board: soc.into(),
             profile: "release".into(),
-            target: "t".into(),
+            target: "target".into(),
             features: soc.into(),
-            flash_b: flash,
-            ram_b: 180_224,
-            sections: vec![],
+            flash_bytes: flash,
+            ram_bytes: 180224,
+            stack_reserved_bytes: 228864,
             crates: vec![],
         }
     }
 
     #[test]
-    fn kex_uses_median_with_min_max_range() {
-        let bmf = to_bmf(&[Results::Bench(bench(vec![100, 200, 300, 400]))]);
-        let m = metric(&bmf, "kex/mlkem768x25519-sha256", M_LATENCY_US);
-        assert_eq!(m.value, 250.0);
-        assert_eq!((m.lower_value, m.upper_value), (Some(100.0), Some(400.0)));
-    }
+    fn kex_bmf() {
+        let bmf = to_bmf(&[results(bench(vec![100, 200, 300, 400]))]);
+        let metric_result = metric(&bmf, "kex/mlkem768x25519-sha256", Measure::LatencyUs);
+        assert_eq!(metric_result.value, 250.0);
+        assert_eq!(
+            (metric_result.lower_value, metric_result.upper_value),
+            (Some(100.0), Some(400.0))
+        );
 
-    #[test]
-    fn kex_keys_on_the_negotiated_algorithm_not_the_variant() {
-        // The two arms of a `bench --kex` A/B come from the same build variant;
-        // only the negotiated algorithm tells them apart.
-        let classical = BenchResults {
-            kex_algorithm: Some("curve25519-sha256".into()),
-            ..bench(vec![240_000])
+        let classical = BenchRun {
+            kex_algorithm: cmd::REFERENCE_KEX.into(),
+            ..bench(vec![240000])
         };
-        let bmf = to_bmf(&[
-            Results::Bench(bench(vec![285_000])),
-            Results::Bench(classical),
-        ]);
+        let bmf = to_bmf(&[results(bench(vec![285000])), results(classical)]);
         assert_eq!(
-            metric(&bmf, "kex/mlkem768x25519-sha256", M_LATENCY_US).value,
-            285_000.0
+            metric(&bmf, "kex/mlkem768x25519-sha256", Measure::LatencyUs).value,
+            285000.0
         );
         assert_eq!(
-            metric(&bmf, "kex/curve25519-sha256", M_LATENCY_US).value,
-            240_000.0
-        );
-        assert!(!bmf.contains_key("kex/default"));
-    }
-
-    #[test]
-    fn bench_maps_boot_wifi_and_heap() {
-        let bmf = to_bmf(&[Results::Bench(bench(vec![1]))]);
-        assert_eq!(metric(&bmf, "boot/default", M_LATENCY_US).value, 412_300.0);
-        // wifi-assoc = wifi_up - peripherals_ready.
-        assert_eq!(
-            metric(&bmf, "boot/default/wifi-assoc", M_LATENCY_US).value,
-            250_000.0
-        );
-        assert_eq!(
-            metric(&bmf, "heap/default/wifi_up", M_HEAP_B).value,
-            53_900.0
+            metric(&bmf, "kex/curve25519-sha256", Measure::LatencyUs).value,
+            240000.0
         );
     }
 
     #[test]
-    fn no_kex_samples_emit_no_kex_metric() {
-        let bmf = to_bmf(&[Results::Bench(bench(vec![]))]);
+    fn bench_has_boot() {
+        let bmf = to_bmf(&[results(bench(vec![1]))]);
+        assert_eq!(metric(&bmf, "boot", Measure::LatencyUs).value, 412300.0);
+        assert_eq!(
+            metric(&bmf, "boot/wifi-association", Measure::LatencyUs).value,
+            250000.0
+        );
+        assert_eq!(
+            metric(&bmf, "heap/wifi_up", Measure::HeapBytes).value,
+            53900.0
+        );
+    }
+
+    #[test]
+    fn no_kex_samples() {
+        let bmf = to_bmf(&[results(bench(vec![]))]);
         assert!(!bmf.contains_key("kex/mlkem768x25519-sha256"));
-        // The boot metrics are still there.
-        assert!(bmf.contains_key("boot/default"));
+        assert!(bmf.contains_key("boot"));
     }
 
     #[test]
-    fn rtt_samples_map_to_bridge_rtt() {
-        let with_rtt = BenchResults {
-            rtt_us: vec![10_000, 12_000, 20_000],
+    fn rtt_samples() {
+        let with_rtt = BenchRun {
+            rtt_us: vec![10000, 12000, 20000],
             ..bench(vec![])
         };
-        let bmf = to_bmf(&[Results::Bench(with_rtt)]);
-        let m = metric(&bmf, "bridge/rtt", M_LATENCY_US);
-        assert_eq!(m.value, 12_000.0);
+        let bmf = to_bmf(&[results(with_rtt)]);
+        let m = metric(&bmf, "bridge/rtt", Measure::LatencyUs);
+        assert_eq!(m.value, 12000.0);
         assert_eq!(
             (m.lower_value, m.upper_value),
-            (Some(10_000.0), Some(20_000.0))
+            (Some(10000.0), Some(20000.0))
         );
     }
 
     #[test]
-    fn single_soc_size_names_are_unprefixed() {
+    fn size_names() {
         let bmf = to_bmf(&[Results::Size(SizeResults {
-            entries: vec![size("esp32c6", 1_046_528)],
-            overflow_checks_enforced_by: vec!["cfg(all())".into()],
+            entries: vec![size("esp32c6", 1046528)],
         })]);
-        assert_eq!(metric(&bmf, "size/flash", M_FLASH_B).value, 1_046_528.0);
-        assert_eq!(metric(&bmf, "size/ram", M_RAM_B).value, 180_224.0);
-        assert_eq!(metric(&bmf, "size/flash", M_FLASH_B).lower_value, None);
+        assert_eq!(
+            metric(&bmf, "release/size/flash", Measure::FlashBytes).value,
+            1046528.0
+        );
+        assert_eq!(
+            metric(&bmf, "release/size/ram", Measure::RamBytes).value,
+            180224.0
+        );
+        assert_eq!(
+            metric(&bmf, "release/size/flash", Measure::FlashBytes).lower_value,
+            None
+        );
     }
 
     #[test]
-    fn multi_soc_size_names_are_soc_prefixed() {
-        let bmf = to_bmf(&[Results::Size(SizeResults {
-            entries: vec![size("esp32c6", 100), size("esp32c3", 200)],
-            overflow_checks_enforced_by: vec![],
-        })]);
-        assert_eq!(metric(&bmf, "esp32c6/size/flash", M_FLASH_B).value, 100.0);
-        assert_eq!(metric(&bmf, "esp32c3/size/flash", M_FLASH_B).value, 200.0);
-        assert!(!bmf.contains_key("size/flash"));
-    }
-
-    #[test]
-    fn one_soc_two_profiles_are_profile_prefixed() {
-        // The shipping and size-minimised measurements of the same SoC are
-        // routinely converted together; without the profile segment the second
-        // would silently overwrite the first.
+    fn two_profiles_one_soc() {
         let min = SocSize {
             profile: "release-min".into(),
-            flash_b: 60,
+            flash_bytes: 60,
             ..size("esp32c6", 0)
         };
         let bmf = to_bmf(&[Results::Size(SizeResults {
             entries: vec![size("esp32c6", 100), min],
-            overflow_checks_enforced_by: vec![],
         })]);
-        assert_eq!(metric(&bmf, "release/size/flash", M_FLASH_B).value, 100.0);
         assert_eq!(
-            metric(&bmf, "release-min/size/flash", M_FLASH_B).value,
+            metric(&bmf, "release/size/flash", Measure::FlashBytes).value,
+            100.0
+        );
+        assert_eq!(
+            metric(&bmf, "release-min/size/flash", Measure::FlashBytes).value,
             60.0
         );
-        assert!(!bmf.contains_key("size/flash"));
     }
 
     #[test]
-    fn stack_maps_to_max_frame() {
-        let bmf = to_bmf(&[Results::Stack(StackResults {
-            entries: vec![SocStack {
-                soc: "esp32c6".into(),
-                profile: "stack-analysis".into(),
-                target: "t".into(),
-                functions: vec![],
-                total_functions: 0,
-                max_frame_b: 4_096,
-            }],
-        })]);
-        assert_eq!(metric(&bmf, "stack/max-frame", M_STACK_B).value, 4_096.0);
+    fn stack_takes_the_maximum() {
+        let with_stack = BenchRun {
+            stack: vec![
+                StackSnapshot {
+                    label: "boot".into(),
+                    max_bytes: 9000,
+                    reserved_bytes: 247408,
+                },
+                StackSnapshot {
+                    label: "session".into(),
+                    max_bytes: 38200,
+                    reserved_bytes: 247408,
+                },
+            ],
+            ..bench(vec![])
+        };
+        let bmf = to_bmf(&[results(with_stack)]);
+        assert_eq!(
+            metric(&bmf, "stack/max", Measure::StackBytes).value,
+            38200.0
+        );
+
+        let stack = |max_bytes| StackSnapshot {
+            label: "session".into(),
+            max_bytes,
+            reserved_bytes: 247408,
+        };
+        let reference = BenchRun {
+            kex_algorithm: cmd::REFERENCE_KEX.into(),
+            stack: vec![stack(30000)],
+            ..bench(vec![240000])
+        };
+        let mlkem = BenchRun {
+            stack: vec![stack(38200)],
+            ..bench(vec![285000])
+        };
+        let bmf = to_bmf(&[results(reference), results(mlkem)]);
+        assert_eq!(
+            metric(&bmf, "stack/max", Measure::StackBytes).value,
+            38200.0
+        );
     }
 
-    fn sweep(recommended: Option<u64>) -> SweepResults {
-        SweepResults {
-            host: "h".into(),
-            user: "u".into(),
+    #[test]
+    fn reference_is_device() {
+        let reference = BenchRun {
+            kex_algorithm: cmd::REFERENCE_KEX.into(),
+            rtt_us: vec![10000],
+            ..bench(vec![240000])
+        };
+        let mlkem = BenchRun {
+            rtt_us: vec![30000],
+            ..bench(vec![285000])
+        };
+        let bmf = to_bmf(&[results(reference), results(mlkem)]);
+        assert_eq!(
+            metric(&bmf, "bridge/rtt", Measure::LatencyUs).value,
+            10000.0
+        );
+    }
+
+    #[test]
+    fn merge_runs() {
+        let classical = || BenchRun {
+            kex_algorithm: cmd::REFERENCE_KEX.into(),
+            rtt_us: vec![10000],
+            stack: vec![StackSnapshot {
+                label: "session".into(),
+                max_bytes: 30000,
+                reserved_bytes: 247408,
+            }],
+            ..bench(vec![240000])
+        };
+        let mlkem = || BenchRun {
+            rtt_us: vec![30000],
+            stack: vec![StackSnapshot {
+                label: "session".into(),
+                max_bytes: 38200,
+                reserved_bytes: 247408,
+            }],
+            ..bench(vec![285000])
+        };
+        assert_eq!(
+            to_bmf(&[results(classical()), results(mlkem())]),
+            to_bmf(&[results(mlkem()), results(classical())])
+        );
+    }
+
+    #[test]
+    fn heap_no_metrics() {
+        let probe = Results::Bench(BenchResults {
             features: "f".into(),
-            load: SweepLoad {
-                concurrency: 4,
-                payload_kib: 256,
-                duration_s: 20,
-            },
-            knob: "heap_size".into(),
-            bisect: false,
-            tolerance: 0.9,
-            recommended,
-            points: vec![SweepPoint {
-                value: 65_536,
-                ram_b: 77_136,
-                heap_max_b: Some(60_000),
-                ready: true,
-                oom: false,
-                throughput_kib_s: 100.0,
-                bytes_sent: 1,
-                failures: 0,
-            }],
-        }
+            runs: vec![
+                RunOutcome::Failed {
+                    heap_size: Some(49_152),
+                    ready: false,
+                },
+                RunOutcome::Ok {
+                    heap_size: Some(65_536),
+                    run: bench(vec![285700]),
+                },
+            ],
+        });
+        assert!(to_bmf(&[probe]).is_empty());
     }
 
     #[test]
-    fn sweep_reports_the_recommended_points_own_numbers() {
-        let bmf = to_bmf(&[Results::Sweep(sweep(Some(65_536)))]);
-        assert_eq!(metric(&bmf, "sweep/heap_size", M_THROUGHPUT).value, 100.0);
-        // Measured static RAM of that image, not an estimate.
-        assert_eq!(metric(&bmf, "sweep/heap_size", M_RAM_B).value, 77_136.0);
-    }
-
-    #[test]
-    fn sweep_without_recommendation_emits_nothing() {
-        assert!(to_bmf(&[Results::Sweep(sweep(None))]).is_empty());
-    }
-
-    #[test]
-    fn multiple_inputs_merge_into_one_document() {
+    fn multiple_inputs() {
         let bmf = to_bmf(&[
-            Results::Bench(bench(vec![285_700])),
+            results(bench(vec![285700])),
             Results::Size(SizeResults {
-                entries: vec![size("esp32c6", 1_046_528)],
-                overflow_checks_enforced_by: vec![],
+                entries: vec![size("esp32c6", 1046528)],
             }),
         ]);
         assert!(bmf.contains_key("kex/mlkem768x25519-sha256"));
-        assert!(bmf.contains_key("size/flash"));
+        assert!(bmf.contains_key("release/size/flash"));
     }
 
     #[test]
-    fn point_metric_serializes_without_bounds() {
+    fn point_metrics() {
         assert_eq!(
-            serde_json::to_string(&Metric::point(1.0)).unwrap(),
-            r#"{"value":1.0}"#
+            serde_json::to_value(Metric::point(1.0)).unwrap(),
+            serde_json::json!({ "value": 1.0 })
         );
         assert_eq!(
-            serde_json::to_string(&Metric::range(2.0, 1.0, 3.0)).unwrap(),
-            r#"{"value":2.0,"lower_value":1.0,"upper_value":3.0}"#
+            serde_json::to_value(Metric::range(2.0, 1.0, 3.0)).unwrap(),
+            serde_json::json!({ "value": 2.0, "lower_value": 1.0, "upper_value": 3.0 })
         );
     }
 }

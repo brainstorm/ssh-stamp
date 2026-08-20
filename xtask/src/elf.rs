@@ -2,201 +2,359 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Reads the linked firmware ELF directly with the [`object`] crate.
-//!
-//! This replaces shelling out to the cargo-binutils shims (`rust-size -A -x`,
-//! `rust-readobj --stack-sizes`) and parsing their text output. `object` reads
-//! any target's ELF regardless of host, so it also drops `llvm-tools` +
-//! `cargo-binutils` from the prerequisites of the size gate — one less thing for
-//! CI to install and for a contributor to get wrong.
+//! Measures the linked firmware using [`espflash`] and [`object`].
 
-use anyhow::{Context, Result, bail};
-use object::{Object, ObjectSection, ObjectSymbol, SymbolKind};
-use std::collections::HashMap;
+use anyhow::{Context, Result, anyhow, bail};
+use espflash::flasher::{FlashData, FlashSettings};
+use espflash::image_format::idf::IdfBootloaderFormat;
+use espflash::target::{Chip, XtalFrequency};
+use object::{Architecture, File, Object, ObjectSection, ObjectSegment, ObjectSymbol};
 use std::path::Path;
+use std::str::FromStr;
 
-use crate::results::{Section, StackFrame};
+use crate::board::Board;
 
-/// Every named section in `elf`, with its size in bytes.
-pub fn sections(elf: &Path) -> Result<Vec<Section>> {
-    let data = read(elf)?;
-    let file = object::File::parse(&*data).with_context(|| format!("parsing {}", elf.display()))?;
-    Ok(file
-        .sections()
-        .filter_map(|s| {
-            let name = s.name().ok()?;
-            // Skip the null section and anything unnamed; keep the ESP-specific
-            // ones (`.rwtext`, `.dram0.*`, …) so a reviewer can audit the
-            // headline two-section flash/RAM figures.
-            (!name.is_empty()).then(|| Section {
-                name: name.to_string(),
-                size_b: s.size(),
-            })
+/// The memory footprint of a firmware.
+#[derive(Debug, Clone, Copy)]
+#[allow(clippy::struct_field_names)]
+pub struct Footprint {
+    /// The size of the ESP-IDF application image itself, headers and padding included.
+    pub flash_b: u64,
+    /// The size of the internal RAM with every segment in the RAM windows.
+    pub ram_b: u64,
+    /// The RAM reserved for the stack by the linker.
+    pub stack_reserved_b: u64,
+}
+
+impl Footprint {
+    /// Measures the `elf` footprint for `board`.
+    pub fn new(elf: &Path, board: &Board) -> Result<Footprint> {
+        let data = read(elf)?;
+        let file = File::parse(&*data).with_context(|| format!("parsing {}", elf.display()))?;
+        let chip = Chip::from_str(board.soc).map_err(|_| anyhow!("unknown chip `{}`", board.soc))?;
+
+        let (ram_b, stack_reserved_b) = Self::memory(&file, board, chip, elf)?;
+
+        Ok(Footprint {
+            flash_b: Self::image_size(&data, board, chip, elf)?,
+            ram_b,
+            stack_reserved_b,
         })
-        .collect())
-}
-
-/// Sums the sizes of the named sections. Missing sections contribute 0.
-pub fn sum_sections(sections: &[Section], names: &[&str]) -> u64 {
-    sections
-        .iter()
-        .filter(|s| names.contains(&s.name.as_str()))
-        .map(|s| s.size_b)
-        .sum()
-}
-
-/// Per-function static stack frames from the `.stack_sizes` section, largest
-/// first.
-///
-/// The section is a sequence of `(function address, ULEB128 frame size)` records
-/// emitted by `-Z emit-stack-sizes`; addresses are resolved back to symbol names
-/// through the ELF symbol table. Returns an empty vector when the section is
-/// absent (fat LTO strips it, and it only exists on a nightly build) — the
-/// caller warns rather than failing, since this is a diagnostic, not a gate.
-pub fn stack_frames(elf: &Path) -> Result<Vec<StackFrame>> {
-    let data = read(elf)?;
-    let file = object::File::parse(&*data).with_context(|| format!("parsing {}", elf.display()))?;
-
-    let Some(section) = file.section_by_name(".stack_sizes") else {
-        return Ok(Vec::new());
-    };
-    let raw = section
-        .data()
-        .map_err(|e| anyhow::anyhow!("reading .stack_sizes of {}: {e}", elf.display()))?;
-
-    // address -> symbol name, for the function symbols the records point at.
-    let names: HashMap<u64, &str> = file
-        .symbols()
-        .filter(|s| s.kind() == SymbolKind::Text)
-        .filter_map(|s| s.name().ok().map(|n| (s.address(), n)))
-        .collect();
-
-    let addr_bytes = if file.is_64() { 8 } else { 4 };
-    let little_endian = file.is_little_endian();
-    let mut frames = Vec::new();
-    let mut rest = raw;
-
-    while !rest.is_empty() {
-        if rest.len() < addr_bytes {
-            bail!(
-                "truncated .stack_sizes in {}: {} trailing byte(s)",
-                elf.display(),
-                rest.len()
-            );
-        }
-        let (addr_raw, tail) = rest.split_at(addr_bytes);
-        let address = read_addr(addr_raw, little_endian);
-        let (size_b, tail) = read_uleb128(tail)
-            .with_context(|| format!("decoding .stack_sizes frame size in {}", elf.display()))?;
-        rest = tail;
-
-        frames.push(StackFrame {
-            // Demangled, because the table exists to name the function worth
-            // shrinking and a mangled symbol names it only to a demangler. An
-            // unresolved address still carries a usable frame size.
-            //
-            // `{:#}` is the alternate form, which drops the crate disambiguator
-            // hashes: they change with the build, so keeping them would make the
-            // same function look like a different one from run to run — the one
-            // thing a table meant for tracking regressions must not do.
-            function: names.get(&address).map_or_else(
-                || format!("<unnamed @ {address:#x}>"),
-                |n| format!("{:#}", rustc_demangle::demangle(n)),
-            ),
-            size_b,
-        });
     }
 
-    frames.sort_by_key(|f| std::cmp::Reverse(f.size_b));
-    Ok(frames)
+    /// The size of the application image for this elf.
+    pub fn image_size(elf: &[u8], board: &Board, chip: Chip, path: &Path) -> Result<u64> {
+        let flash_data = FlashData::new(
+            FlashSettings::default(),
+            0,
+            None,
+            chip,
+            XtalFrequency::default(),
+        );
+
+        let image = IdfBootloaderFormat::new(
+            elf,
+            &flash_data,
+            board.partitions.map(Path::new),
+            None,
+            None,
+            None,
+        )
+        .with_context(|| {
+            format!(
+                "building {} application image using {}",
+                board.name,
+                path.display()
+            )
+        })?;
+
+        Ok(image.ota_segments().map(|s| u64::from(s.size())).sum())
+    }
+
+    /// The internal RAM used by the firmware, and the stack reserved bytes specified by the linker.
+    pub fn memory(file: &File, board: &Board, chip: Chip, elf: &Path) -> Result<(u64, u64)> {
+        let segments: Vec<_> = file
+            .segments()
+            .map(|segment| {
+                let (_, file_size) = segment.file_range();
+                (segment.address(), file_size, segment.size())
+            })
+            .collect();
+
+        Self::memory_of(
+            &segments,
+            Self::stack_span(file, elf)?,
+            Self::section_span(file, ".rwdata_dummy"),
+            Self::section_span(file, ".rtc_fast.dummy"),
+            board,
+            chip,
+        )
+    }
+
+    /// The RAM and stack reserved bytes from the extracted `segments`.
+    pub fn memory_of(
+        segments: &[(u64, u64, u64)],
+        stack_span: (u64, u64),
+        rwdata_dummy: Option<(u64, u64)>,
+        rtc_fast_dummy: Option<(u64, u64)>,
+        board: &Board,
+        chip: Chip,
+    ) -> Result<(u64, u64)> {
+        let mut ram = 0;
+        let mut ram_segments = Vec::new();
+        for &(addr, file_size, mem_size) in segments {
+            // A zero size segment doesn't have anything to add to the result.
+            if mem_size == 0 {
+                continue;
+            }
+
+            // First, count everything in the ram, including the stack reserved addresses.
+            if let Some(window_end) = Self::window_end(addr, board.ram) {
+                // Ensure that the whole segment, up to it's size is inside the same window that
+                // it starts in. An error here means that the map is no longer accurately
+                // maintaining the windows.
+                if addr + mem_size > window_end {
+                    bail!(
+                        "segment ({addr:#010x}) goes {mem_size} bytes ({:#010x}) past the RAM window",
+                        addr + mem_size
+                    );
+                }
+
+                ram += mem_size;
+                ram_segments.push((addr, mem_size));
+
+                continue;
+            }
+
+            // Past here the segment is outside every RAM window, so it has to be flash otherwise
+            // it's an error.
+            if !u32::try_from(addr).is_ok_and(|a| chip.addr_is_flash(a)) {
+                bail!("the segment ({addr:#010x}) is not in the RAM window and not flash");
+            }
+
+            // Past here it is at a flash address, but if it is completely empty, that's also
+            // an error as it's a contradiction.
+            if file_size == 0 {
+                bail!("segment at {addr:#010x} is a flash address but has zero size");
+            }
+        }
+
+        // Then, subtract the stack reserved in order to determine the reserved bytes vs the
+        // actual RAM bytes.
+        let (stack_end, stack_start) = stack_span;
+        if stack_start < stack_end {
+            bail!("the stack reservation start is less than the end");
+        }
+        let stack = stack_start - stack_end;
+
+        // This subtraction is only meaningful if the stack reservation is actually inside the
+        // windows that were counted. Just in case it was not, error here to avoid an incorrect
+        // value.
+        if !Self::covered(&ram_segments, stack_end, stack_start) {
+            bail!(
+                "stack reservation ({stack_end:#010x}..{stack_start:#010x}) is not inside any RAM window"
+            );
+        }
+
+        let rwdata_dummy = Self::dummy_size(".rwdata_dummy", rwdata_dummy, &ram_segments)?;
+        let rtc_fast_dummy = Self::dummy_size(".rtc_fast.dummy", rtc_fast_dummy, &ram_segments)?;
+
+        // Remove both the stack and the dummy size sections from the RAM.
+        let ram = ram
+            .checked_sub(stack + rwdata_dummy + rtc_fast_dummy)
+            .with_context(|| "subtracting bytes from RAM windows overflows".to_string())?;
+
+        Ok((ram, stack))
+    }
+
+    /// The total size of the `name` section span, which is counted twice and must be removed.
+    /// On Xtensa, these represent the same physical address in two windows, so they are
+    /// removed here to avoid double counting.
+    ///
+    /// See: <https://github.com/esp-rs/esp-hal/blob/esp-hal-v1.1.1/esp-hal/ld/esp32s3/esp32s3.x>
+    pub fn dummy_size(
+        name: &str,
+        section: Option<(u64, u64)>,
+        ram_segments: &[(u64, u64)],
+    ) -> Result<u64> {
+        // A missing or empty dummy section means nothing to avoid double counting.
+        let Some((addr, size)) = section else {
+            return Ok(0);
+        };
+        if size == 0 {
+            return Ok(0);
+        }
+
+        // This subtraction is only meaningful if the dummy section is actually inside the
+        // windows that were counted, just like the stack.
+        if !Self::covered(ram_segments, addr, addr + size) {
+            bail!(
+                "`{name}` ({addr:#010x}..{:#010x}) is not inside any RAM window.",
+                addr + size
+            );
+        }
+
+        Ok(size)
+    }
+
+    /// The span from `_stack_start` to `_stack_end` which determines stack reserved addresses.
+    ///
+    /// See: <https://github.com/esp-rs/esp-hal/blob/esp-hal-v1.1.1/esp-hal/ld/sections/stack.x>
+    pub fn stack_span(file: &File, elf: &Path) -> Result<(u64, u64)> {
+        let symbol = |name: &str| {
+            file.symbols()
+                .find(|symbol| symbol.name() == Ok(name))
+                .map(|symbol| symbol.address())
+                .with_context(|| format!("{}: no `{name}` symbol", elf.display()))
+        };
+
+        Ok((symbol("_stack_end")?, symbol("_stack_start")?))
+    }
+
+    /// The address and size of the `name` section, if it is present.
+    fn section_span(file: &File, name: &str) -> Option<(u64, u64)> {
+        let section = file.section_by_name(name)?;
+        Some((section.address(), section.size()))
+    }
+
+    /// True if the `start` and `end` sections are inside one of `segments`.
+    fn covered(segments: &[(u64, u64)], start: u64, end: u64) -> bool {
+        segments
+            .iter()
+            .any(|&(addr, size)| addr <= start && end <= addr + size)
+    }
+
+    /// The end of the `start` and `end` window containing `addr`, if any.
+    fn window_end(addr: u64, windows: &[(u64, u64)]) -> Option<u64> {
+        windows
+            .iter()
+            .find(|&&(lo, hi)| (lo..hi).contains(&addr))
+            .map(|&(_, hi)| hi)
+    }
 }
 
 fn read(elf: &Path) -> Result<Vec<u8>> {
-    std::fs::read(elf).with_context(|| {
-        format!(
-            "reading {} — build it first, or drop --no-build",
-            elf.display()
-        )
-    })
-}
-
-/// Decodes a 4- or 8-byte address in the ELF's endianness.
-fn read_addr(bytes: &[u8], little_endian: bool) -> u64 {
-    bytes.iter().enumerate().fold(0u64, |acc, (i, &b)| {
-        let shift = if little_endian {
-            8 * i
-        } else {
-            8 * (bytes.len() - 1 - i)
-        };
-        acc | (u64::from(b) << shift)
-    })
-}
-
-/// Decodes one ULEB128 integer, returning it and the remaining bytes.
-fn read_uleb128(bytes: &[u8]) -> Result<(u64, &[u8])> {
-    let mut value = 0u64;
-    let mut shift = 0u32;
-    for (i, &byte) in bytes.iter().enumerate() {
-        if shift >= 64 {
-            bail!("ULEB128 value wider than 64 bits");
-        }
-        value |= u64::from(byte & 0x7f) << shift;
-        if byte & 0x80 == 0 {
-            return Ok((value, &bytes[i + 1..]));
-        }
-        shift += 7;
-    }
-    bail!("unterminated ULEB128 value")
+    std::fs::read(elf).with_context(|| format!("reading {}", elf.display()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::board::find;
 
-    #[test]
-    fn reads_single_byte_uleb128() {
-        assert_eq!(read_uleb128(&[0x10, 0xAA]).unwrap(), (0x10, &[0xAAu8][..]));
-        assert_eq!(read_uleb128(&[0x7f]).unwrap().0, 127);
+    fn board_and_chip(name: &str) -> (&'static Board, Chip) {
+        let board = find(name).unwrap();
+        (board, Chip::from_str(board.soc).unwrap())
     }
 
     #[test]
-    fn reads_multi_byte_uleb128() {
-        // 624485 == 0xE5 0x8E 0x26, the canonical LEB128 example.
-        assert_eq!(read_uleb128(&[0xE5, 0x8E, 0x26]).unwrap().0, 624_485);
-        // 128 needs a continuation byte.
-        assert_eq!(read_uleb128(&[0x80, 0x01]).unwrap().0, 128);
+    fn windows_are_open() {
+        let board = find("esp32c6-devkitc").unwrap();
+        let chip = Chip::from_str(board.soc).unwrap();
+
+        assert!(Footprint::window_end(0x4081_3800, board.ram).is_some());
+        assert!(chip.addr_is_flash(0x4202_0020));
+        assert!(Footprint::window_end(0x4202_0020, board.ram).is_none());
+        assert!(Footprint::window_end(0x4080_0000, board.ram).is_some());
+        assert!(Footprint::window_end(0x4087_E610, board.ram).is_none());
+        assert!(Footprint::window_end(0, board.ram).is_none() && !chip.addr_is_flash(0));
     }
 
     #[test]
-    fn rejects_unterminated_uleb128() {
-        assert!(read_uleb128(&[0x80, 0x80]).is_err());
-        assert!(read_uleb128(&[]).is_err());
+    fn segment_should_be_starting_window() {
+        let board = find("esp32-s2-saola").unwrap();
+        let (addr, mem_size) = (0x3FFF_0000, 0x3_1000);
+        let end = Footprint::window_end(addr, board.ram).unwrap();
+
+        assert!(Footprint::window_end(addr + mem_size - 1, board.ram).is_some());
+        assert!(addr + mem_size > end);
+        assert_eq!(Footprint::window_end(0x3FFB_0000, board.ram), Some(0x4000_0000));
+        assert!(Footprint::window_end(0x4000_0000, board.ram).is_none());
     }
 
     #[test]
-    fn reads_addresses_in_both_endiannesses() {
-        assert_eq!(read_addr(&[0x20, 0x00, 0x00, 0x42], true), 0x4200_0020);
-        assert_eq!(read_addr(&[0x42, 0x00, 0x00, 0x20], false), 0x4200_0020);
+    fn covered_requires_segment() {
+        let segments = [(0x100, 0x100), (0x200, 0x100)];
+
+        assert!(Footprint::covered(&segments, 0x100, 0x200));
+        assert!(Footprint::covered(&segments, 0x210, 0x280));
+        assert!(!Footprint::covered(&segments, 0x180, 0x220));
+        assert!(!Footprint::covered(&[], 0x100, 0x200));
     }
 
     #[test]
-    fn sums_only_the_named_sections() {
-        let s = vec![
-            Section {
-                name: ".text".into(),
-                size_b: 100,
-            },
-            Section {
-                name: ".rodata".into(),
-                size_b: 20,
-            },
-            Section {
-                name: ".bss".into(),
-                size_b: 7,
-            },
+    fn measures_ram_flash_and_stack() {
+        let (board, chip) = board_and_chip("esp32c6-devkitc");
+        let segments = [
+            (0x4080_0000, 0x100, 0x300),
+            (0x5000_0000, 0x10, 0x10),
+            (0x4202_0000, 0x40, 0x40),
+            (0x1000, 0, 0),
         ];
-        assert_eq!(sum_sections(&s, &[".text", ".rodata"]), 120);
-        // A section that isn't present contributes nothing rather than erroring.
-        assert_eq!(sum_sections(&s, &[".data", ".bss"]), 7);
+        let stack_span = (0x4080_0200, 0x4080_0300);
+        let (ram, stack) =
+            Footprint::memory_of(&segments, stack_span, None, None, board, chip).unwrap();
+        assert_eq!(stack, 0x100);
+        assert_eq!(ram, 0x300 + 0x10 - 0x100);
+    }
+
+    #[test]
+    fn segment_outside_windows_error() {
+        let (board, chip) = board_and_chip("esp32-s2-saola");
+        let segments = [(0x3FFF_0000, 0, 0x3_1000)];
+        assert!(Footprint::memory_of(&segments, (0, 0), None, None, board, chip).is_err());
+
+        let (board, chip) = board_and_chip("esp32c6-devkitc");
+        let segments = [(0x1000, 0x10, 0x10)];
+        assert!(Footprint::memory_of(&segments, (0, 0), None, None, board, chip).is_err());
+
+        let (board, chip) = board_and_chip("esp32c6-devkitc");
+        let segments = [(0x4202_0020, 0, 0x10)];
+        assert!(Footprint::memory_of(&segments, (0, 0), None, None, board, chip).is_err());
+
+        let (board, chip) = board_and_chip("esp32c6-devkitc");
+        let segments = [(0x4080_0000, 0x100, 0x100)];
+        let stack_span = (0x5000_0000, 0x5000_1000);
+        assert!(Footprint::memory_of(&segments, stack_span, None, None, board, chip).is_err());
+
+        let (board, chip) = board_and_chip("esp32c6-devkitc");
+        let segments = [(0x4080_0000, 0x100, 0x100)];
+        let stack_span = (0x5000_0000, 0x5000_1000);
+        assert!(Footprint::memory_of(&segments, stack_span, None, None, board, chip).is_err());
+
+        let (board, chip) = board_and_chip("esp32c6-devkitc");
+        let segments = [(0x4080_0000, 0x100, 0x100)];
+        let stack_span = (0x4080_0300, 0x4080_0200);
+        assert!(Footprint::memory_of(&segments, stack_span, None, None, board, chip).is_err());
+    }
+
+    #[test]
+    fn dummy_sections_are_subtracted() {
+        let (board, chip) = board_and_chip("waveshare-esp32-s3-touch-lcd-43");
+        let segments = [(0x3FC8_8000, 0x400, 0x400), (0x4037_0000, 0x100, 0x100)];
+
+        let (ram, stack) = Footprint::memory_of(
+            &segments,
+            (0x3FC8_8200, 0x3FC8_8300),
+            Some((0x3FC8_8000, 0x100)),
+            Some((0x3FC8_8100, 0x40)),
+            board,
+            chip,
+        )
+        .unwrap();
+
+        assert_eq!(stack, 0x100);
+        assert_eq!(ram, 0x400 + 0x100 - 0x100 - 0x100 - 0x40);
+    }
+
+    #[test]
+    fn dummy_section_outside_window_error() {
+        let counted = [(0x3FC8_8000, 0x400)];
+        assert!(Footprint::dummy_size(".rwdata_dummy", Some((0x4037_0000, 0x100)), &counted).is_err());
+        assert_eq!(
+            Footprint::dummy_size(".rtc_fast.dummy", Some((0, 0)), &[]).unwrap(),
+            0
+        );
+        assert_eq!(Footprint::dummy_size(".rotext_dummy", None, &[]).unwrap(), 0);
     }
 }
