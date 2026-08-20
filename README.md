@@ -23,6 +23,8 @@ The SSH connection can be established via WiFi, enabling untethered (and secure)
 
 Refer to [building](./docs/BUILDING.md) if you are not using our binary releases and [using](./docs/USING.md) documentation.
 
+Networking is IPv4-only today; [ipv6](./docs/IPV6.md) covers what the `ipv6` feature does and does not do, and what it would take to finish it.
+
 ## Targets
 
 At present only Espressif ICs are supported but other targets (i.e Raspberry Pico2 or Dabao-1x) are planned in the future.

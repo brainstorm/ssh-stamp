@@ -167,7 +167,12 @@ opt-level = "s"
 opt-level = "s"
 
 [features]
-ipv6 = []
+# Persist and apply a static IPv6 configuration. `embassy-net` gates
+# `StaticConfigV6`/`Ipv6Cidr` behind `proto-ipv6`, so the feature has to pull
+# it in explicitly: without this, `cargo check -p ssh-stamp --features ipv6`
+# fails, and it only ever built inside `ssh-stamp-esp32` because
+# `edge-nal-embassy` happens to enable `proto-ipv6` by default.
+ipv6 = ["embassy-net/proto-ipv6"]
 
 # Enables the SFTP OTA Subsystem. Use packer to pack a binary and PUT it over sftp
 sftp-ota = []

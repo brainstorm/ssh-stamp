@@ -59,8 +59,15 @@ pub struct SSHStampConfig {
     /// - `[0xFF; 6]`: Generate random MAC on each boot
     /// - Otherwise: Use the stored MAC (defaults to hardware eFuse MAC)
     pub mac: [u8; 6],
-    /// `None` for DHCP
+    /// `None` for DHCP. Persisted, but nothing applies it to the network
+    /// stack yet — AP mode is hardwired to [`settings::DEFAULT_IP`] and
+    /// station mode to a DHCP lease.
+    ///
+    /// [`settings::DEFAULT_IP`]: crate::settings::DEFAULT_IP
     pub ipv4_static: Option<StaticConfigV4>,
+    /// Persisted, but likewise never applied, and there is no
+    /// `SSH_STAMP_IPV6_*` env var to populate it. See `docs/IPV6.md` for what
+    /// the `ipv6` feature covers and what finishing it would take.
     #[cfg(feature = "ipv6")]
     pub ipv6_static: Option<StaticConfigV6>,
     /// UART
@@ -315,8 +322,11 @@ where
         let ad: [u8; 16] = SSHDecode::dec(s)?;
         let ad = Ipv6Addr::from(ad);
         let prefix = SSHDecode::dec(s)?;
-        if prefix > 32 {
-            // embassy panics, so test it here
+        if prefix > 128 {
+            // embassy panics, so test it here. IPv6 prefixes run 0..=128;
+            // this used to check the IPv4 bound of 32, rejecting every real
+            // address (a /64 included) and tripping the recreate path in
+            // `store::load_or_create`.
             return Err(WireError::PacketWrong);
         }
         let gw: Option<[u8; 16]> = dec_option(s)?;
@@ -435,5 +445,138 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
             uart_params,
             first_login,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sunset::sshwire;
+
+    /// Drives the private `enc_ipv6_config`/`dec_ipv6_config` pair on its own,
+    /// so a test does not have to hand-roll the rest of the config stream.
+    #[cfg(feature = "ipv6")]
+    struct Ipv6Slot(Option<StaticConfigV6>);
+
+    #[cfg(feature = "ipv6")]
+    impl SSHEncode for Ipv6Slot {
+        fn enc(&self, s: &mut dyn SSHSink) -> WireResult<()> {
+            enc_ipv6_config(self.0.as_ref(), s)
+        }
+    }
+
+    #[cfg(feature = "ipv6")]
+    impl<'de> SSHDecode<'de> for Ipv6Slot {
+        fn dec<S>(s: &mut S) -> WireResult<Self>
+        where
+            S: SSHSource<'de>,
+        {
+            dec_ipv6_config(s).map(Ipv6Slot)
+        }
+    }
+
+    /// `bool` tag + 16 address bytes + prefix + `bool` tag for an absent gateway.
+    #[cfg(feature = "ipv6")]
+    const IPV6_SLOT_NO_GW_LEN: usize = 1 + 16 + 1 + 1;
+    #[cfg(feature = "ipv6")]
+    const IPV6_PREFIX_OFFSET: usize = 17;
+
+    #[cfg(feature = "ipv6")]
+    fn ipv6_slot(prefix: u8) -> StaticConfigV6 {
+        StaticConfigV6 {
+            address: Ipv6Cidr::new(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1), prefix),
+            gateway: None,
+            dns_servers: Default::default(),
+        }
+    }
+
+    #[cfg(feature = "ipv6")]
+    fn round_trip(cfg: &StaticConfigV6) -> Option<StaticConfigV6> {
+        let mut buf = [0u8; 64];
+        let n = sshwire::write_ssh(&mut buf, &Ipv6Slot(Some(cfg.clone()))).expect("encode");
+        assert_eq!(n, IPV6_SLOT_NO_GW_LEN, "unexpected ipv6 slot wire layout");
+        let (slot, _): (Ipv6Slot, usize) = sshwire::read_ssh(&buf[..n], None).expect("decode");
+        slot.0
+    }
+
+    /// A /64 is the ordinary case. The decoder used to check the IPv4 bound of
+    /// 32 here, so every realistic stored IPv6 config failed to decode — and a
+    /// decode failure sends `store::load_or_create` down its recreate path.
+    #[test]
+    #[cfg(feature = "ipv6")]
+    fn ipv6_prefix_64_round_trips() {
+        let cfg = ipv6_slot(64);
+        assert_eq!(round_trip(&cfg), Some(cfg));
+    }
+
+    /// 128 is the largest legal prefix and must be accepted, not rejected as
+    /// an off-by-one.
+    #[test]
+    #[cfg(feature = "ipv6")]
+    fn ipv6_prefix_128_round_trips() {
+        let cfg = ipv6_slot(128);
+        assert_eq!(round_trip(&cfg), Some(cfg));
+    }
+
+    #[test]
+    #[cfg(feature = "ipv6")]
+    fn ipv6_gateway_round_trips() {
+        let cfg = StaticConfigV6 {
+            address: Ipv6Cidr::new(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1), 64),
+            gateway: Some(Ipv6Addr::new(0xfe80, 0, 0, 0, 0, 0, 0, 1)),
+            dns_servers: Default::default(),
+        };
+        let mut buf = [0u8; 64];
+        let n = sshwire::write_ssh(&mut buf, &Ipv6Slot(Some(cfg.clone()))).expect("encode");
+        let (slot, _): (Ipv6Slot, usize) = sshwire::read_ssh(&buf[..n], None).expect("decode");
+        assert_eq!(slot.0, Some(cfg));
+    }
+
+    /// Above 128 `Ipv6Cidr::new` asserts, so the decoder has to reject the
+    /// bytes rather than hand them to smoltcp and panic the device on boot.
+    #[test]
+    #[cfg(feature = "ipv6")]
+    fn ipv6_prefix_over_128_rejected() {
+        let mut buf = [0u8; 64];
+        let n = sshwire::write_ssh(&mut buf, &Ipv6Slot(Some(ipv6_slot(64)))).expect("encode");
+        assert_eq!(n, IPV6_SLOT_NO_GW_LEN, "unexpected ipv6 slot wire layout");
+        buf[IPV6_PREFIX_OFFSET] = 129;
+        let decoded: Result<(Ipv6Slot, usize), _> = sshwire::read_ssh(&buf[..n], None);
+        assert!(decoded.is_err(), "prefix 129 must not decode");
+    }
+
+    /// The IPv4 guard is the one the IPv6 guard was mistakenly copied from;
+    /// pin its bound so a future edit cannot widen it to 128 as well.
+    #[test]
+    fn ipv4_prefix_over_32_rejected() {
+        struct Ipv4Slot(Option<StaticConfigV4>);
+
+        impl SSHEncode for Ipv4Slot {
+            fn enc(&self, s: &mut dyn SSHSink) -> WireResult<()> {
+                enc_ipv4_config(self.0.as_ref(), s)
+            }
+        }
+
+        impl<'de> SSHDecode<'de> for Ipv4Slot {
+            fn dec<S>(s: &mut S) -> WireResult<Self>
+            where
+                S: SSHSource<'de>,
+            {
+                dec_ipv4_config(s).map(Ipv4Slot)
+            }
+        }
+
+        let cfg = StaticConfigV4 {
+            address: Ipv4Cidr::new(Ipv4Addr::new(192, 168, 4, 1), 24),
+            gateway: None,
+            dns_servers: Default::default(),
+        };
+        let mut buf = [0u8; 64];
+        let n = sshwire::write_ssh(&mut buf, &Ipv4Slot(Some(cfg))).expect("encode");
+        // bool tag + 4 address bytes + prefix + bool tag for an absent gateway.
+        assert_eq!(n, 1 + 4 + 1 + 1, "unexpected ipv4 slot wire layout");
+        buf[5] = 33;
+        let decoded: Result<(Ipv4Slot, usize), _> = sshwire::read_ssh(&buf[..n], None);
+        assert!(decoded.is_err(), "prefix 33 must not decode");
     }
 }

@@ -399,10 +399,16 @@ fn open(page: &Path) -> Result<(), String> {
 }
 
 fn test(root: &Path, registry: &Registry) -> Result<(), String> {
-    // Host-side crates only; the firmware crates are no_std and cannot run
-    // tests on the host.
+    // Both crates are `no_std` on device and `cfg_attr(not(test), no_std)` on
+    // the host, so their unit tests run here without a board attached.
     let mut cmd = cargo(registry.host_toolchain());
     cmd.args(["test", "-p", "ota"]);
+    exec(root, cmd)?;
+
+    // `--features ipv6` because the config wire tests for the IPv6 slot are
+    // gated on it, and nothing else in CI builds that feature.
+    let mut cmd = cargo(registry.host_toolchain());
+    cmd.args(["test", "-p", "ssh-stamp", "--features", "ipv6"]);
     exec(root, cmd)
 }
 
