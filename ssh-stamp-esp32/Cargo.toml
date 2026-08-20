@@ -52,9 +52,6 @@ static_cell = { workspace = true }
 portable-atomic = { version = "1" }
 cfg-if = "1"
 
-[target.'cfg(target_arch = "riscv32")'.dependencies]
-riscv = { version = "0.16", optional = true }
-
 [features]
 default = ["board-esp32c6-devkitc", "mlkem"]
 sftp-ota = ["ssh-stamp/sftp-ota"]
@@ -69,7 +66,6 @@ ipv6 = ["ssh-stamp/ipv6"]
 
 mlkem = ["ssh-stamp/mlkem"]
 mem-probe = ["ssh-stamp/mem-probe", "esp-alloc/internal-heap-stats"]
-crypto-bench = ["ssh-stamp/crypto-bench", "dep:riscv"]
 bench-loopback = []
 
 # Board features — select a specific PCB. Each enables the corresponding
@@ -77,7 +73,6 @@ bench-loopback = []
 board-esp32c5-devkitc = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32c5-devkitc", "esp32c5"]
 board-esp32c61-devkitc = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32c61-devkitc", "esp32c61"]
 board-esp32c6-devkitc = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32c6-devkitc", "esp32c6"]
-board-esp32c6-generic = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32c6-generic", "esp32c6"]
 board-esp32-s2-saola = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32-s2-saola", "esp32s2"]
 board-waveshare-esp32-s3-touch-lcd-43 = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-waveshare-esp32-s3-touch-lcd-43", "esp32s3"]
 

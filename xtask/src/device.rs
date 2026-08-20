@@ -23,9 +23,7 @@ pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// The timeout for the device booting.
 pub const BOOT_TIMEOUT: Duration = Duration::from_mins(2);
 
-/// What the session gets on top of [`CONNECT_TIMEOUT`] to become usable: key
-/// exchange, authentication, opening the session channel and the first echo off
-/// the bridge. A post-quantum key exchange on the device is most of it.
+/// What the session gets to set everything up.
 pub const SETUP_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// This will flash the firmware onto the board via espflash.
@@ -65,12 +63,6 @@ impl SessionReport {
     const OUT_READER_BUF: usize = 4096;
 
     /// Open an SSH session and measures the round trip times over it.
-    ///
-    /// What counts as established is the bridge's own echo — see
-    /// [`RoundTrips::measure_round_trips`] — rather than anything ssh says about
-    /// itself. Its
-    /// `-v` trace is collected for one purpose: explaining a session that never
-    /// came up.
     pub fn ssh_session(
         host: &str,
         user: &str,
@@ -182,11 +174,6 @@ impl RoundTrips {
     const RTT_MARKER_TIMEOUT: Duration = CONNECT_TIMEOUT.saturating_add(SETUP_TIMEOUT);
 
     /// Writes the round trip markers and times each one until it returns.
-    ///
-    /// Marker 0 doubles as the establishment probe, so it is what
-    /// [`RoundTrips::established`] means: nothing can echo it until ssh has
-    /// connected, exchanged keys, authenticated and opened the session channel
-    /// and the firmware's bridge has copied it back out.
     pub fn measure_round_trips(
         mut stdin: ChildStdin,
         rx: &mpsc::Receiver<Vec<u8>>,
@@ -518,9 +505,8 @@ mod tests {
     }
 
     #[test]
-    fn a_silent_session_loses_the_marker_without_hanging() {
-        // Nothing sent and the sender still alive: the deadline is the only
-        // thing that ends the wait.
+    fn silent_session_loses_marker() {
+        // Nothing sent and the sender still active
         let (_tx, rx) = mpsc::channel();
         let mut pending = Vec::new();
         let deadline = Instant::now() + Duration::from_millis(50);

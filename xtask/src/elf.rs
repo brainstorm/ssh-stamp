@@ -233,6 +233,47 @@ impl Footprint {
     }
 }
 
+/// The stack addresses the stack probe paints.
+///
+/// See: <https://github.com/esp-rs/esp-hal/blob/esp-hal-v1.1.1/esp-hal/ld/sections/stack.x>
+#[derive(Debug, Clone, Copy)]
+pub struct StackRegion {
+    /// The start of the reservation, `_stack_start`.
+    pub start: u64,
+    /// The bottom of the reservation, `_stack_end`.
+    pub end: u64,
+    /// The lowest address the probe can reach, one word above the
+    /// `__stack_chk_guard`.
+    pub floor: u64,
+}
+
+impl StackRegion {
+    /// Reads the stack out of the `elf` symbols.
+    pub fn new(elf: &Path) -> Result<StackRegion> {
+        let data = read(elf)?;
+        let file = File::parse(&*data).with_context(|| format!("parsing {}", elf.display()))?;
+
+        let (end, top) = Footprint::stack_span(&file, elf)?;
+        let guard = file
+            .symbols()
+            .find(|symbol| symbol.name() == Ok("__stack_chk_guard"))
+            .map(|symbol| symbol.address())
+            .with_context(|| format!("{}: no `__stack_chk_guard` symbol", elf.display()))?;
+        let floor = guard + 4;
+
+        if guard < end || floor >= top {
+            bail!("`__stack_chk_guard` ({guard:#010x}) is outside the stack reservation");
+        }
+
+        Ok(StackRegion { start: top, end, floor })
+    }
+
+    /// The painted and scanned span in whole words.
+    pub fn words(&self) -> usize {
+        usize::try_from((self.start - self.floor) / 4).expect("stack reservation fits in memory")
+    }
+}
+
 fn read(elf: &Path) -> Result<Vec<u8>> {
     std::fs::read(elf).with_context(|| format!("reading {}", elf.display()))
 }

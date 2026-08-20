@@ -54,8 +54,6 @@ use ssh_stamp_hal::{HalError, WifiError};
 use ssh_stamp_hal::{NetworkProviderHal, WifiHal};
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
-#[cfg(feature = "crypto-bench")]
-use {esp_hal::clock::cpu_clock, ssh_stamp::crypto_bench};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "esp32")] {
@@ -79,6 +77,7 @@ async fn main(spawner: Spawner) -> ! {
     esp_bootloader_esp_idf::esp_app_desc!();
     logger::init_logger_from_env();
     bench::log_heap("boot");
+
     debug!("HSM: initialising peripherals");
 
     // Note that benches do depend on a stable clock speed across comparisons. The default
@@ -171,13 +170,6 @@ async fn main(spawner: Spawner) -> ! {
     }
 
     mem_probe::checkpoint(Checkpoint::Boot);
-    // Run the crypto benches before the network stack, if enabled.
-    #[cfg(feature = "crypto-bench")]
-    {
-        bench_cycles::init();
-        crypto_bench::run(20, bench_cycles::read, cpu_clock().as_mhz());
-    }
-
     let uart_buf = UART_BUF.init_with(BufferedUart::new);
     let interrupt_executor =
         INT_EXECUTOR.init_with(|| InterruptExecutor::new(sw_int.software_interrupt1));
@@ -217,6 +209,7 @@ async fn main(spawner: Spawner) -> ! {
 
     mem_probe::checkpoint(Checkpoint::PeripheralsReady);
     bench::log_heap("peripherals");
+
     debug!("Initialising radio");
 
     let ap_config = app::prepare_ap_config(config, &platform)
@@ -244,60 +237,13 @@ async fn main(spawner: Spawner) -> ! {
 
     mem_probe::checkpoint(Checkpoint::WifiUp);
     bench::log_heap("wifi_up");
+
     if let Err(e) = app::run_app(stack.unwrap(), uart_buf, config, &platform).await {
         error!("run_app exited with error: {e}");
     }
 
     warn!("End of main, resetting");
     esp_hal::system::software_reset();
-}
-
-/// CPU cycle counter crypto benchmarks. The counter is target specific so they are
-/// defined in the binary.
-#[cfg(feature = "crypto-bench")]
-mod bench_cycles {
-    // Espressif's custom performance CSRs. These do not exist in Rust, so we have to
-    // define them here. They correspond to the equivalent in:
-    // https://github.com/espressif/esp-idf/blob/95e1386d5567123d092c8151e3c942e2ec9de6a1/components/riscv/include/riscv/rv_utils.h#L46-L48
-
-    /// `pcer` event select.
-    #[cfg(target_arch = "riscv32")]
-    mod pcer {
-        riscv::write_csr_as_usize_rv32!(safe 0x7E0);
-    }
-    /// `pcmr` mode enable.
-    #[cfg(target_arch = "riscv32")]
-    mod pcmr {
-        riscv::write_csr_as_usize_rv32!(safe 0x7E1);
-    }
-    /// `pccr` the counter itself.
-    #[cfg(target_arch = "riscv32")]
-    mod pccr {
-        riscv::read_csr_as_usize_rv32!(0x7E2);
-    }
-
-    /// Enables the cycle counter.
-    #[cfg(target_arch = "riscv32")]
-    pub fn init() {
-        pcer::write(1);
-        pcmr::write(1);
-    }
-
-    /// Reads the current CPU cycle count.
-    #[cfg(target_arch = "riscv32")]
-    pub fn read() -> u32 {
-        u32::try_from(pccr::read()).unwrap_or(u32::MAX)
-    }
-
-    /// CCOUNT is always available so nothing to do.
-    #[cfg(target_arch = "xtensa")]
-    pub fn init() {}
-
-    /// Reads the CCOUNT cycle register.
-    #[cfg(target_arch = "xtensa")]
-    pub fn read() -> u32 {
-        esp_hal::xtensa_lx::timer::get_cycle_count()
-    }
 }
 
 #[panic_handler]

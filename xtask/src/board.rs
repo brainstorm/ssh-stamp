@@ -67,11 +67,6 @@ const ESP32C61_RAM: &[(u64, u64)] = &[(0x4080_0000, 0x4084_EA70)];
 /// The RAM regions that the esp32s2 declares. These values should be updated if esp-hal ever
 /// updates the regions.
 ///
-/// The data and instruction windows deliberately start at the raw SRAM base rather than at the
-/// linker `ORIGIN`s, which move with the `ESP_HAL_CONFIG_INSTRUCTION_CACHE_SIZE` and
-/// `ESP_HAL_CONFIG_DATA_CACHE_SIZE` settings. These are outer bounds that hold for every legal
-/// cache configuration, so do not tighten them to the origins of one configuration.
-///
 /// Sourced from: <https://github.com/esp-rs/esp-hal/blob/esp-hal-v1.1.1/esp-hal/ld/esp32s2/memory.x>
 const ESP32S2_RAM: &[(u64, u64)] = &[
     (0x3FF9_E000, 0x3FFA_0000),
@@ -83,12 +78,6 @@ const ESP32S2_RAM: &[(u64, u64)] = &[
 
 /// The RAM regions that the esp32s3 declares. These values should be updated if esp-hal ever
 /// updates the regions.
-///
-/// The instruction window deliberately starts at the raw SRAM base rather than at the linker
-/// `ORIGIN`, which moves with the `ESP_HAL_CONFIG_INSTRUCTION_CACHE_SIZE` setting. This is an
-/// outer bound that holds for every legal cache configuration, so do not tighten it to the
-/// origin of one configuration. The data cache is reserved above the end of `dram2_seg` for
-/// every legal size, so the data window needs no allowance.
 ///
 /// Sourced from: <https://github.com/esp-rs/esp-hal/blob/esp-hal-v1.1.1/esp-hal/ld/esp32s3/memory.x>
 const ESP32S3_RAM: &[(u64, u64)] = &[
@@ -362,21 +351,14 @@ mod tests {
     }
 
     #[test]
-    fn ram_windows_are_sorted_and_disjoint() {
-        // The window lookup in `elf` takes the first match and its straddle check assumes
-        // the next window never starts before this one ends, so the table must stay sorted
-        // and non-overlapping for classification to be order-independent.
+    fn ram_windows_are_sorted() {
         for board in BOARDS {
-            for &(lo, hi) in board.ram {
-                assert!(lo < hi, "{}: empty window {lo:#010x}..{hi:#010x}", board.name);
+            for &(low, high) in board.ram {
+                assert!(low < high);
             }
             for pair in board.ram.windows(2) {
                 assert!(
                     pair[0].1 <= pair[1].0,
-                    "{}: windows {:#010x?} and {:#010x?} overlap or are unsorted",
-                    board.name,
-                    pair[0],
-                    pair[1]
                 );
             }
         }

@@ -10,12 +10,11 @@
 use crate::board::{self, Board};
 use crate::cmd::{self, BENCH_FEATURES};
 use crate::device::{self, Serial};
+use crate::elf::StackRegion;
 use crate::host;
 use crate::record::{self, Record};
-use crate::results::{
-    BenchResults, BenchRun, BootCheckpoint, HeapSnapshot, Results, RunOutcome,
-    StackSnapshot,
-};
+use crate::results::{BenchResults, BenchRun, BootCheckpoint, HeapSnapshot, Results, RunOutcome};
+use crate::stack_probe::StackProbe;
 use crate::stats::{Stats, fmt_bytes, fmt_us};
 use anyhow::{Result, bail};
 use clap::Args as ClapArgs;
@@ -161,7 +160,23 @@ fn measure(args: &Args, features: &str, port: &str, heap: Option<u64>) -> Result
     board.build(&xshell::Shell::new()?, profile, features, &env)?;
     device::flash(board, profile, port)?;
 
+    // Paint the stack over the debug link.
+    let mut probe = match StackProbe::attach(board.soc, StackRegion::new(&board.elf_path(profile))?)
+    {
+        Ok(mut probe) => {
+            probe.paint()?;
+            Some(probe)
+        }
+        Err(e) => {
+            eprintln!("=== no debug link, skipping the stack measurement: {e:#} ===");
+            None
+        }
+    };
+
     let serial = Serial::open(port, args.verbose)?;
+    if let Some(probe) = probe.as_mut() {
+        probe.run()?;
+    }
     eprintln!("=== waiting for device to be ready ===");
     if !serial.wait_for_ready(device::BOOT_TIMEOUT) {
         serial.report_health();
@@ -235,7 +250,10 @@ fn measure(args: &Args, features: &str, port: &str, heap: Option<u64>) -> Result
         });
     }
 
-    let run = reconstruct(args.kex.clone(), rtt_us, &lines);
+    let mut run = reconstruct(args.kex.clone(), rtt_us, &lines);
+    if let Some(probe) = probe.as_mut() {
+        run.stack.push(probe.max_usage()?);
+    }
     print_summary(&run);
 
     Ok(RunOutcome::Ok {
@@ -250,7 +268,6 @@ fn reconstruct(kex_algorithm: String, rtt_us: Vec<u64>, lines: &[String]) -> Ben
 
     let mut boot: Vec<BootCheckpoint> = Vec::new();
     let mut heap: Vec<HeapSnapshot> = Vec::new();
-    let mut stack: Vec<StackSnapshot> = Vec::new();
     let mut kex_us: Vec<u64> = Vec::new();
 
     for r in &records {
@@ -265,24 +282,6 @@ fn reconstruct(kex_algorithm: String, rtt_us: Vec<u64>, lines: &[String]) -> Ben
                 }
             }
             Record::Kex { elapsed_us } => kex_us.push(*elapsed_us),
-            Record::Stack {
-                label,
-                max_bytes,
-                reserved_bytes,
-            } => {
-                // The measurement is monotonic, so the newest line is the latest.
-                match stack.iter_mut().find(|s| &s.label == label) {
-                    Some(s) => {
-                        s.max_bytes = *max_bytes;
-                        s.reserved_bytes = *reserved_bytes;
-                    }
-                    None => stack.push(StackSnapshot {
-                        label: label.clone(),
-                        max_bytes: *max_bytes,
-                        reserved_bytes: *reserved_bytes,
-                    }),
-                }
-            }
             Record::Heap {
                 label,
                 used_bytes,
@@ -313,7 +312,7 @@ fn reconstruct(kex_algorithm: String, rtt_us: Vec<u64>, lines: &[String]) -> Ben
         kex_algorithm,
         boot,
         heap,
-        stack,
+        stack: Vec::new(),
         kex_us,
         rtt_us,
     }

@@ -24,12 +24,6 @@ pub enum Record {
         total_bytes: u64,
         max_bytes: u64,
     },
-    /// The maximum stack usage up to a labelled point.
-    Stack {
-        label: String,
-        max_bytes: u64,
-        reserved_bytes: u64,
-    },
 }
 
 impl Record {
@@ -67,14 +61,6 @@ impl Record {
                 used_bytes: parse_number("used_bytes").unwrap_or(0),
                 total_bytes: parse_number("total_bytes").unwrap_or(0),
                 max_bytes: parse_number("max_bytes").unwrap_or(0),
-            });
-        }
-
-        if let Some(label) = fields.get("stack") {
-            return Some(Record::Stack {
-                label: label.to_string(),
-                max_bytes: parse_number("max_bytes")?,
-                reserved_bytes: parse_number("reserved_bytes")?,
             });
         }
 
@@ -129,15 +115,6 @@ mod tests {
                 used_bytes: 53_900,
                 total_bytes: 73_728,
                 max_bytes: 61_688,
-            })
-        );
-
-        assert_eq!(
-            Record::parse_line("@BENCH stack=session max_bytes=38200 reserved_bytes=247408"),
-            Some(Record::Stack {
-                label: "session".into(),
-                max_bytes: 38_200,
-                reserved_bytes: 247_408,
             })
         );
     }

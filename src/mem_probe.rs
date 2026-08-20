@@ -20,7 +20,7 @@ macro_rules! bench_emit {
     };
 }
 
-/// One point in the ssh_stamp flow.
+/// One point in the `ssh_stamp` flow.
 #[derive(Clone, Copy)]
 pub enum Checkpoint {
     /// Boot reached.

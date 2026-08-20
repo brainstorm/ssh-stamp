@@ -105,7 +105,6 @@ pub mod app;
 #[cfg(feature = "can")]
 pub mod can;
 pub mod config;
-pub mod crypto_bench;
 pub mod errors;
 pub mod handle;
 pub mod mem_probe;

@@ -67,7 +67,7 @@ pub async fn prepare_ap_config<P: PlatformServices>(
             .await
             .map_err(|_| sunset::error::BadUsage.build())?;
     }
-    info!("WIFI PSK: {}", guard.wifi_ap_pw);
+    log_ap_credentials(&guard);
 
     let mac = guard
         .resolve_mac()
@@ -99,6 +99,12 @@ pub async fn prepare_ap_config<P: PlatformServices>(
     })
 }
 
+/// Logs the access point credentials.
+fn log_ap_credentials(config: &SSHStampConfig) {
+    info!("WIFI SSID: {}", config.wifi_ap_ssid);
+    info!("WIFI PSK: {}", config.wifi_ap_pw);
+}
+
 /// Runs the SSH server loop forever: accept TCP, run SSH, bridge to UART,
 /// then go round again. Does not return under normal operation.
 ///
@@ -120,6 +126,7 @@ where
 
     checkpoint(Checkpoint::TcpListening);
     replay_checkpoints();
+    log_ap_credentials(&*config.lock().await);
     loop {
         debug!("HSM: accepting TCP on port 22");
         let mut tcp_socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);

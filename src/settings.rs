@@ -30,13 +30,13 @@ pub(crate) const WIFI_PASSWORD_CHARS: &[u8; 62] =
 pub const STATION_MODE_MAX_RETRY_SECONDS: u8 = 10;
 
 /// UART buffer size in bytes.
-pub const UART_BUFFER_SIZE: usize = esp_config_int!(usize, "SSH_STAMP_CONFIG_UART_BUF");
+pub const UART_BUFFER_SIZE: usize = 4096;
 
 /// Receive buffer for the SSH TCP socket.
-pub const TCP_RX_BUF: usize = esp_config_int!(usize, "SSH_STAMP_CONFIG_TCP_RX_BUF");
+pub const TCP_RX_BUF: usize = 1536;
 
 /// Transmit buffer for the SSH TCP socket.
-pub const TCP_TX_BUF: usize = esp_config_int!(usize, "SSH_STAMP_CONFIG_TCP_TX_BUF");
+pub const TCP_TX_BUF: usize = 1536;
 
 /// Global allocator heap size in bytes.
 pub const HEAP_SIZE: usize = esp_config_int!(usize, "SSH_STAMP_CONFIG_HEAP_SIZE");
