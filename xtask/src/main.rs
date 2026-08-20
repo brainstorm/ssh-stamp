@@ -399,10 +399,12 @@ fn open(page: &Path) -> Result<(), String> {
 }
 
 fn test(root: &Path, registry: &Registry) -> Result<(), String> {
-    // Host-side crates only; the firmware crates are no_std and cannot run
-    // tests on the host.
+    // Crates whose unit tests run on the host. Both are `no_std` on device and
+    // drop to std under `cfg(test)` so the standard test harness can link.
+    // The port crates (ssh-stamp-esp32 &co) cannot be tested this way: they
+    // pull in esp-hal and only build for the MCU triples.
     let mut cmd = cargo(registry.host_toolchain());
-    cmd.args(["test", "-p", "ota"]);
+    cmd.args(["test", "-p", "ota", "-p", "ssh-stamp"]);
     exec(root, cmd)
 }
 

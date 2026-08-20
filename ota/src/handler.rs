@@ -302,7 +302,10 @@ impl<W: OtaActions> UpdateProcessor<W> {
                 "UpdateProcessor: Checksum mismatch after download! Expected: {original_hash:x?}`"
             );
             self.state = UpdateProcessorState::Error(OtaError::VerificationFailed);
-            return Ok(());
+            // Must return Err: the caller's `?` would otherwise fall through and
+            // overwrite this Error state with Finished{}, flashing and marking
+            // bootable an image whose bytes never matched the supplied checksum.
+            return Err(OtaError::VerificationFailed);
         }
         Ok(())
     }

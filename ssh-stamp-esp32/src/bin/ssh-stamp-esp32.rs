@@ -168,7 +168,17 @@ async fn main(spawner: Spawner) -> ! {
         let (flash_storage, buf) = fb.split_ref_mut();
         store::load_or_create(flash_storage, buf, mac_address(), uart_pins)
     }
-    .expect("Could not load or create SSHStampConfig");
+    // Deliberately fatal. `load_or_create` only errors when a config *is*
+    // present but fails its version or integrity check; recreating one there
+    // would regenerate the host key (breaking client host-key pinning) and
+    // reopen the unauthenticated first-login window. Refusing to boot is the
+    // safe side of that trade. Recover by erasing the config sector, e.g.
+    // `espflash erase-region 0x9000 0x1000`, which makes the next boot mint a
+    // fresh config.
+    .expect(
+        "Stored config is present but invalid; refusing to overwrite it. \
+         Erase the config sector (espflash erase-region 0x9000 0x1000) to reprovision.",
+    );
 
     // Line settings for the bridge; the UART task is configured with them
     // below, so `SSH_STAMP_UART_*` changes take effect on the next boot.
