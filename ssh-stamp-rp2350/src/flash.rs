@@ -5,11 +5,16 @@
 //! Config storage on the RP2350's XIP flash.
 //!
 //! [`ssh_stamp::store`] addresses the config at a fixed `CONFIG_OFFSET`
-//! (`0x9000`), which is an ESP partition-table convention. On the RP2350
-//! that offset sits in the middle of our own program text, so
-//! [`ConfigFlash`] translates the store's window onto a dedicated sector at
-//! the very top of flash and refuses everything outside it. Nothing else in
-//! the image can be reached through this view, which is the point.
+//! (`0x9000`). On the RP2350 that offset sits in the middle of our own
+//! program text, so [`ConfigFlash`] translates the store's window onto a
+//! dedicated sector at the very top of flash and refuses everything outside
+//! it. Nothing else in the image can be reached through this view, which is
+//! the point.
+//!
+//! Only that translating view is local. Pairing it with the store's scratch
+//! buffer, and holding the pair in a boot-initialised singleton, is
+//! [`ssh_stamp::store::ConfigStore`] / [`ConfigStoreCell`], shared with the
+//! other ports.
 
 use embassy_rp::Peri;
 use embassy_rp::flash::{Blocking, ERASE_SIZE, Flash};
@@ -18,8 +23,7 @@ use embedded_storage::ReadStorage;
 use embedded_storage::nor_flash::{
     ErrorType, NorFlash, NorFlashError, NorFlashErrorKind, ReadNorFlash,
 };
-use once_cell::sync::OnceCell;
-use ssh_stamp::store::{CONFIG_AREA_SIZE, CONFIG_OFFSET};
+use ssh_stamp::store::{CONFIG_AREA_SIZE, CONFIG_OFFSET, ConfigStore, ConfigStoreCell};
 use sunset_async::SunsetMutex;
 
 /// Declared flash size. The Pico 2 ships 4 MiB; larger parts just leave the
@@ -57,27 +61,9 @@ impl ConfigFlash {
     }
 }
 
-/// The view plus the scratch buffer `ssh_stamp::store` serialises through,
-/// mirroring the ESP port's `FlashBuffer`.
-pub struct FlashBuffer {
-    view: ConfigFlash,
-    buf: [u8; CONFIG_AREA_SIZE],
-}
-
-impl FlashBuffer {
-    #[must_use]
-    pub fn new(flash: RpFlash) -> Self {
-        Self {
-            view: ConfigFlash::new(flash),
-            buf: [0u8; CONFIG_AREA_SIZE],
-        }
-    }
-
-    /// Borrow the flash view and the scratch buffer independently.
-    pub fn split_ref_mut(&mut self) -> (&mut ConfigFlash, &mut [u8]) {
-        (&mut self.view, &mut self.buf)
-    }
-}
+/// This port's config store: the translating view plus the store's scratch
+/// buffer.
+pub type FlashBuffer = ConfigStore<ConfigFlash>;
 
 /// Map a store-relative offset onto the real config sector, rejecting
 /// anything that would escape it.
@@ -167,14 +153,11 @@ impl ReadStorage for ConfigFlash {
     }
 }
 
-static FLASH_STORAGE: OnceCell<SunsetMutex<FlashBuffer>> = OnceCell::new();
+static FLASH_STORAGE: ConfigStoreCell<ConfigFlash> = ConfigStoreCell::new();
 
 /// Initialise config storage. Call once, early in boot.
 pub fn init(flash: Peri<'static, FLASH>) {
-    let fb = FlashBuffer::new(Flash::new_blocking(flash));
-    if FLASH_STORAGE.set(SunsetMutex::new(fb)).is_err() {
-        log::warn!("Flash storage already initialized");
-    }
+    FLASH_STORAGE.init(ConfigFlash::new(Flash::new_blocking(flash)));
 }
 
 /// Access the config storage initialised by [`init`].

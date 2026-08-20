@@ -4,15 +4,17 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use embassy_sync::once_lock::OnceLock;
 use embedded_storage::ReadStorage;
 use embedded_storage::nor_flash::NorFlash;
 
 use pretty_hex::PrettyHex;
 use ssh_key::sha2::Digest;
 
-use log::{debug, error};
+use log::{debug, error, warn};
 
 use sunset::error::Error as SunsetError;
+use sunset_async::SunsetMutex;
 
 use crate::config::{SSHStampConfig, UartPins};
 
@@ -36,6 +38,77 @@ struct FlashConfig<'a> {
 
 impl FlashConfig<'_> {
     const BUF_SIZE: usize = 460; // Must be enough to hold the whole config
+}
+
+/// A platform's flash storage plus the scratch buffer [`load`] and [`save`]
+/// serialise through.
+///
+/// Every port needs exactly this pair and differs only in `S`, its
+/// `embedded-storage` implementation, so the pairing lives here rather than
+/// being retyped once per target.
+pub struct ConfigStore<S> {
+    storage: S,
+    buf: [u8; CONFIG_AREA_SIZE],
+}
+
+impl<S> ConfigStore<S> {
+    #[must_use]
+    pub const fn new(storage: S) -> Self {
+        Self {
+            storage,
+            buf: [0u8; CONFIG_AREA_SIZE],
+        }
+    }
+
+    /// Borrow the storage and the scratch buffer independently, which is how
+    /// [`load_or_create`] and [`save`] want them.
+    pub fn split_ref_mut(&mut self) -> (&mut S, &mut [u8]) {
+        (&mut self.storage, &mut self.buf)
+    }
+}
+
+/// The one config store a port owns, installed during boot.
+///
+/// A port declares this as a `static` over its own storage type and reaches
+/// it from both the boot path and the SSH handlers. `SunsetMutex` because
+/// saving happens from async handler code; set-once because the storage
+/// peripheral is a singleton and re-registering it would hand out two
+/// independent views of the same sector.
+pub struct ConfigStoreCell<S: 'static> {
+    cell: OnceLock<SunsetMutex<ConfigStore<S>>>,
+}
+
+impl<S: 'static> ConfigStoreCell<S> {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            cell: OnceLock::new(),
+        }
+    }
+
+    /// Install the platform's storage. Call once, early in boot; a second
+    /// call is ignored.
+    pub fn init(&self, storage: S) {
+        if self
+            .cell
+            .init(SunsetMutex::new(ConfigStore::new(storage)))
+            .is_err()
+        {
+            warn!("Config store already initialised");
+        }
+    }
+
+    /// The store, or `None` before [`init`](Self::init) has run.
+    #[must_use]
+    pub fn get(&self) -> Option<&SunsetMutex<ConfigStore<S>>> {
+        self.cell.try_get()
+    }
+}
+
+impl<S: 'static> Default for ConfigStoreCell<S> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 fn config_hash(config: &SSHStampConfig) -> Result<[u8; 32], SunsetError> {

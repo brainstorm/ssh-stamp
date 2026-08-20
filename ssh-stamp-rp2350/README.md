@@ -11,10 +11,11 @@ UART out, over **wired Ethernet** via the onboard WIZnet W6300.
 
 [W6300-EVB-Pico2]: https://docs.wiznet.io/Product/Chip/Ethernet/W6300/w6300-evb-pico2
 
-> **Status: builds and links; not yet verified on hardware.** The image
-> layout is checked (see [Verified](#what-is-actually-verified)), but no
-> byte has moved over a real SPI bus. Treat the SPI clock and the W6300
-> bring-up as unproven until someone reports back.
+> **Status: working on hardware.** Verified end to end on a W6300-EVB-Pico2:
+> the W6300 comes up over PIO SPI, the PHY links, DHCP hands out an address
+> and an SSH session bridges to the UART. See
+> [Verified](#what-is-actually-verified) for what that covers and
+> [Not yet](#what-is-not) for what it does not.
 
 ## Prerequisites
 
@@ -95,8 +96,8 @@ The board's headline feature is quad SPI (>80 Mbps). `embassy-net-wiznet`
 [embassy-rs/embassy#4662] (PR #5809), still open. So IO2/IO3 stay
 unconfigured and the bus runs single-bit at 8 MHz. That is a throughput
 ceiling, not a correctness problem: an SSH terminal bridge needs kilobits.
-Raising `W6300_SPI_CLK_HZ` in `net.rs` is the first easy win once a link
-is confirmed.
+Raising `W6300_SPI_CLK_HZ` in `net.rs` is the first easy win if the link
+ever needs more.
 
 [embassy-rs/embassy#4662]: https://github.com/embassy-rs/embassy/issues/4662
 
@@ -119,7 +120,8 @@ outside it, so a store bug cannot scribble on the firmware.
 
 ## First boot
 
-No WiFi AP fallback exists here — DHCP is the only way in.
+There is no WiFi AP to fall back on: the address comes from DHCP, or from
+the static fallback (`192.168.4.1/24`) when nothing answers.
 
 1. `cargo xtask run w6300-evb-pico2`, watch USB CDC for `W6300: IPv4 <addr>`.
 2. `ssh -o SendEnv=SSH_STAMP_PUBKEY root@<addr>` with `SSH_STAMP_PUBKEY`
@@ -131,20 +133,32 @@ of the config, so it is stable across reboots.
 
 ## What is actually verified
 
+On a real W6300-EVB-Pico2:
+
+- The W6300 answers over PIO SPI at 8 MHz (`VERSION=0x11`), the PHY
+  reports link, and DHCP hands out an address.
+- SSH in over that address, with the UART bridged to the session.
+- Entropy comes from the RP2350 TRNG (`CryptoRng`), not the ROSC counter —
+  it generates the SSH host key, and the key survives reboots along with
+  the rest of the config in the top flash sector.
+- The static fallback takes over when no DHCP server answers, so a board
+  cabled straight to a laptop is still reachable.
+
+And at build time:
+
 - Compiles and links clean for `thumbv8m.main-none-eabihf`; clippy clean
   at `-D warnings`.
 - `.start_block` lands at `0x10000114`, inside the first 4 KiB where the
   boot ROM looks for it (`readelf -S`).
 - Image ends around `0x10071000`, far below the config sector.
-- Entropy comes from the RP2350 TRNG (`CryptoRng`), not the ROSC counter —
-  it generates the SSH host key.
 
 ## What is not
 
-- **Nothing has run on hardware.** No SPI transaction, no link, no DHCP.
-- The 8 MHz PIO SPI clock is a guess. If the driver's `VERSIONR` check
-  fails at init you will see `W6300 init failed`: drop the clock, confirm
-  wiring, then climb back up.
+- **8 MHz is where the SPI clock was left, not where it has to stay.** It
+  was conservative for bring-up and has not been pushed since. If a raised
+  clock breaks the driver's `VERSIONR` check you will see
+  `W6300 init failed` at init; back it off.
+- **Quad SPI is unused.** Single-bit only, for the upstream reason above.
 - The W6300 driver disables the MAC address filter (upstream found DHCP
   fails with it on), so the MCU sees all bus traffic and filters in
   software. Expect more interrupt load on a busy LAN than a W5500 would.
@@ -152,3 +166,5 @@ of the config, so it is stable across reboots.
   since the boot ROM selects images from a partition table this port does
   not define. Every `OtaActions` method refuses rather than accepting an
   upload that could never boot. Reflash over USB or SWD.
+- The `embassy-net-wiznet` driver is still vendored (`vendor/`) pending the
+  upstream fixes described there.

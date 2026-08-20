@@ -16,49 +16,25 @@ use esp_bootloader_esp_idf::partitions::PARTITION_TABLE_MAX_LEN;
 use esp_hal::peripherals::FLASH;
 use esp_storage::FlashStorage;
 use log::{debug, error};
-use once_cell::sync::OnceCell;
+use ssh_stamp::store::{ConfigStore, ConfigStoreCell};
 use ssh_stamp_hal::{FlashError, HalError, OtaActions};
 use sunset_async::SunsetMutex;
 
-const FLASH_BUF_SIZE: usize = FlashStorage::SECTOR_SIZE as usize;
+/// This port's config store: `esp-storage`'s flash plus the store's scratch
+/// buffer. The pairing and the singleton below are shared with every other
+/// port; only the storage type is ESP-specific.
+pub type FlashBuffer = ConfigStore<FlashStorage<'static>>;
 
 /// Flash storage singleton
-static FLASH_STORAGE: OnceCell<SunsetMutex<FlashBuffer<'static>>> = OnceCell::new();
-
-/// Flash buffer holding both storage and read/write buffer
-#[derive(Debug)]
-pub struct FlashBuffer<'d> {
-    pub flash: FlashStorage<'d>,
-    pub buf: [u8; FLASH_BUF_SIZE],
-}
-
-impl<'d> FlashBuffer<'d> {
-    #[must_use]
-    pub fn new(flash: FlashStorage<'static>) -> Self {
-        Self {
-            flash,
-            buf: [0u8; FLASH_BUF_SIZE],
-        }
-    }
-
-    /// Get mutable references to both flash and buffer
-    pub fn split_ref_mut(&mut self) -> (&mut FlashStorage<'d>, &mut [u8]) {
-        (&mut self.flash, &mut self.buf)
-    }
-}
+static FLASH_STORAGE: ConfigStoreCell<FlashStorage<'static>> = ConfigStoreCell::new();
 
 /// Initialize flash storage
 pub fn init(flash: FLASH<'static>) {
-    let fl = FlashBuffer::new(FlashStorage::new(flash));
-
-    let Ok(()) = FLASH_STORAGE.set(SunsetMutex::new(fl)) else {
-        log::warn!("Flash storage already initialized");
-        return;
-    };
+    FLASH_STORAGE.init(FlashStorage::new(flash));
 }
 
 /// Get flash storage and buffer
-pub fn get_flash_n_buffer() -> Option<&'static SunsetMutex<FlashBuffer<'static>>> {
+pub fn get_flash_n_buffer() -> Option<&'static SunsetMutex<FlashBuffer>> {
     FLASH_STORAGE.get()
 }
 

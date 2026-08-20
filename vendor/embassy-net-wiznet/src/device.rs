@@ -216,40 +216,47 @@ impl<C: Chip, SPI: SpiDevice> WiznetDevice<C, SPI> {
         // including those two bytes.
         let mut frame_bytes = [0u8; 2];
         self.read_bytes(&mut read_ptr, &mut frame_bytes).await?;
-        let header = u16::from_be_bytes(frame_bytes) as usize;
+        let raw = u16::from_be_bytes(frame_bytes) as usize;
 
-        // The length comes from the chip's RX buffer, so it is only as
-        // trustworthy as the buffer state. Two ways it goes wrong, both of
-        // which used to take the whole firmware down:
+        // The length comes out of the chip's RX buffer, so it is only as
+        // trustworthy as that buffer's state. Two values are impossible
+        // rather than merely surprising: one that does not cover its own
+        // two header bytes, and one claiming more than the chip just said
+        // is queued. Both used to take the whole firmware down —
+        // `raw - 2` underflows on the first (a panic with overflow-checks
+        // on, a huge value without) and `frame[..n]` goes out of range on
+        // the second.
         //
-        //   header < 2         -> `header - 2` underflows. Panics outright
-        //                         with overflow-checks on, silently wraps to
-        //                         a huge value without.
-        //   header - 2 > frame -> `frame[..n]` is out of range, which panics
-        //                         regardless of profile.
-        //
-        // Neither is recoverable by the caller and neither should be fatal:
-        // a device on a network must not be killed by one bad length field.
-        // Drop what is queued and resynchronise instead.
-        let payload = header.checked_sub(2).filter(|n| *n <= frame.len());
-        let Some(payload) = payload else {
-            // Skip the entire reported backlog rather than the one frame:
-            // if the length was wrong then the framing is untrustworthy, so
-            // there is no next header to seek to.
+        // Either way the framing itself is no longer trustworthy, so there
+        // is no next header to seek to: drop the reported backlog and
+        // resynchronise on a boundary we know.
+        if raw < 2 || raw > rx_size {
             let resync = start_ptr.wrapping_add(rx_size as u16);
             self.set_rx_read_ptr(resync).await?;
             self.command(Command::Receive).await?;
             return Ok(0);
-        };
+        }
+        let expected_frame_size = raw - 2;
+
+        // A frame bigger than the caller's buffer is delivered truncated
+        // rather than overrunning it. Unlike the case above this one is
+        // legitimate, so the rest of the frame is skipped and the frames
+        // queued behind it are kept.
+        let read_len = expected_frame_size.min(frame.len());
 
         // Read the ethernet frame
-        self.read_bytes(&mut read_ptr, &mut frame[..payload]).await?;
+        self.read_bytes(&mut read_ptr, &mut frame[..read_len]).await?;
+
+        // Bounded by the `raw > rx_size` check above.
+        if expected_frame_size > read_len {
+            read_ptr = read_ptr.wrapping_add((expected_frame_size - read_len) as u16);
+        }
 
         // Register RX as completed
         self.set_rx_read_ptr(read_ptr).await?;
         self.command(Command::Receive).await?;
 
-        Ok(payload)
+        Ok(read_len)
     }
 
     /// Write an ethernet frame to the device. Returns number of bytes written

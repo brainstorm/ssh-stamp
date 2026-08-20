@@ -48,7 +48,6 @@ embedded-storage = { workspace = true }
 
 heapless = { workspace = true }
 static_cell = { workspace = true }
-once_cell = { workspace = true }
 portable-atomic = { workspace = true }
 log = { workspace = true }
 sunset-async = { workspace = true }

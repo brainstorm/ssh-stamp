@@ -2389,10 +2389,6 @@ name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
-dependencies = [
- "critical-section",
- "portable-atomic",
-]
 
 [[package]]
 name = "once_cell_polyfill"
@@ -3279,7 +3275,6 @@ dependencies = [
  "heapless 0.9.3",
  "hmac 0.12.1",
  "log",
- "once_cell",
  "ota",
  "portable-atomic",
  "sha2 0.10.9",
@@ -3329,7 +3324,6 @@ dependencies = [
  "getrandom",
  "heapless 0.9.3",
  "log",
- "once_cell",
  "portable-atomic",
  "ssh-stamp",
  "ssh-stamp-hal",

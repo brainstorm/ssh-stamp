@@ -22,6 +22,15 @@
 //! unconfigured and we run single-bit at [`W6300_SPI_CLK_HZ`]. This is a
 //! throughput ceiling, not a correctness problem: an SSH terminal bridge
 //! needs kilobits, not megabits.
+//!
+//! # Why the driver is vendored
+//!
+//! `embassy-net-wiznet` is patched in-tree (`vendor/embassy-net-wiznet`)
+//! because the released 0.3.0 can panic or wedge on frames this board
+//! actually sees. Both changes are headed upstream, and the vendored copy
+//! is deliberately kept to a single modified file so it can be deleted the
+//! moment a release carries them. `vendor/README.md` describes the delta
+//! and the retirement checklist.
 
 use embassy_executor::Spawner;
 use embassy_net::{
@@ -52,12 +61,16 @@ const LINK_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Address used when no DHCP server answers.
 ///
-/// 192.168.4.1 to match what the ESP32 ports serve on their access point,
-/// so the address to point a client at is the same story on every board.
+/// 192.168.4.1 to match what the other ports serve on their access point, so
+/// the address to point a client at is the same story on every board.
 ///
-/// A future refinement is to take this from `SSHStampConfig::ipv4_static`,
-/// which already exists and is already persisted; it is a constant here
-/// because `bring_up` has no view of the stored config.
+/// TODO(#125): two follow-ups, both deliberately out of scope here.
+/// Take the address from `SSHStampConfig::ipv4_static`, which already exists
+/// and is already persisted — it is a constant here only because `bring_up`
+/// has no view of the stored config. And offer the same fallback on the
+/// station path of the `WiFi` ports, where a board that associates but never
+/// gets a lease is currently just unreachable; on this board the fallback
+/// has been the difference between debugging a link and guessing at one.
 pub const FALLBACK_IPV4: Ipv4Address = Ipv4Address::new(192, 168, 4, 1);
 /// Prefix length for [`FALLBACK_IPV4`].
 pub const FALLBACK_PREFIX: u8 = 24;

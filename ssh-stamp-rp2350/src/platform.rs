@@ -62,6 +62,13 @@ impl PlatformServices for Rp2350Platform {
 /// boot — and risk bricking a board mid-write — every operation refuses
 /// up front. Reflash over USB (BOOTSEL/UF2) or SWD instead. The `sftp-ota`
 /// feature is deliberately not wired up for this crate.
+///
+/// TODO(#125): wire up OTA over SFTP, as the ESP32 port has. The blocker is
+/// the image layout, not the transport: it needs an RP2350 partition table
+/// with two slots inside the declared 4 MiB (see `flash.rs`, which currently
+/// hands the config the top sector and nothing else), a `finalize` that
+/// rewrites the boot selection, and a rollback path for an image that comes
+/// up dead. Only once that exists can these methods do anything but refuse.
 pub struct Rp2350OtaWriter;
 
 impl OtaActions for Rp2350OtaWriter {

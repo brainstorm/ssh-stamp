@@ -42,7 +42,6 @@ embedded-storage-async = { workspace = true }
 
 ssh-stamp-esp32-boards = { path = "../ssh-stamp-esp32-boards", optional = true }
 
-once_cell = { workspace = true }
 sunset-async = { workspace = true }
 sha2 = { workspace = true }
 hmac = { workspace = true }

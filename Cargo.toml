@@ -102,9 +102,6 @@ smoltcp = { version = "0.12", default-features = false, features = [
 # Utilities
 log = "0.4"
 static_cell = { version = "2.1" }
-once_cell = { version = "1", features = [
-    "critical-section",
-], default-features = false }
 portable-atomic = "1"
 snafu = { version = "0.8", default-features = false }
 pastey = "0.1"
