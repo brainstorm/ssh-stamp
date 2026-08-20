@@ -25,7 +25,10 @@ use edge_nal_embassy::{Udp, UdpBuffers};
 use embassy_executor::Spawner;
 use embassy_net::DhcpConfig;
 use embassy_net::tcp::TcpSocket;
-use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, Stack, StackResources, StaticConfigV4};
+use embassy_net::{
+    ConfigV6, IpListenEndpoint, Ipv4Cidr, Ipv6Cidr, Runner, Stack, StackResources, StaticConfigV4,
+    StaticConfigV6,
+};
 use embassy_time::{Duration, Timer};
 use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
@@ -35,9 +38,11 @@ use esp_radio::wifi::{
 };
 use log::info;
 use log::{debug, error, warn};
+use smoltcp::wire::{EthernetAddress, HardwareAddress};
 use ssh_stamp::settings::STATION_MODE_MAX_RETRY_SECONDS;
 use ssh_stamp_hal::{
-    BandMode, HalError, NetworkProviderHal, WifiApConfigStatic, WifiError, WifiHal,
+    BandMode, HalError, IPV6_MAX_PREFIX_LEN, Ipv6Mode, NetworkProviderHal, WifiApConfigStatic,
+    WifiError, WifiHal,
 };
 use static_cell::StaticCell;
 
@@ -137,13 +142,8 @@ impl NetworkProviderHal for EspWifi {
             loop {
                 debug!("Checking if link is up");
                 if ap_stack.is_link_up() {
-                    if let Some(config) = ap_stack.config_v4() {
-                        info!(
-                            "Connect to the AP `{}` with IP {}",
-                            ap_config.ap_ssid.as_str(),
-                            config.address,
-                        );
-                    }
+                    info!("Connect to the AP `{}`", ap_config.ap_ssid.as_str());
+                    log_addresses(ap_stack, ap_config.mac, ap_config.ipv6);
                     break;
                 }
                 Timer::after(Duration::from_millis(500)).await;
@@ -152,13 +152,14 @@ impl NetworkProviderHal for EspWifi {
             let mut retry_count = 0;
             loop {
                 debug!("Checking if station has received IP address");
+                // `is_config_up()` is `v4 || v6`, but only a *static* v6
+                // counts: `Stack::config_v6` stays `None` under SLAAC. So this
+                // still effectively waits for the DHCPv4 lease unless a static
+                // IPv6 address was configured, which is the behaviour a
+                // v4-only network needs anyway.
                 if ap_stack.is_config_up() {
-                    if let Some(config) = ap_stack.config_v4() {
-                        info!(
-                            "Connect to the AP `{}` with IP {}",
-                            sta_ssid_static, config.address,
-                        );
-                    }
+                    info!("Joined the AP `{sta_ssid_static}`");
+                    log_addresses(ap_stack, ap_config.mac, ap_config.ipv6);
                     break;
                 }
                 retry_count += 1;
@@ -190,11 +191,22 @@ fn build_radio_config(
                 .with_password(password)
                 .with_channel(ap_config.channel),
         );
-        let net = embassy_net::Config::ipv4_static(StaticConfigV4 {
+        let mut net = embassy_net::Config::ipv4_static(StaticConfigV4 {
             address: Ipv4Cidr::new(gateway, 24),
             gateway: Some(gateway),
             dns_servers: Default::default(),
         });
+        // SLAAC needs a router to solicit and there is nothing here sending
+        // router advertisements, so an access point can only offer a static
+        // address (typically a ULA) on top of its always-present link-local.
+        let ipv6 = match ap_config.ipv6 {
+            Ipv6Mode::Slaac => {
+                warn!("IPv6 SLAAC has no router to solicit in Access Point mode; link-local only");
+                Ipv6Mode::Disabled
+            }
+            other => other,
+        };
+        apply_ipv6(&mut net, ipv6);
         (radio, net, Interface::access_point())
     } else {
         info!("Wifi configuring Station Mode");
@@ -204,8 +216,87 @@ fn build_radio_config(
                 .with_ssid(AllocString::from(ap_config.sta_ssid.as_str()))
                 .with_password(password),
         );
-        let net = embassy_net::Config::dhcpv4(DhcpConfig::default());
+        let mut net = embassy_net::Config::dhcpv4(DhcpConfig::default());
+        apply_ipv6(&mut net, ap_config.ipv6);
         (radio, net, Interface::station())
+    }
+}
+
+/// Puts the stored [`Ipv6Mode`] onto an `embassy-net` config.
+///
+/// `Config::ipv4_static` and `Config::dhcpv4` both hardcode
+/// `ipv6: ConfigV6::None`, so the field has to be overwritten afterwards.
+/// `Config` is `#[non_exhaustive]` and cannot be built with a struct literal
+/// from outside its crate, but its fields are public, which is what makes this
+/// possible at all.
+fn apply_ipv6(net: &mut embassy_net::Config, mode: Ipv6Mode) {
+    net.ipv6 = match mode {
+        Ipv6Mode::Disabled => ConfigV6::None,
+        Ipv6Mode::Slaac => ConfigV6::Slaac,
+        Ipv6Mode::Static {
+            address,
+            prefix_len,
+            gateway,
+        } => {
+            // `Ipv6Mode::new_static` already validated this, but an enum
+            // variant cannot have private fields, so a hand-built value can
+            // still reach here — and `Ipv6Cidr::new` asserts rather than
+            // erroring. Refuse the config instead of panicking the device.
+            if prefix_len > IPV6_MAX_PREFIX_LEN {
+                warn!("IPv6 prefix /{prefix_len} is out of range, leaving IPv6 unconfigured");
+                ConfigV6::None
+            } else {
+                ConfigV6::Static(StaticConfigV6 {
+                    address: Ipv6Cidr::new(address, prefix_len),
+                    gateway,
+                    dns_servers: Default::default(),
+                })
+            }
+        }
+    };
+}
+
+/// The `fe80::` address `embassy-net` derives from the MAC and installs on
+/// every config apply.
+///
+/// Worth deriving a second time here because the stack will not tell us:
+/// `Stack::config_v6` reports the *static* config only, so it is `None` under
+/// SLAAC, and there is no public accessor for the interface's actual address
+/// list. Without this the operator has no IPv6 address to connect to.
+///
+/// Uses smoltcp's own helper against the same prefix and hardware address
+/// `embassy-net` passes, so the two cannot drift apart.
+fn link_local_address(mac: [u8; 6]) -> Option<Ipv6Cidr> {
+    let link_prefix = Ipv6Cidr::new(Ipv6Cidr::LINK_LOCAL_PREFIX.address(), 64);
+    Ipv6Cidr::from_link_prefix(
+        &link_prefix,
+        HardwareAddress::Ethernet(EthernetAddress(mac)),
+    )
+}
+
+/// Reports every address a client could reach the device on.
+///
+/// A SLAAC-derived global address cannot be read back from the stack, but it
+/// shares its lower 64 bits with the link-local one, so printing the link-local
+/// is enough to predict it once the router's prefix is known.
+fn log_addresses(stack: Stack<'static>, mac: [u8; 6], ipv6: Ipv6Mode) {
+    match stack.config_v4() {
+        Some(config) => info!("IPv4 address: {}", config.address),
+        None => info!("IPv4: not configured"),
+    }
+
+    if let Some(config) = stack.config_v6() {
+        info!("IPv6 address: {} (static)", config.address);
+    }
+
+    if let Some(link_local) = link_local_address(mac) {
+        let addr = link_local.address();
+        info!("IPv6 link-local: {addr} (ssh -6 root@{addr}%<your-interface>)");
+        if matches!(ipv6, Ipv6Mode::Slaac) {
+            info!(
+                "IPv6 SLAAC: soliciting a router; the global address will end in the same 64 bits as the link-local above"
+            );
+        }
     }
 }
 

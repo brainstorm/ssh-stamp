@@ -23,7 +23,7 @@ The SSH connection can be established via WiFi, enabling untethered (and secure)
 
 Refer to [building](./docs/BUILDING.md) if you are not using our binary releases and [using](./docs/USING.md) documentation.
 
-Networking is IPv4-only today; [ipv6](./docs/IPV6.md) covers what the `ipv6` feature does and does not do, and what it would take to finish it.
+The network stack is dual-stack: see [ipv6](./docs/IPV6.md) for the `SSH_STAMP_IPV6` modes, what works in AP versus Station mode, and how to test it on hardware.
 
 ## Targets
 

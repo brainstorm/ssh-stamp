@@ -405,10 +405,8 @@ fn test(root: &Path, registry: &Registry) -> Result<(), String> {
     cmd.args(["test", "-p", "ota"]);
     exec(root, cmd)?;
 
-    // `--features ipv6` because the config wire tests for the IPv6 slot are
-    // gated on it, and nothing else in CI builds that feature.
     let mut cmd = cargo(registry.host_toolchain());
-    cmd.args(["test", "-p", "ssh-stamp", "--features", "ipv6"]);
+    cmd.args(["test", "-p", "ssh-stamp"]);
     exec(root, cmd)
 }
 

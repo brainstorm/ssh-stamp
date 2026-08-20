@@ -17,7 +17,7 @@ use embassy_net::{IpListenEndpoint, Stack, tcp::TcpSocket};
 use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
 use heapless::String;
 use log::{debug, error, info, warn};
-use ssh_stamp_hal::{BandMode, WifiApConfigStatic};
+use ssh_stamp_hal::{BandMode, Ipv6Mode, WifiApConfigStatic};
 #[cfg(feature = "can")]
 use sunset::ChanHandle;
 use sunset::SignKey;
@@ -84,6 +84,16 @@ pub async fn prepare_ap_config<P: PlatformServices>(
 
     info!("WIFI AP band: {band:?} (channel {channel})");
 
+    match guard.ipv6 {
+        Ipv6Mode::Disabled => info!("IPv6: link-local only (set SSH_STAMP_IPV6 to change)"),
+        Ipv6Mode::Slaac => info!("IPv6: SLAAC, soliciting a router advertisement"),
+        Ipv6Mode::Static {
+            address,
+            prefix_len,
+            gateway,
+        } => info!("IPv6: static {address}/{prefix_len} gateway {gateway:?}"),
+    }
+
     Ok(WifiApConfigStatic {
         ap_ssid: guard.wifi_ap_ssid.clone(),
         ap_password: guard.wifi_ap_pw.clone(),
@@ -92,6 +102,7 @@ pub async fn prepare_ap_config<P: PlatformServices>(
         channel,
         band,
         mac,
+        ipv6: guard.ipv6,
     })
 }
 
