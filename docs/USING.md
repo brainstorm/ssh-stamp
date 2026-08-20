@@ -78,21 +78,26 @@ Notes:
 
 If your SSH client doesn't forward environment variables by default, use the `-o SendEnv=VAR` option as shown above or configure `SendEnv` in your SSH client config.
 
-# UART pins
+# Pin assignments
 
-UART RX/TX pins are defined per-board in `boards/*.toml` files inside the
-`ssh-stamp-esp32-boards` crate. Each board feature (e.g.
-`board-esp32c6-devkitc`) selects a specific PCB and its pin assignments.
-The TOML files are the single source of truth — no other file in the
-repository hard-codes UART pin numbers.
+UART, CAN and I2C pins are defined per-board in `boards/*.toml` files inside
+the board support crate of each platform (`ssh-stamp-esp32-boards` for the
+Espressif one). Each board feature (e.g. `board-esp32c6-devkitc`) selects a
+specific PCB and its pin assignments. The TOML files are the single source of
+truth — no other file in the repository hard-codes pin numbers.
 
-To see the available boards and their pin assignments, run:
+To see which GPIO each bus uses on each board, and which buses a board does
+not support yet, build the documentation:
 
 ```
 cargo xtask doc
 ```
 
-(`cargo xtask list` gives the same board list as a quick terminal summary.)
+Then open the board support crate's front page,
+`target/riscv32imac-unknown-none-elf/doc/ssh_stamp_esp32_boards/index.html`.
+Its catalog table is regenerated from the TOML files on every run.
+(`cargo xtask doc --open` opens a browser on the `ssh-stamp` crate instead;
+the crate list in the sidebar reaches every other crate, this one included.)
 
-Then open `target/riscv32imac-unknown-none-elf/doc/ssh_stamp_esp32_boards/index.html`,
-which contains the auto-generated per-board pin assignment table.
+(`cargo xtask list` gives the board list as a quick terminal summary, without
+the pins.)

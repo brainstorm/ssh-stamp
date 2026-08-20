@@ -30,7 +30,8 @@ COMMANDS:
     run <target> [opts]     Build, flash and monitor a board
     clippy [<target>]       Lint (defaults to the registry's default board)
     fmt [--check]           Format the workspace
-    doc                     Build the rustdoc for all library crates
+    doc [--open]            Build the rustdoc for all library crates,
+                            including each platform's board pin catalog
     test                    Run the host-side test suites
     ci                      Everything CI checks: every target, lints, format
 
@@ -38,6 +39,7 @@ OPTIONS:
     --features <a,b>        Extra cargo features, comma or space separated
     --profile <name>        Cargo profile override (default: release)
     --check                 For `fmt`: check instead of rewriting
+    --open                  For `doc`: open the docs in a browser afterwards
     -- <args...>            Everything after `--` is passed through to cargo
 
 EXAMPLES:
@@ -45,6 +47,7 @@ EXAMPLES:
     cargo xtask build esp32c3                       # chip only, library build
     cargo xtask run waveshare-esp32-s3-touch-lcd-43 --features can-no-ack
     cargo xtask build esp32c6-devkitc -- --timings
+    cargo xtask doc --open                          # docs, then a browser
 ";
 
 fn main() -> ExitCode {
@@ -77,7 +80,7 @@ fn run() -> Result<(), String> {
         "run" => build(&root, &registry, &args, true),
         "clippy" => clippy(&root, &registry, &args),
         "fmt" => fmt(&root, &registry, &args),
-        "doc" => doc(&root, &registry),
+        "doc" => doc(&root, &registry, &args),
         "test" => test(&root, &registry),
         "ci" => ci(&root, &registry),
         "-h" | "--help" | "help" => {
@@ -104,6 +107,7 @@ struct Args {
     features: Vec<String>,
     profile: Option<String>,
     check: bool,
+    open: bool,
     /// Everything after a literal `--`, forwarded to cargo verbatim.
     passthrough: Vec<String>,
 }
@@ -120,6 +124,7 @@ impl Args {
                     break;
                 }
                 "--check" => args.check = true,
+                "--open" => args.open = true,
                 "--features" => {
                     let value = raw
                         .next()
@@ -324,7 +329,17 @@ fn fmt(root: &Path, registry: &Registry, args: &Args) -> Result<(), String> {
     exec(root, cmd)
 }
 
-fn doc(root: &Path, registry: &Registry) -> Result<(), String> {
+/// Build the rustdoc for the library crates.
+///
+/// Each platform's BSP build script regenerates its board pin catalog from
+/// `boards/*.toml` as part of this, so the table on that crate's front page
+/// is never stale.
+///
+/// With `--open`, the first package in `doc-packages` is opened in a browser
+/// once the build succeeds; rustdoc's sidebar reaches the rest of the
+/// workspace from there. Cargo's own `--open` would land on `ota`, the
+/// alphabetically first of the `-p` flags.
+fn doc(root: &Path, registry: &Registry, args: &Args) -> Result<(), String> {
     let board = registry.defaults.board.clone();
     let unit = resolve(registry, &board)?;
     let platform = registry.platform_of(unit.chip)?;
@@ -348,7 +363,39 @@ fn doc(root: &Path, registry: &Registry) -> Result<(), String> {
     if unit.chip.build_std {
         cmd.arg("-Zbuild-std=core,alloc");
     }
-    exec(root, cmd)
+    exec(root, cmd)?;
+
+    if args.open {
+        let entry = registry
+            .defaults
+            .doc_packages
+            .first()
+            .ok_or("doc-packages is empty, nothing to open")?;
+        let page = root
+            .join("target")
+            .join(&unit.chip.target)
+            .join("doc")
+            .join(entry.replace('-', "_"))
+            .join("index.html");
+        open(&page)?;
+    }
+    Ok(())
+}
+
+/// Hand a generated page to the desktop's browser.
+fn open(page: &Path) -> Result<(), String> {
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    println!("\x1b[1;36m>\x1b[0m {opener} {}", page.display());
+    // The browser outlives us, so spawn instead of waiting for it.
+    Command::new(opener)
+        .arg(page)
+        .spawn()
+        .map(drop)
+        .map_err(|e| format!("`{opener}` failed on {}: {e}", page.display()))
 }
 
 fn test(root: &Path, registry: &Registry) -> Result<(), String> {
@@ -376,7 +423,7 @@ fn ci(root: &Path, registry: &Registry) -> Result<(), String> {
             ..Args::default()
         },
     )?;
-    doc(root, registry)?;
+    doc(root, registry, &Args::default())?;
     test(root, registry)
 }
 
