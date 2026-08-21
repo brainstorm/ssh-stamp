@@ -16,14 +16,19 @@ use crate::record::{self, Record};
 use crate::results::{BenchResults, BenchRun, BootCheckpoint, HeapSnapshot, Results, RunOutcome};
 use crate::stack_probe::StackProbe;
 use crate::stats::{Stats, fmt_bytes, fmt_us, to_f64};
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use clap::Args as ClapArgs;
-use std::path::PathBuf;
+use std::env::home_dir;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::Duration;
 
 /// The variable that overrides the heap size when flashing the firmware.
 const HEAP_ENV_VAR: &str = "SSH_STAMP_CONFIG_HEAP_SIZE";
+
+/// The variable for the public key.
+const PUBKEY_ENV_VAR: &str = "SSH_STAMP_PUBKEY";
 
 #[derive(ClapArgs)]
 pub struct Args {
@@ -36,6 +41,10 @@ pub struct Args {
     /// SSH username.
     #[arg(long, default_value = "root")]
     user: String,
+    /// The public key used for enrolment on the first boot. Defaults to
+    /// `~/.ssh/id_ed25519.pub`.
+    #[arg(long)]
+    pubkey: Option<PathBuf>,
     /// Number of SSH sessions to execute, this controls how many samples are collected
     /// from an SSH session.
     #[arg(long, default_value_t = 10, value_parser = clap::value_parser!(u32).range(1..))]
@@ -193,6 +202,7 @@ fn measure(args: &Args, features: &str, port: &str, heap: Option<u64>) -> Result
     }
     sleep(Duration::from_secs(1));
 
+    enrol(args)?;
     let (established, rtt_us) = run_sessions(args)?;
 
     sleep(Duration::from_secs(2));
@@ -231,7 +241,7 @@ fn run_sessions(args: &Args) -> Result<(u32, Vec<u64>)> {
     );
     for i in 1..=args.sessions {
         let session =
-            device::SessionReport::ssh_session(&args.host, &args.user, &opts, args.rtt_iters)?;
+            device::SessionReport::ssh_session(&args.host, &args.user, &opts, &[], args.rtt_iters)?;
         eprintln!(
             "  session {i:2}: {}, {} of {} markers returned",
             if session.established { "OK" } else { "FAILED" },
@@ -263,6 +273,57 @@ fn run_sessions(args: &Args) -> Result<(u32, Vec<u64>)> {
     eprintln!("=== sessions done, {failures} failures, {timeouts} timeouts ===");
 
     Ok((established, rtt_us))
+}
+
+/// Enrols the public key into the device on first boot.
+fn enrol(args: &Args) -> Result<()> {
+    let Some((path, pubkey)) = read_pubkey(args.pubkey.as_deref())? else {
+        return Ok(());
+    };
+
+    eprintln!("=== adding {} for public key enrolment ===", path.display());
+    let mut opts = args.ssh_opts();
+    opts.push(format!("SendEnv={PUBKEY_ENV_VAR}"));
+    let envs = [(PUBKEY_ENV_VAR.to_string(), pubkey)];
+
+    let session = device::SessionReport::ssh_session(&args.host, &args.user, &opts, &envs, 0)?;
+    if !session.established {
+        bail!("the public key failed to enrol");
+    }
+
+    Ok(())
+}
+
+/// Reads the key to enrol.
+fn read_pubkey(path: Option<&Path>) -> Result<Option<(PathBuf, String)>> {
+    let path = if let Some(path) = path {
+        path.to_path_buf()
+    } else {
+        let Some(home) = home_dir() else {
+            eprintln!("=== no home directory, skipping enrolment ===");
+            return Ok(None);
+        };
+        let default = home.join(".ssh").join("id_ed25519.pub");
+        if !default.exists() {
+            eprintln!(
+                "=== {} not found, skipping enrolment ===",
+                default.display()
+            );
+            return Ok(None);
+        }
+        default
+    };
+
+    let key = fs::read_to_string(&path)
+        .with_context(|| format!("could not read {}", path.display()))?
+        .trim()
+        .to_string();
+
+    if !key.starts_with("ssh-ed25519") {
+        bail!("{} is not an Ed25519 key", path.display());
+    }
+
+    Ok(Some((path, key)))
 }
 
 /// Get the records from captured serial lines and reconstruct them.
@@ -364,6 +425,7 @@ mod tests {
             board: board::find("esp32c6-devkitc").unwrap(),
             host: String::new(),
             user: String::new(),
+            pubkey: None,
             sessions: 1,
             heap,
             port: None,

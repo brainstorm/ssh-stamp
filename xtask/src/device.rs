@@ -67,10 +67,11 @@ impl SessionReport {
         host: &str,
         user: &str,
         extra_opts: &[String],
+        envs: &[(String, String)],
         markers: u32,
     ) -> Result<Self> {
         let shell = Shell::new()?;
-        let mut child = Self::ssh_session_cmd(&shell, host, user, extra_opts, true)
+        let mut child = Self::ssh_session_cmd(&shell, host, user, extra_opts, envs, true)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -128,6 +129,7 @@ impl SessionReport {
         host: &str,
         user: &str,
         extra_opts: &[String],
+        envs: &[(String, String)],
         verbose: bool,
     ) -> Command {
         let null_device = if cfg!(windows) { "NUL" } else { "/dev/null" };
@@ -140,11 +142,13 @@ impl SessionReport {
             .collect();
         let destination = format!("{user}@{host}");
 
-        cmd!(
-        shell,
-        "ssh -T -F none -o BatchMode=yes -o StrictHostKeyChecking=no -o {known_hosts} -o {connect_timeout} {verbose...} {extra_opts...} {destination}"
-    )
-            .into()
+        let mut command: Command = cmd!(
+            shell,
+            "ssh -T -F none -o BatchMode=yes -o StrictHostKeyChecking=no -o {known_hosts} -o {connect_timeout} {verbose...} {extra_opts...} {destination}"
+        )
+            .into();
+        command.envs(envs.iter().map(|(key, value)| (key.as_str(), value.as_str())));
+        command
     }
 }
 
