@@ -147,7 +147,10 @@ impl SessionReport {
             "ssh -T -F none -o BatchMode=yes -o StrictHostKeyChecking=no -o {known_hosts} -o {connect_timeout} {verbose...} {extra_opts...} {destination}"
         )
             .into();
-        command.envs(envs.iter().map(|(key, value)| (key.as_str(), value.as_str())));
+        command.envs(
+            envs.iter()
+                .map(|(key, value)| (key.as_str(), value.as_str())),
+        );
         command
     }
 }

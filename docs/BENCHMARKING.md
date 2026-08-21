@@ -12,7 +12,7 @@ The ssh-stamp codebase implements benchmarking in two ways:
 - **On-device metrics** needs a physical board. This measures the boot timeline, KEX metrics, RTT, and the heap and 
   stack usage. These can be uploaded manually as part of a PR.
 
-Both these kinds of measurements are stored in bencher, under:
+Both these kinds of measurements are stored in [Bencher][Bencher], under:
 
 https://bencher.dev/console/projects/ssh-stamp/testbeds?per_page=8&page=1
 
@@ -138,10 +138,8 @@ The following values are defined:
 | `<board>/<profile>/size`  | `flash-bytes`  | application image size                           |
 | `<board>/<profile>/size`  | `ram-bytes`    | internal RAM usage                               |
 
-Everything that describes a run that isn't specifically to do with KEX (`boot`,
-`bridge/rtt` and `heap/<label>`) is taken from the `curve25519-sha256` run when
-present, falling back to the first run, so those values stay consistent.
-`stack/max` is the maximum across all runs.
+Everything that describes a run that isn't specifically to do with KEX is taken from the `mlkem768x25519-sha256`
+run when present, so those values stay consistent.
 
 ## CI Tracking
 
@@ -181,4 +179,3 @@ main itself, the `--start-point` flags should be removed.
 
 [Bencher]: https://bencher.dev
 [bencher-cli]: https://bencher.dev/docs/how-to/install-cli/
-[bmf]: https://bencher.dev/docs/reference/bencher-metric-format/

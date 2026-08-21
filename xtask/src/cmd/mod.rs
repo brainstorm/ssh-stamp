@@ -12,7 +12,7 @@ pub mod size;
 pub const BENCH_FEATURES: &[&str] = &["mem-probe", "bench-loopback"];
 
 /// The default KEX for measurements not about key exchange.
-pub const REFERENCE_KEX: &str = "curve25519-sha256";
+pub const REFERENCE_KEX: &str = "mlkem768x25519-sha256";
 
 /// The boot `@BENCH checkpoint=` name of the firmware.
 pub const BOOT: &str = "bench_boot";

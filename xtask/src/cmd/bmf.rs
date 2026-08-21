@@ -235,7 +235,7 @@ mod tests {
 
     fn bench(kex: Vec<u64>) -> BenchRun {
         BenchRun {
-            kex_algorithm: "mlkem768x25519-sha256".into(),
+            kex_algorithm: "curve25519-sha256".into(),
             boot: vec![
                 BootCheckpoint {
                     label: cmd::PERIPHERALS_READY.into(),
@@ -279,24 +279,24 @@ mod tests {
     #[test]
     fn kex_bmf() {
         let bmf = to_bmf(&[results(bench(vec![100, 200, 300, 400]))]);
-        let metric_result = metric(&bmf, "kex/mlkem768x25519-sha256", Measure::LatencyUs);
+        let metric_result = metric(&bmf, "kex/curve25519-sha256", Measure::LatencyUs);
         assert_eq!(metric_result.value, 250.0);
         assert_eq!(
             (metric_result.lower_value, metric_result.upper_value),
             (Some(100.0), Some(400.0))
         );
 
-        let classical = BenchRun {
+        let mlkem = BenchRun {
             kex_algorithm: cmd::REFERENCE_KEX.into(),
             ..bench(vec![240_000])
         };
-        let bmf = to_bmf(&[results(bench(vec![285_000])), results(classical)]);
+        let bmf = to_bmf(&[results(bench(vec![285_000])), results(mlkem)]);
         assert_eq!(
-            metric(&bmf, "kex/mlkem768x25519-sha256", Measure::LatencyUs).value,
+            metric(&bmf, "kex/curve25519-sha256", Measure::LatencyUs).value,
             285_000.0
         );
         assert_eq!(
-            metric(&bmf, "kex/curve25519-sha256", Measure::LatencyUs).value,
+            metric(&bmf, "kex/mlkem768x25519-sha256", Measure::LatencyUs).value,
             240_000.0
         );
     }
@@ -318,7 +318,7 @@ mod tests {
     #[test]
     fn no_kex_samples() {
         let bmf = to_bmf(&[results(bench(vec![]))]);
-        assert!(!bmf.contains_key("kex/mlkem768x25519-sha256"));
+        assert!(!bmf.contains_key("kex/curve25519-sha256"));
         assert!(bmf.contains_key("boot"));
     }
 
@@ -429,11 +429,11 @@ mod tests {
             stack: vec![stack(30_000)],
             ..bench(vec![240_000])
         };
-        let mlkem = BenchRun {
+        let classical = BenchRun {
             stack: vec![stack(38_200)],
             ..bench(vec![285_000])
         };
-        let bmf = to_bmf(&[results(reference), results(mlkem)]);
+        let bmf = to_bmf(&[results(reference), results(classical)]);
         assert_eq!(
             metric(&bmf, "stack/max", Measure::StackBytes).value,
             38_200.0
@@ -447,11 +447,11 @@ mod tests {
             rtt_us: vec![10_000],
             ..bench(vec![240_000])
         };
-        let mlkem = BenchRun {
+        let classical = BenchRun {
             rtt_us: vec![30_000],
             ..bench(vec![285_000])
         };
-        let bmf = to_bmf(&[results(reference), results(mlkem)]);
+        let bmf = to_bmf(&[results(reference), results(classical)]);
         assert_eq!(
             metric(&bmf, "bridge/rtt", Measure::LatencyUs).value,
             10_000.0
@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn merge_runs() {
-        let classical = || BenchRun {
+        let mlkem = || BenchRun {
             kex_algorithm: cmd::REFERENCE_KEX.into(),
             rtt_us: vec![10_000],
             stack: vec![StackSnapshot {
@@ -470,7 +470,7 @@ mod tests {
             }],
             ..bench(vec![240_000])
         };
-        let mlkem = || BenchRun {
+        let classical = || BenchRun {
             rtt_us: vec![30_000],
             stack: vec![StackSnapshot {
                 label: "session".into(),
@@ -511,7 +511,7 @@ mod tests {
                 entries: vec![size("esp32c6", 1_046_528)],
             }),
         ]);
-        assert!(bmf.contains_key("kex/mlkem768x25519-sha256"));
+        assert!(bmf.contains_key("kex/curve25519-sha256"));
         assert!(bmf.contains_key("esp32c6/release/size"));
     }
 

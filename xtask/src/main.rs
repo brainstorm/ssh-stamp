@@ -81,7 +81,7 @@ mod tests {
         assert_eq!(args.boards[0].name, "esp32c5-devkitc");
         assert_eq!(args.boards[0].soc, "esp32c5");
 
-        assert!(size_cmd(&["--board", "esp32c9"]).is_err());
+        assert!(size_cmd(&["--board", "esp32-fake-name"]).is_err());
         assert!(size_cmd(&["--board", "esp32c3"]).is_err());
 
         assert!(size_cmd(&["--all"]).is_ok());

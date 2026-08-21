@@ -4,7 +4,7 @@
 
 //! The host side of the device communication.
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use quick_xml::escape::escape;
 use std::io::Write;
 use std::net::{TcpStream, ToSocketAddrs};
@@ -48,7 +48,8 @@ impl AccessPoint {
     }
 
     /// Joins the access point with the ssid and psk. The `interface` can optionally be
-    /// specified on multi interface hosts to avoid automatically detecting.
+    /// specified on multi interface hosts to avoid automatically detecting. It is
+    /// required when falling back to `iwctl` on Linux.
     pub fn join(&self, interface: Option<&str>) -> Result<()> {
         let shell = Shell::new()?;
         let (ssid, psk) = (&self.ssid, &self.psk);
@@ -79,14 +80,32 @@ impl AccessPoint {
             .map(|interface| vec!["ifname".to_string(), interface.to_string()])
             .unwrap_or_default();
 
-        cmd!(
+        let nmcli = cmd!(
             shell,
             "nmcli device wifi connect {ssid} password {psk} {ifname...}"
         )
         .secret()
         .quiet()
-        .run()
-        .context("nmcli device wifi connect")
+        .run();
+
+        if let Err(err) = nmcli {
+            let Some(station) = interface else {
+                bail!(
+                    "nmcli failed with `{err}`, it's possible to use iwctl but `--interface` must be specified"
+                );
+            };
+
+            return cmd!(
+                shell,
+                "iwctl --passphrase {psk} station {station} connect {ssid}"
+            )
+            .secret()
+            .quiet()
+            .run()
+            .with_context(|| format!("iwctl fallback after nmcli failed with `{err}`"));
+        }
+
+        Ok(())
     }
 
     /// Imports a profile for `ssid` into the Windows WLAN storage.
@@ -157,7 +176,7 @@ impl AccessPoint {
             match self.join(interface) {
                 Ok(()) => eprintln!("=== asked this host to join {} ===", self.ssid),
                 Err(err) => {
-                    eprintln!("warning: could not join {}: {}", self.ssid, err);
+                    eprintln!("warning: could not join {}: {err:#}", self.ssid);
                 }
             }
 

@@ -486,7 +486,7 @@ pub async fn pubkey_env(
             }
             Some(trimmed) => {
                 if config_guard.add_pubkey(trimmed).is_ok() {
-                    info!("Added new pubkey from ENV");
+                    debug!("Added new pubkey from ENV");
                     a.succeed()?;
                     if config_guard.first_login {
                         config_guard.first_login = false;
@@ -780,10 +780,10 @@ where
         debug!("Checking bridge session type");
         match session_type {
             SessionType::Bridge(ch) => {
-                info!("Handling bridge session");
+                debug!("Handling bridge session");
                 let chan_io: ChanInOut<'_> = ssh_server.stdio(ch).await?;
                 let (stdin, stdout) = chan_io.split();
-                info!("Starting bridge");
+                debug!("Starting bridge");
                 serial_bridge(stdin, stdout, uart_buff).await?;
             }
             #[cfg(feature = "sftp-ota")]
@@ -801,10 +801,10 @@ where
     let result = {
         let can_session = async {
             let ch = can_queue.receive().await;
-            info!("Handling CAN session");
+            debug!("Handling CAN session");
             let chan_io: ChanInOut<'_> = ssh_server.stdio(ch).await?;
             let (stdin, stdout) = chan_io.split();
-            info!("Starting CAN bridge");
+            debug!("Starting CAN bridge");
             can_bridge(stdin, stdout, platform.can()).await
         };
         match select(session, can_session).await {
