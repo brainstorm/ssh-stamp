@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
 
 env:
-  BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
+  BENCHER_API_KEY: ${{ secrets.BENCHER_API_KEY }}
   BENCHER_PROJECT: ${{ vars.BENCHER_PROJECT }}
   BENCHER_BRANCH: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
   BENCHER_START_POINT: ${{ github.base_ref }}
@@ -77,19 +77,19 @@ jobs:
     needs: size
     steps:
       - name: Download size JSON
-        if: ${{ env.BENCHER_API_TOKEN != '' && env.BENCHER_PROJECT != '' }}
+        if: ${{ env.BENCHER_API_KEY != '' && env.BENCHER_PROJECT != '' }}
         uses: actions/download-artifact@v4
         with:
           pattern: size-*
           merge-multiple: true
       - name: Merge boards
-        if: ${{ env.BENCHER_API_TOKEN != '' && env.BENCHER_PROJECT != '' }}
+        if: ${{ env.BENCHER_API_KEY != '' && env.BENCHER_PROJECT != '' }}
         run: jq --slurp add bmf-size-*.json > bmf-size.json
       - name: Setup Bencher
-        if: ${{ env.BENCHER_API_TOKEN != '' && env.BENCHER_PROJECT != '' }}
+        if: ${{ env.BENCHER_API_KEY != '' && env.BENCHER_PROJECT != '' }}
         uses: bencherdev/bencher@main
       - name: Track size
-        if: ${{ env.BENCHER_API_TOKEN != '' && env.BENCHER_PROJECT != '' }}
+        if: ${{ env.BENCHER_API_KEY != '' && env.BENCHER_PROJECT != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
