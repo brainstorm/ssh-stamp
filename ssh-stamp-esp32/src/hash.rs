@@ -6,6 +6,8 @@
 //!
 //! Uses ESP32's hardware-accelerated HMAC peripheral.
 
+use core::future::{Future, ready};
+
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256 as Sha256Impl};
 use ssh_stamp_hal::{HashError, HashHal};
@@ -14,31 +16,33 @@ use ssh_stamp_hal::{HashError, HashHal};
 pub struct EspHmac;
 
 impl HashHal for EspHmac {
-    async fn hmac_sha256(
+    fn hmac_sha256(
         &mut self,
         key: &[u8],
         message: &[u8],
         output: &mut [u8; 32],
-    ) -> Result<(), ssh_stamp_hal::HalError> {
+    ) -> impl Future<Output = Result<(), ssh_stamp_hal::HalError>> {
         // Use software HMAC implementation for now
         // ESP32 hardware HMAC requires special key handling
-        let mut mac = Hmac::<Sha256Impl>::new_from_slice(key)
-            .map_err(|_| ssh_stamp_hal::HalError::Hash(HashError::Config))?;
-        mac.update(message);
-        let result = mac.finalize();
-        output.copy_from_slice(&result.into_bytes());
-        Ok(())
+        ready(match Hmac::<Sha256Impl>::new_from_slice(key) {
+            Ok(mut mac) => {
+                mac.update(message);
+                output.copy_from_slice(&mac.finalize().into_bytes());
+                Ok(())
+            }
+            Err(_) => Err(ssh_stamp_hal::HalError::Hash(HashError::Config)),
+        })
     }
 
-    async fn sha256(
+    fn sha256(
         &mut self,
         message: &[u8],
         output: &mut [u8; 32],
-    ) -> Result<(), ssh_stamp_hal::HalError> {
+    ) -> impl Future<Output = Result<(), ssh_stamp_hal::HalError>> {
         let mut hasher = Sha256Impl::new();
         hasher.update(message);
         let result = hasher.finalize();
         output.copy_from_slice(&result);
-        Ok(())
+        ready(Ok(()))
     }
 }
