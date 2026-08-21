@@ -1,0 +1,111 @@
+# SPDX-FileCopyrightText: 2026 Marko Malenic <mmalenic1@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Size
+
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
+  BENCHER_PROJECT: ${{ vars.BENCHER_PROJECT }}
+  BENCHER_BRANCH: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+  BENCHER_START_POINT: ${{ github.base_ref }}
+  BENCHER_START_POINT_HASH: ${{ github.event.pull_request.base.sha || '' }}
+
+jobs:
+  size:
+    name: Size budget ${{ matrix.board.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [
+            { name: "esp32c5-devkitc", xtensa: false },
+            { name: "esp32c6-devkitc", xtensa: false },
+            { name: "esp32c61-devkitc", xtensa: false },
+            { name: "esp32-s2-saola", xtensa: true },
+            { name: "waveshare-esp32-s3-touch-lcd-43", xtensa: true },
+        ]
+    steps:
+      - name: Cache
+        uses: mozilla-actions/sccache-action@v0.0.10
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Setup Stable Rust Toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: riscv32imac-unknown-none-elf
+      - name: Setup Rust toolchain for Xtensa
+        if: ${{ matrix.board.xtensa }}
+        uses: esp-rs/xtensa-toolchain@v1.7.0
+        with:
+          ldproxy: false
+          version: 1.96.0
+      - name: Install cargo-bloat
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-bloat
+      - name: Size budget
+        run: cargo xtask size --board ${{ matrix.board.name }} -o size-${{ matrix.board.name }}.json
+      - name: Convert to Bencher Metric Format
+        run: cargo xtask bmf --input size-${{ matrix.board.name }}.json -o bmf-size-${{ matrix.board.name }}.json
+      - name: Upload size JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-${{ matrix.board.name }}
+          path: |
+            size-${{ matrix.board.name }}.json
+            bmf-size-${{ matrix.board.name }}.json
+          if-no-files-found: warn
+  track:
+    name: Track size
+    runs-on: ubuntu-latest
+    needs: size
+    steps:
+      - name: Download size JSON
+        if: ${{ env.BENCHER_API_TOKEN != '' && env.BENCHER_PROJECT != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: size-*
+          merge-multiple: true
+      - name: Merge boards
+        if: ${{ env.BENCHER_API_TOKEN != '' && env.BENCHER_PROJECT != '' }}
+        run: jq --slurp add bmf-size-*.json > bmf-size.json
+      - name: Setup Bencher
+        if: ${{ env.BENCHER_API_TOKEN != '' && env.BENCHER_PROJECT != '' }}
+        uses: bencherdev/bencher@main
+      - name: Track size
+        if: ${{ env.BENCHER_API_TOKEN != '' && env.BENCHER_PROJECT != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The start point is required to ensure comparison is done against the base
+          # commit, rather than accidentally on a previous commit on the same PR.
+          start_point=()
+          if [ -n "$BENCHER_START_POINT_HASH" ]; then
+            start_point=(
+              --start-point "$BENCHER_START_POINT"
+              --start-point-hash "$BENCHER_START_POINT_HASH"
+              --start-point-reset
+            )
+          fi
+          bencher run \
+            "${start_point[@]}" \
+            --testbed ci \
+            --adapter json \
+            --github-actions "$GITHUB_TOKEN" \
+            --file bmf-size.json

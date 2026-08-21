@@ -197,15 +197,16 @@ fn device_metrics(bmf: &mut Bmf, bench: &BenchRun) {
 
 /// Insert the size metrics from the results.
 fn size_metrics(bmf: &mut Bmf, size: &SocSize) {
+    let bench = format!("{}/{}/size", size.board, size.profile);
     insert(
         bmf,
-        format!("{}/size/flash", size.profile),
+        bench.as_str(),
         Measure::FlashBytes,
         Metric::point(to_f64(size.flash_bytes)),
     );
     insert(
         bmf,
-        format!("{}/size/ram", size.profile),
+        bench,
         Measure::RamBytes,
         Metric::point(to_f64(size.ram_bytes)),
     );
@@ -342,15 +343,15 @@ mod tests {
             entries: vec![size("esp32c6", 1_046_528)],
         })]);
         assert_eq!(
-            metric(&bmf, "release/size/flash", Measure::FlashBytes).value,
+            metric(&bmf, "esp32c6/release/size", Measure::FlashBytes).value,
             1_046_528.0
         );
         assert_eq!(
-            metric(&bmf, "release/size/ram", Measure::RamBytes).value,
+            metric(&bmf, "esp32c6/release/size", Measure::RamBytes).value,
             180_224.0
         );
         assert_eq!(
-            metric(&bmf, "release/size/flash", Measure::FlashBytes).lower_value,
+            metric(&bmf, "esp32c6/release/size", Measure::FlashBytes).lower_value,
             None
         );
     }
@@ -366,12 +367,32 @@ mod tests {
             entries: vec![size("esp32c6", 100), min],
         })]);
         assert_eq!(
-            metric(&bmf, "release/size/flash", Measure::FlashBytes).value,
+            metric(&bmf, "esp32c6/release/size", Measure::FlashBytes).value,
             100.0
         );
         assert_eq!(
-            metric(&bmf, "release-min/size/flash", Measure::FlashBytes).value,
+            metric(&bmf, "esp32c6/release-min/size", Measure::FlashBytes).value,
             60.0
+        );
+    }
+
+    #[test]
+    fn two_boards_one_document() {
+        let bmf = to_bmf(&[
+            Results::Size(SizeResults {
+                entries: vec![size("esp32c6", 100)],
+            }),
+            Results::Size(SizeResults {
+                entries: vec![size("esp32s3", 200)],
+            }),
+        ]);
+        assert_eq!(
+            metric(&bmf, "esp32c6/release/size", Measure::FlashBytes).value,
+            100.0
+        );
+        assert_eq!(
+            metric(&bmf, "esp32s3/release/size", Measure::FlashBytes).value,
+            200.0
         );
     }
 
@@ -491,7 +512,7 @@ mod tests {
             }),
         ]);
         assert!(bmf.contains_key("kex/mlkem768x25519-sha256"));
-        assert!(bmf.contains_key("release/size/flash"));
+        assert!(bmf.contains_key("esp32c6/release/size"));
     }
 
     #[test]

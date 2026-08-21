@@ -38,13 +38,14 @@ impl Stats {
 
     /// Computes stats over the `samples` from u64 values. Returns `None` for an empty slice.
     pub fn from_micros(samples: &[u64]) -> Option<Stats> {
-        let f: Vec<f64> = samples
-            .iter()
-            .copied()
-            .map(|value| f64::try_from(value).expect("sample to be convertable to f64"))
-            .collect();
+        let f: Vec<f64> = samples.iter().copied().map(to_f64).collect();
         Stats::from_samples(&f)
     }
+}
+
+/// Converts a measured value to f64.
+pub fn to_f64(value: u64) -> f64 {
+    f64::from(u32::try_from(value).expect("measured value to fit in u32"))
 }
 
 /// Formats a microsecond value.
