@@ -11,17 +11,16 @@ use crate::board::{self, Board};
 use crate::cmd::{self, BENCH_FEATURES};
 use crate::device::{self, Serial};
 use crate::elf::StackRegion;
-use crate::host;
+use crate::host::AccessPoint;
 use crate::record::{self, Record};
 use crate::results::{BenchResults, BenchRun, BootCheckpoint, HeapSnapshot, Results, RunOutcome};
 use crate::stack_probe::StackProbe;
-use crate::stats::{Stats, fmt_bytes, fmt_us};
+use crate::stats::{Stats, fmt_bytes, fmt_us, to_f64};
 use anyhow::{Result, bail};
 use clap::Args as ClapArgs;
 use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::Duration;
-use crate::host::AccessPoint;
 
 /// The variable that overrides the heap size when flashing the firmware.
 const HEAP_ENV_VAR: &str = "SSH_STAMP_CONFIG_HEAP_SIZE";
@@ -135,7 +134,7 @@ pub fn run(args: &mut Args) -> Result<()> {
 fn smallest_working(runs: &[RunOutcome]) -> Option<u64> {
     runs.iter()
         .filter(|r| r.bench().is_some())
-        .filter_map(|r| r.heap_size())
+        .filter_map(RunOutcome::heap_size)
         .min()
 }
 
@@ -189,14 +188,38 @@ fn measure(args: &Args, features: &str, port: &str, heap: Option<u64>) -> Result
     eprintln!("=== ready ===");
 
     let access_point = AccessPoint::parse(&serial.current_capture())?;
-    if !access_point.wait_for_reachable(
-        &args.host,
-        args.interface.as_deref(),
-    ) {
+    if !access_point.wait_for_reachable(&args.host, args.interface.as_deref()) {
         bail!("the device reports itself ready but is unreachable");
     }
     sleep(Duration::from_secs(1));
 
+    let (established, rtt_us) = run_sessions(args)?;
+
+    sleep(Duration::from_secs(2));
+    serial.report_health();
+    let lines = serial.current_capture();
+
+    if established == 0 {
+        return Ok(RunOutcome::Failed {
+            heap_size: heap,
+            ready: true,
+        });
+    }
+
+    let mut run = reconstruct(args.kex.clone(), rtt_us, &lines);
+    if let Some(probe) = probe.as_mut() {
+        run.stack.push(probe.max_usage()?);
+    }
+    print_summary(&run);
+
+    Ok(RunOutcome::Ok {
+        heap_size: heap,
+        run,
+    })
+}
+
+/// Runs the SSH sessions and collects the round-trip samples.
+fn run_sessions(args: &Args) -> Result<(u32, Vec<u64>)> {
     let opts = args.ssh_opts();
     let mut established = 0;
     let mut failures = 0;
@@ -239,27 +262,7 @@ fn measure(args: &Args, features: &str, port: &str, heap: Option<u64>) -> Result
     }
     eprintln!("=== sessions done, {failures} failures, {timeouts} timeouts ===");
 
-    sleep(Duration::from_secs(2));
-    serial.report_health();
-    let lines = serial.current_capture();
-
-    if established == 0 {
-        return Ok(RunOutcome::Failed {
-            heap_size: heap,
-            ready: true,
-        });
-    }
-
-    let mut run = reconstruct(args.kex.clone(), rtt_us, &lines);
-    if let Some(probe) = probe.as_mut() {
-        run.stack.push(probe.max_usage()?);
-    }
-    print_summary(&run);
-
-    Ok(RunOutcome::Ok {
-        heap_size: heap,
-        run,
-    })
+    Ok((established, rtt_us))
 }
 
 /// Get the records from captured serial lines and reconstruct them.
@@ -321,7 +324,7 @@ fn reconstruct(kex_algorithm: String, rtt_us: Vec<u64>, lines: &[String]) -> Ben
 /// Print the summary stats.
 fn print_summary(r: &BenchRun) {
     match r.boot_t(cmd::TCP_LISTENING) {
-        Some(t) => println!("boot to SSH ready: {}", fmt_us(t as f64)),
+        Some(t) => println!("boot to SSH ready: {}", fmt_us(to_f64(t))),
         None => println!("boot: no startup checkpoints"),
     }
     match Stats::from_micros(&r.kex_us) {

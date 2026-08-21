@@ -21,7 +21,8 @@ members = [
     "ssh-stamp-hal",
     "ssh-stamp-esp32",
     "ssh-stamp-esp32-boards",
-    "ota"
+    "ota",
+    "xtask"
 ]
 
 [workspace.lints.clippy]
@@ -53,6 +54,7 @@ esp-config = { version = "0.7", default-features = false }
 sunset = { version = "0.5.0", default-features = false, features = [
     "openssh-key",
     "embedded-io",
+    "mlkem",
 ] }
 sunset-async = { version = "0.5.0", default-features = false, features = [
     "multi-thread",
@@ -74,8 +76,6 @@ digest = { version = "0.10", default-features = false, features = [
 # Storage
 embedded-storage = "0.3.1"
 embedded-storage-async = "0.4"
-esp-storage = { version = "0.8" }
-esp-bootloader-esp-idf = { version = "0.4.0" }
 
 # Networking
 edge-dhcp = "0.7"
@@ -163,10 +163,6 @@ lto = 'fat'
 opt-level = "s"
 overflow-checks = true
 panic = "abort"
-
-[profile.bench]
-opt-level = 3
-
 
 [profile.dev.package.esp-storage]
 opt-level = "s"

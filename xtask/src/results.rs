@@ -173,10 +173,10 @@ pub struct SizeResults {
     pub entries: Vec<SocSize>,
 }
 
-/// The size for a single firmware SoC.
+/// The size for a single firmware `SoC`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SocSize {
-    /// The SoC name.
+    /// The `SoC` name.
     pub soc: String,
     /// The board that it was built for.
     pub board: String,

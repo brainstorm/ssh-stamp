@@ -5,13 +5,13 @@
 //! The host side of the device communication.
 
 use anyhow::{Context, Result, anyhow};
+use quick_xml::escape::escape;
 use std::io::Write;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::thread;
 use std::time::{Duration, Instant};
-use quick_xml::escape::escape;
 use strip_ansi_escapes::strip_str;
-use xshell::{Cmd, Shell, cmd};
+use xshell::{Shell, cmd};
 
 /// The device access point.
 pub struct AccessPoint {
@@ -38,7 +38,7 @@ impl AccessPoint {
                         .map(|(_, value)| value.trim().to_string())
                 })
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| anyhow!("field `{}` not found", key))
+                .ok_or_else(|| anyhow!("field `{key}` not found"))
         };
 
         Ok(AccessPoint {
@@ -57,29 +57,36 @@ impl AccessPoint {
             let name = format!("name={ssid}");
             let interface = interface.map(|interface| format!("interface={interface}"));
 
-            return cmd!(shell, "netsh wlan connect {name} {interface...}").run()
+            return cmd!(shell, "netsh wlan connect {name} {interface...}")
+                .run()
                 .context("netsh wlan connect");
         }
 
         if cfg!(target_os = "macos") {
             let device = interface.unwrap_or("en0");
 
-            return cmd!(shell,"networksetup -setairportnetwork {device} {ssid} {psk}").secret()
-                                      .quiet()
-                                      .run()
-                                      .context("networksetup -setairportnetwork");
+            return cmd!(
+                shell,
+                "networksetup -setairportnetwork {device} {ssid} {psk}"
+            )
+            .secret()
+            .quiet()
+            .run()
+            .context("networksetup -setairportnetwork");
         }
-
 
         let ifname = interface
             .map(|interface| vec!["ifname".to_string(), interface.to_string()])
             .unwrap_or_default();
 
-
-        cmd!(shell, "nmcli device wifi connect {ssid} password {psk} {ifname...}").secret()
-                           .quiet()
-                           .run()
-                           .context("nmcli device wifi connect")
+        cmd!(
+            shell,
+            "nmcli device wifi connect {ssid} password {psk} {ifname...}"
+        )
+        .secret()
+        .quiet()
+        .run()
+        .context("nmcli device wifi connect")
     }
 
     /// Imports a profile for `ssid` into the Windows WLAN storage.
@@ -135,17 +142,14 @@ impl AccessPoint {
         )
     }
 
-
     /// Waits until the host can reach the device, i.e. when it `host:22` accepts the TCP connection.
-    pub fn wait_for_reachable(
-        &self,
-        host: &str,
-        interface: Option<&str>,
-    ) -> bool {
+    pub fn wait_for_reachable(&self, host: &str, interface: Option<&str>) -> bool {
         let timeout = Instant::now() + Self::REACHABLE_TIMEOUT;
         loop {
             let tcp_port_open = (host, 22).to_socket_addrs().is_ok_and(|mut addrs| {
-                addrs.any(|addr| TcpStream::connect_timeout(&addr, Self::TCP_CONNECT_INTERVAL).is_ok())
+                addrs.any(|addr| {
+                    TcpStream::connect_timeout(&addr, Self::TCP_CONNECT_INTERVAL).is_ok()
+                })
             });
             if tcp_port_open {
                 return true;
@@ -199,10 +203,7 @@ mod tests {
     fn profile_expected_value() {
         let xml = AccessPoint::wlan_profile_xml("ssh-stamp\"", "p&ss");
         assert!(xml.contains("<name>ssh-stamp&quot;</name>"), "{xml}");
-        assert!(
-            xml.contains("<keyMaterial>p&amp;ss</keyMaterial>"),
-            "{xml}"
-        );
+        assert!(xml.contains("<keyMaterial>p&amp;ss</keyMaterial>"), "{xml}");
         assert!(!xml.contains("{ssid}") && !xml.contains("{psk}"));
         assert!(xml.contains("<connectionMode>manual</connectionMode>"));
     }

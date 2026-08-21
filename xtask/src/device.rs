@@ -7,14 +7,14 @@
 use crate::board::Board;
 use crate::cmd;
 use anyhow::{Context, Result, bail};
+use serial2::SerialPort;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::{ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, mpsc, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use serial2::SerialPort;
 use xshell::{Shell, cmd};
 
 /// The SSH `ConnectTimeout` that applies to each session.
@@ -360,7 +360,13 @@ impl Serial {
                         Self::lock_capture(out).lines.push(line);
                     }
                 }
-                Err(e) if matches!(e.kind(), io::ErrorKind::TimedOut | io::ErrorKind::Interrupted | io::ErrorKind::WouldBlock) => {}
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        io::ErrorKind::TimedOut
+                            | io::ErrorKind::Interrupted
+                            | io::ErrorKind::WouldBlock
+                    ) => {}
                 Err(e) => {
                     Self::lock_capture(out).error = Some(e.to_string());
                     serial_port = None;
@@ -368,7 +374,6 @@ impl Serial {
             }
         }
     }
-
 
     /// List the available serial ports on the OS.
     pub fn available_ports() -> Result<Vec<PathBuf>> {
@@ -404,7 +409,8 @@ impl Serial {
     pub fn open_port(port: &str) -> Result<SerialPort> {
         let mut serial_port = SerialPort::open(port, Self::CONSOLE_BAUD)
             .with_context(|| format!("opening serial port {port}"))?;
-        serial_port.set_read_timeout(Self::SERIAL_WAIT)
+        serial_port
+            .set_read_timeout(Self::SERIAL_WAIT)
             .context("setting serial read timeout")?;
 
         Ok(serial_port)
@@ -448,7 +454,10 @@ impl Serial {
             }
             return;
         };
-        eprintln!("warning: reading {port} failed with {err}", port = self.port);
+        eprintln!(
+            "warning: reading {port} failed with {err}",
+            port = self.port
+        );
     }
 
     /// Lock the capture and return the guard unconditionally.

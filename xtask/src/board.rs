@@ -10,9 +10,6 @@ use clap::builder::{PossibleValuesParser, TypedValueParser};
 use std::path::PathBuf;
 use xshell::{Shell, cmd};
 
-/// The features for each build.
-pub const BUILD_FEATURES: &[&str] = &["mlkem"];
-
 /// A board the firmware can be built and flashed for.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Board {
@@ -20,7 +17,7 @@ pub struct Board {
     pub name: &'static str,
     /// The feature that selects the board's pins.
     pub feature: &'static str,
-    /// The SoC for this board.
+    /// The `SoC` for this board.
     pub soc: &'static str,
     /// The rust target.
     pub target: &'static str,
@@ -197,7 +194,6 @@ impl Board {
     /// The features for a build formatted as a `String`.
     pub fn features(&self, extra: &[&str]) -> String {
         let mut features = vec![self.feature];
-        features.extend_from_slice(BUILD_FEATURES);
 
         for extra_feature in extra {
             if !features.contains(extra_feature) {
@@ -357,9 +353,7 @@ mod tests {
                 assert!(low < high);
             }
             for pair in board.ram.windows(2) {
-                assert!(
-                    pair[0].1 <= pair[1].0,
-                );
+                assert!(pair[0].1 <= pair[1].0);
             }
         }
     }
@@ -367,11 +361,15 @@ mod tests {
     #[test]
     fn features_build_set() {
         let board = find("esp32c6-devkitc").unwrap();
+        assert_eq!(board.features(&[]), "board-esp32c6-devkitc");
         assert_eq!(
             board.features(&["mem-probe"]),
-            "board-esp32c6-devkitc,mlkem,mem-probe"
+            "board-esp32c6-devkitc,mem-probe"
         );
-        assert_eq!(board.features(&["mlkem"]), "board-esp32c6-devkitc,mlkem");
+        assert_eq!(
+            board.features(&["board-esp32c6-devkitc"]),
+            "board-esp32c6-devkitc"
+        );
     }
 
     #[test]

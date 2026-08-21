@@ -5,14 +5,13 @@
 //! `xtask size` determines the flash and RAM size of the firmware.
 
 use crate::board::{self, Board};
-use crate::elf;
+use crate::elf::Footprint;
 use crate::results::{Results, SizeResults, SocSize};
 use crate::stats::fmt_bytes;
 use anyhow::{Result, bail};
 use clap::{ArgGroup, Args as ClapArgs};
 use std::path::PathBuf;
 use xshell::Shell;
-use crate::elf::Footprint;
 
 #[derive(ClapArgs)]
 #[command(group(ArgGroup::new("selection").required(true)))]

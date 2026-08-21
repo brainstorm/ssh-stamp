@@ -8,7 +8,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use espflash::flasher::{FlashData, FlashSettings};
 use espflash::image_format::idf::IdfBootloaderFormat;
 use espflash::target::{Chip, XtalFrequency};
-use object::{Architecture, File, Object, ObjectSection, ObjectSegment, ObjectSymbol};
+use object::{File, Object, ObjectSection, ObjectSegment, ObjectSymbol};
 use std::path::Path;
 use std::str::FromStr;
 
@@ -31,7 +31,8 @@ impl Footprint {
     pub fn new(elf: &Path, board: &Board) -> Result<Footprint> {
         let data = read(elf)?;
         let file = File::parse(&*data).with_context(|| format!("parsing {}", elf.display()))?;
-        let chip = Chip::from_str(board.soc).map_err(|_| anyhow!("unknown chip `{}`", board.soc))?;
+        let chip =
+            Chip::from_str(board.soc).map_err(|_| anyhow!("unknown chip `{}`", board.soc))?;
 
         let (ram_b, stack_reserved_b) = Self::memory(&file, board, chip, elf)?;
 
@@ -265,7 +266,11 @@ impl StackRegion {
             bail!("`__stack_chk_guard` ({guard:#010x}) is outside the stack reservation");
         }
 
-        Ok(StackRegion { start: top, end, floor })
+        Ok(StackRegion {
+            start: top,
+            end,
+            floor,
+        })
     }
 
     /// The painted and scanned span in whole words.
@@ -309,7 +314,10 @@ mod tests {
 
         assert!(Footprint::window_end(addr + mem_size - 1, board.ram).is_some());
         assert!(addr + mem_size > end);
-        assert_eq!(Footprint::window_end(0x3FFB_0000, board.ram), Some(0x4000_0000));
+        assert_eq!(
+            Footprint::window_end(0x3FFB_0000, board.ram),
+            Some(0x4000_0000)
+        );
         assert!(Footprint::window_end(0x4000_0000, board.ram).is_none());
     }
 
@@ -391,11 +399,16 @@ mod tests {
     #[test]
     fn dummy_section_outside_window_error() {
         let counted = [(0x3FC8_8000, 0x400)];
-        assert!(Footprint::dummy_size(".rwdata_dummy", Some((0x4037_0000, 0x100)), &counted).is_err());
+        assert!(
+            Footprint::dummy_size(".rwdata_dummy", Some((0x4037_0000, 0x100)), &counted).is_err()
+        );
         assert_eq!(
             Footprint::dummy_size(".rtc_fast.dummy", Some((0, 0)), &[]).unwrap(),
             0
         );
-        assert_eq!(Footprint::dummy_size(".rotext_dummy", None, &[]).unwrap(), 0);
+        assert_eq!(
+            Footprint::dummy_size(".rotext_dummy", None, &[]).unwrap(),
+            0
+        );
     }
 }

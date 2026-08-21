@@ -57,24 +57,22 @@ mod tests {
         Cli::command().debug_assert();
     }
 
-    #[allow(clippy::result_large_err)]
-    fn size_cmd(argv: &[&str]) -> Result<cmd::size::Args, clap::Error> {
-        Cli::try_parse_from(["xtask", "size"].into_iter().chain(argv.iter().copied())).map(|cli| {
-            match cli.command {
+    fn size_cmd(argv: &[&str]) -> Result<cmd::size::Args, Box<clap::Error>> {
+        Cli::try_parse_from(["xtask", "size"].into_iter().chain(argv.iter().copied()))
+            .map(|cli| match cli.command {
                 Command::Size(parsed) => parsed,
                 _ => unreachable!(),
-            }
-        })
+            })
+            .map_err(Box::new)
     }
 
-    #[allow(clippy::result_large_err)]
-    fn bench_cmd(argv: &[&str]) -> Result<cmd::bench::Args, clap::Error> {
-        Cli::try_parse_from(["xtask", "bench"].into_iter().chain(argv.iter().copied())).map(
-            |cli| match cli.command {
+    fn bench_cmd(argv: &[&str]) -> Result<cmd::bench::Args, Box<clap::Error>> {
+        Cli::try_parse_from(["xtask", "bench"].into_iter().chain(argv.iter().copied()))
+            .map(|cli| match cli.command {
                 Command::Bench(parsed) => parsed,
                 _ => unreachable!(),
-            },
-        )
+            })
+            .map_err(Box::new)
     }
 
     #[test]
@@ -107,7 +105,27 @@ mod tests {
 
         assert!(bench_cmd(&["--kex", "curve25519-sha256"]).is_err());
         assert!(bench_cmd(&["--board", "esp32c6-devkitc"]).is_err());
-        assert!(bench_cmd(&["--board", "esp32c6-devkitc", "--kex", "c", "--sessions", "0"]).is_err());
-        assert!(bench_cmd(&["--board", "esp32c6-devkitc", "--kex", "c", "--rtt-iters", "0"]).is_err());
+        assert!(
+            bench_cmd(&[
+                "--board",
+                "esp32c6-devkitc",
+                "--kex",
+                "c",
+                "--sessions",
+                "0"
+            ])
+            .is_err()
+        );
+        assert!(
+            bench_cmd(&[
+                "--board",
+                "esp32c6-devkitc",
+                "--kex",
+                "c",
+                "--rtt-iters",
+                "0"
+            ])
+            .is_err()
+        );
     }
 }

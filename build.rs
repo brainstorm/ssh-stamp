@@ -12,14 +12,12 @@ fn main() {
 
     generate_config(
         "ssh-stamp",
-        &[
-            option(
-                "heap_size",
-                "Global allocator heap size in bytes",
-                72 * 1024,
-                16 * 1024..257 * 1024,
-            )
-        ],
+        &[option(
+            "heap_size",
+            "Global allocator heap size in bytes",
+            72 * 1024,
+            16 * 1024..257 * 1024,
+        )],
         true,
         true,
     );

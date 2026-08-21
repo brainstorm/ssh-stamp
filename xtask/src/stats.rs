@@ -5,7 +5,7 @@
 //! The statistics calculated from the benchmarking results.
 
 use humansize::{BINARY, format_size};
-use statrs::statistics::{Data, Max, Median, Min, OrderStatistics};
+use statrs::statistics::{Data, Max, Median, Min};
 
 /// Summary statistics over a set of samples.
 #[derive(Debug, Clone, Copy)]
@@ -17,7 +17,7 @@ pub struct Stats {
     /// Maximum of the batch.
     pub max: f64,
     /// Median of the batch.
-    pub median: f64
+    pub median: f64,
 }
 
 impl Stats {
@@ -26,7 +26,7 @@ impl Stats {
         if samples.is_empty() {
             return None;
         }
-        let mut data = Data::new(samples.to_vec());
+        let data = Data::new(samples.to_vec());
 
         Some(Stats {
             n: samples.len(),
@@ -38,7 +38,11 @@ impl Stats {
 
     /// Computes stats over the `samples` from u64 values. Returns `None` for an empty slice.
     pub fn from_micros(samples: &[u64]) -> Option<Stats> {
-        let f: Vec<f64> = samples.iter().map(|&s| s as f64).collect();
+        let f: Vec<f64> = samples
+            .iter()
+            .copied()
+            .map(|value| f64::try_from(value).expect("sample to be convertable to f64"))
+            .collect();
         Stats::from_samples(&f)
     }
 }
@@ -67,11 +71,14 @@ mod tests {
     #[test]
     fn compute_stats() {
         let stats = Stats::from_samples(&[100.0, 1.0, 3.0, 2.0]).unwrap();
-        assert_eq!((stats.n, stats.min, stats.max, stats.median), (4, 1.0, 100.0, 2.5));
+        assert_eq!(
+            (stats.n, stats.min, stats.max, stats.median),
+            (4, 1.0, 100.0, 2.5)
+        );
 
         let stats = Stats::from_samples(&[5.0]).unwrap();
         assert_eq!(stats.min, stats.max);
-        
+
         assert!(Stats::from_samples(&[]).is_none());
     }
 }
