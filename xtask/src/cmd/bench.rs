@@ -112,7 +112,7 @@ pub fn run(args: &mut Args) -> Result<()> {
 
     if runs.iter().all(|r| r.bench().is_none()) {
         // This likely indicates that everything failed, not just a heap flash.
-        bail!("no run was completed, device never booted");
+        bail!("no run was completed");
     }
 
     if !args.heap.is_empty() {
@@ -198,18 +198,27 @@ fn measure(args: &Args, features: &str, port: &str, heap: Option<u64>) -> Result
 
     let access_point = AccessPoint::parse(&serial.current_capture())?;
     if !access_point.wait_for_reachable(&args.host, args.interface.as_deref()) {
-        bail!("the device reports itself ready but is unreachable");
+        eprintln!("=== the device reports itself ready but is unreachable ===");
+        return Ok(RunOutcome::Failed {
+            heap_size: heap,
+            ready: true,
+        });
     }
     sleep(Duration::from_secs(1));
 
-    enrol(args)?;
+    if !enrol(args)? {
+        return Ok(RunOutcome::Failed {
+            heap_size: heap,
+            ready: true,
+        });
+    }
     let (established, rtt_us) = run_sessions(args)?;
 
     sleep(Duration::from_secs(2));
     serial.report_health();
     let lines = serial.current_capture();
 
-    if established == 0 {
+    if established == 0 || rtt_us.is_empty() {
         return Ok(RunOutcome::Failed {
             heap_size: heap,
             ready: true,
@@ -262,10 +271,11 @@ fn run_sessions(args: &Args) -> Result<(u32, Vec<u64>)> {
             break;
         }
         if session.established && rtt_us.is_empty() {
-            bail!(
-                "nothing came back in the first session, {} timed out",
+            eprintln!(
+                "=== nothing came back in the first session, {} timed out ===",
                 session.timeouts
             );
+            break;
         }
 
         sleep(Duration::from_secs(1));
@@ -275,10 +285,11 @@ fn run_sessions(args: &Args) -> Result<(u32, Vec<u64>)> {
     Ok((established, rtt_us))
 }
 
-/// Enrols the public key into the device on first boot.
-fn enrol(args: &Args) -> Result<()> {
+/// Enrols the public key into the device on first boot. Returns false if the
+/// enrolment session could not be established.
+fn enrol(args: &Args) -> Result<bool> {
     let Some((path, pubkey)) = read_pubkey(args.pubkey.as_deref())? else {
-        return Ok(());
+        return Ok(true);
     };
 
     eprintln!("=== adding {} for public key enrolment ===", path.display());
@@ -288,10 +299,11 @@ fn enrol(args: &Args) -> Result<()> {
 
     let session = device::SessionReport::ssh_session(&args.host, &args.user, &opts, &envs, 0)?;
     if !session.established {
-        bail!("the public key failed to enrol");
+        eprintln!("=== the public key failed to enrol ===");
+        return Ok(false);
     }
 
-    Ok(())
+    Ok(true)
 }
 
 /// Reads the key to enrol.
