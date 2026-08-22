@@ -59,6 +59,16 @@ ssh -o SendEnv=SSH_STAMP_WIFI_BAND root@192.168.4.1
 ```
 Accepts `2.4g` (default), `5g`, or `auto`. The device resets after applying the change.
 
+- To configure IPv6 (defaults to link-local only):
+```
+export SSH_STAMP_IPV6="slaac"
+ssh -o SendEnv=SSH_STAMP_IPV6 root@192.168.4.1
+```
+Accepts `off`, `slaac`, or `<address>/<prefix>` with an optional `,<gateway>`
+suffix — for example `fd00::1/64` on an access point, or
+`2001:db8::2/64,2001:db8::1` on a station. The device resets after applying the
+change. See [ipv6](./IPV6.md) for what each mode does and how to test it.
+
 - To set the UART bridge line parameters (defaults to 115200 8N1):
 ```
 export SSH_STAMP_UART_BAUD="921600"
@@ -73,6 +83,8 @@ Notes:
 - `SSH_STAMP_PUBKEY` is accepted on first-boot to add the initial admin key.
 - `SSH_STAMP_WIFI_AP_SSID` and `SSH_STAMP_WIFI_AP_PSK` may be applied while authenticated via pubkey (or on first-boot). After a successful change the device persists the settings and performs a software reset so the new WiFi settings take effect.
 - `SSH_STAMP_WIFI_BAND` selects the AP radio band. Only the ESP32-C5 supports 5GHz; other chips ignore the setting and stay on 2.4GHz.
+- `SSH_STAMP_WIFI_STA_PSK` is also accepted as `SSH_STAMP_WIFI_STA_PW`.
+- `SSH_STAMP_IPV6` selects how the device takes a routable IPv6 address. `slaac` needs a router advertising a prefix, so it only applies in Station mode; an access point can offer a static address only. A link-local `fe80::` address derived from the MAC is always present regardless, and is printed on boot.
 - `SSH_STAMP_UART_*` is supported on every target. The bridge configures its UART once at boot, so the device also resets here: the new line settings are live on the next connection.
 - If you prefer a single-step provisioning, export all three env vars locally and forward them with `SendEnv` in the same SSH invocation.
 

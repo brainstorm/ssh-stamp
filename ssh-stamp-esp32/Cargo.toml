@@ -21,6 +21,7 @@ embassy-executor = { workspace = true }
 embassy-time = { workspace = true }
 embassy-futures = { workspace = true }
 embassy-net = { workspace = true }
+smoltcp = { workspace = true }
 
 edge-dhcp = { workspace = true }
 edge-nal = { workspace = true }
@@ -62,7 +63,6 @@ can = ["ssh-stamp/can"]
 # real bus — Normal mode retransmits until a node acknowledges, as CAN
 # reliability expects.
 can-no-ack = ["can"]
-ipv6 = ["ssh-stamp/ipv6"]
 
 # Board features — select a specific PCB. Each enables the corresponding
 # board definition in ssh-stamp-esp32-boards AND the IC feature it targets.

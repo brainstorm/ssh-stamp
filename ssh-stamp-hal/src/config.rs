@@ -6,6 +6,7 @@
 
 //! Hardware configuration types.
 
+use core::net::Ipv6Addr;
 use core::str::FromStr;
 use heapless::String;
 
@@ -148,6 +149,152 @@ impl From<u8> for BandMode {
     }
 }
 
+/// Largest legal IPv6 prefix length.
+pub const IPV6_MAX_PREFIX_LEN: u8 = 128;
+
+/// Why an IPv6 configuration was refused.
+///
+/// Both variants describe a value that would panic rather than merely
+/// misbehave if it reached the network stack, which is why they are rejected
+/// at the edge instead of being clamped or ignored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ipv6ConfigError {
+    /// The value is not one of `off`, `slaac`, or `<address>/<prefix>` with an
+    /// optional `,<gateway>` suffix.
+    Syntax,
+    /// Prefix length above [`IPV6_MAX_PREFIX_LEN`]. `Ipv6Cidr::new` asserts on
+    /// these.
+    PrefixTooLong,
+    /// An address that cannot sit on an interface or act as a gateway:
+    /// multicast (which `Interface::update_ip_addrs` panics on), unspecified,
+    /// or loopback.
+    NotAssignable,
+}
+
+/// How the device obtains a routable IPv6 address.
+///
+/// Independent of the IPv4 setting: the stack runs both families at once, so
+/// a station can hold a `DHCPv4` lease and a SLAAC address at the same time.
+///
+/// A link-local `fe80::` address derived from the MAC is present regardless of
+/// this setting — `embassy-net` installs one on every config apply — so
+/// `ssh -6 fe80::…%iface` reaches the device even when IPv6 is `Disabled`.
+/// `Disabled` means "no routable address", not "no IPv6".
+///
+/// Deliberately built from `core::net` types only. An earlier revision stored
+/// `embassy_net::StaticConfigV6` behind a cargo feature, which made the
+/// on-flash layout depend on a build flag; flipping the flag across an OTA
+/// silently failed the config's integrity check and wiped the host key. This
+/// type compiles unconditionally, so there is one flash format for every build.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Ipv6Mode {
+    /// No routable address is configured. Link-local only.
+    #[default]
+    Disabled,
+    /// Stateless address autoconfiguration (RFC 4862): solicit a router and
+    /// derive an address from the prefix it advertises.
+    ///
+    /// Station mode only in practice. Nothing on this device sends router
+    /// advertisements, so a client attached to its access point has no router
+    /// to hear from, and neither does the device itself.
+    Slaac,
+    /// A fixed address and prefix, with an optional default gateway.
+    Static {
+        address: Ipv6Addr,
+        prefix_len: u8,
+        gateway: Option<Ipv6Addr>,
+    },
+}
+
+impl Ipv6Mode {
+    /// Builds a validated [`Ipv6Mode::Static`].
+    ///
+    /// This is the only way to construct one, because both of the checks it
+    /// makes guard against a panic rather than a wrong result: smoltcp's
+    /// `Ipv6Cidr::new` asserts the prefix is at most 128, and
+    /// `Interface::update_ip_addrs` panics outright on an address that is not
+    /// unicast. Values reaching either of those come from flash or from an SSH
+    /// environment variable, so they are checked here instead.
+    ///
+    /// # Errors
+    /// [`Ipv6ConfigError::PrefixTooLong`] for a prefix over 128, or
+    /// [`Ipv6ConfigError::NotAssignable`] for an address or gateway that is
+    /// multicast, unspecified or loopback.
+    pub fn new_static(
+        address: Ipv6Addr,
+        prefix_len: u8,
+        gateway: Option<Ipv6Addr>,
+    ) -> Result<Self, Ipv6ConfigError> {
+        if prefix_len > IPV6_MAX_PREFIX_LEN {
+            return Err(Ipv6ConfigError::PrefixTooLong);
+        }
+        if !is_assignable(&address) || gateway.is_some_and(|gw| !is_assignable(&gw)) {
+            return Err(Ipv6ConfigError::NotAssignable);
+        }
+        Ok(Self::Static {
+            address,
+            prefix_len,
+            gateway,
+        })
+    }
+}
+
+/// Whether an address can be installed on an interface or used as a gateway.
+///
+/// Multicast is what smoltcp panics on; the unspecified and loopback addresses
+/// decode fine but are never a usable interface address, so they are refused
+/// at the same gate rather than failing confusingly later.
+fn is_assignable(addr: &Ipv6Addr) -> bool {
+    !addr.is_multicast() && !addr.is_unspecified() && !addr.is_loopback()
+}
+
+impl FromStr for Ipv6Mode {
+    type Err = Ipv6ConfigError;
+
+    /// Parses the value of the `SSH_STAMP_IPV6` environment variable.
+    ///
+    /// Accepts `"off"`/`"none"`/`"disabled"`, `"slaac"`/`"auto"`, or an address
+    /// in `<address>/<prefix>` form with an optional `,<gateway>` suffix —
+    /// for example `"2001:db8::2/64,2001:db8::1"`. Comma rather than a space
+    /// so the value survives `env_sanitize`, which requires printable
+    /// non-space ASCII.
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let value = value.trim();
+        if value.eq_ignore_ascii_case("off")
+            || value.eq_ignore_ascii_case("none")
+            || value.eq_ignore_ascii_case("disabled")
+        {
+            return Ok(Self::Disabled);
+        }
+        if value.eq_ignore_ascii_case("slaac") || value.eq_ignore_ascii_case("auto") {
+            return Ok(Self::Slaac);
+        }
+
+        let (cidr, gateway) = match value.split_once(',') {
+            Some((cidr, gw)) => (
+                cidr,
+                Some(
+                    gw.trim()
+                        .parse::<Ipv6Addr>()
+                        .map_err(|_| Ipv6ConfigError::Syntax)?,
+                ),
+            ),
+            None => (value, None),
+        };
+        let (address, prefix_len) = cidr.trim().split_once('/').ok_or(Ipv6ConfigError::Syntax)?;
+        let address = address
+            .trim()
+            .parse::<Ipv6Addr>()
+            .map_err(|_| Ipv6ConfigError::Syntax)?;
+        let prefix_len = prefix_len
+            .trim()
+            .parse::<u8>()
+            .map_err(|_| Ipv6ConfigError::Syntax)?;
+
+        Self::new_static(address, prefix_len, gateway)
+    }
+}
+
 /// `WiFi` access point configuration.
 ///
 /// Contains settings for running the device as a `WiFi` access point.
@@ -168,6 +315,8 @@ pub struct WifiApConfigStatic {
     pub band: BandMode,
     /// MAC address for the access point interface.
     pub mac: [u8; 6],
+    /// How to configure IPv6 on the stack once it is up.
+    pub ipv6: Ipv6Mode,
 }
 
 impl Default for WifiApConfigStatic {
@@ -180,6 +329,7 @@ impl Default for WifiApConfigStatic {
             channel: 1,
             band: BandMode::default(),
             mac: [0; 6],
+            ipv6: Ipv6Mode::default(),
         }
     }
 }

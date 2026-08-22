@@ -47,6 +47,15 @@ rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s3"', '--cfg',
 # https://docs.espressif.com/projects/rust/esp-hal/1.0.0-beta.1/esp32c6/esp_hal/index.html#additional-configuration
 [env]
 ESP_LOG = "info"
+
+# smoltcp build-time sizing. The defaults are 2 addresses, 2 routes and 1
+# SLAAC prefix, and every overflow is a silent `let _ = push(..)` — a
+# dual-stack station needs one IPv4, the fe80:: link-local embassy-net always
+# installs, and one address per advertised prefix, which is already over the
+# default. Costs a few dozen bytes of RAM in the interface.
+SMOLTCP_IFACE_MAX_ADDR_COUNT = "5"
+SMOLTCP_IFACE_MAX_ROUTE_COUNT = "3"
+SMOLTCP_IFACE_MAX_PREFIX_COUNT = "2"
 #ESP_HAL_CONFIG_PLACE_SWITCH_TABLES_IN_RAM=true
 #ESP_HAL_CONFIG_PLACE_ANON_IN_RAM=false
 #ESP_HAL_CONFIG_FLIP_LINK=false

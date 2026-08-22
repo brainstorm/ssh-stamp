@@ -23,6 +23,8 @@ The SSH connection can be established via WiFi, enabling untethered (and secure)
 
 Refer to [building](./docs/BUILDING.md) if you are not using our binary releases and [using](./docs/USING.md) documentation.
 
+The network stack is dual-stack: see [ipv6](./docs/IPV6.md) for the `SSH_STAMP_IPV6` modes, what works in AP versus Station mode, and how to test it on hardware.
+
 ## Targets
 
 At present only Espressif ICs are supported but other targets (i.e Raspberry Pico2 or Dabao-1x) are planned in the future.

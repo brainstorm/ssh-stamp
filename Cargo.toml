@@ -77,17 +77,38 @@ esp-storage = { version = "0.8" }
 esp-bootloader-esp-idf = { version = "0.4.0" }
 
 # Networking
-edge-dhcp = "0.7"
-edge-nal = "0.6"
-edge-nal-embassy = "0.8"
-embassy-net = { version = "0.8", features = [
+edge-dhcp = "0.8"
+edge-nal = "0.7"
+# `default-features = false`: the default `all` feature turns on proto-ipv6,
+# multicast, icmp, medium-ip and dns for the whole graph whether or not
+# anything uses them. Ask for the DHCPv4 server's needs only; embassy-net
+# below states our own.
+edge-nal-embassy = { version = "0.9", default-features = false, features = [
+    "proto-ipv4",
+    "medium-ethernet",
+    "udp",
+    "tcp",
+    "dhcpv4",
+] }
+# `slaac` implies proto-ipv6 + multicast and pulls smoltcp's
+# `proto-ipv6-slaac`. It also makes embassy-net derive and install the
+# fe80:: link-local address from the MAC on every config apply, which is
+# what makes `ssh -6 fe80::…%iface` work without any addressing upstream.
+embassy-net = { version = "0.9", features = [
     "tcp",
     "udp",
     "dhcpv4",
     "medium-ethernet",
+    "proto-ipv6",
+    "slaac",
 ] }
-smoltcp = { version = "0.12", default-features = false, features = [
+# Used directly only for `Ipv6Cidr::from_link_prefix`, to derive the same
+# fe80:: address embassy-net installs (it exposes no way to read it back).
+# `proto-ipv6` is named explicitly rather than left to feature unification
+# with embassy-net.
+smoltcp = { version = "0.13", default-features = false, features = [
     "medium-ethernet",
+    "proto-ipv6",
     "socket-raw",
 ] }
 
@@ -165,7 +186,11 @@ opt-level = "s"
 opt-level = "s"
 
 [features]
-ipv6 = []
+# NOTE: there is deliberately no `ipv6` feature. IPv6 is always compiled in and
+# selected at runtime through `SSH_STAMP_IPV6`. Gating it on a cargo feature
+# made the on-flash config layout depend on a build flag, so flipping the flag
+# across an OTA failed the config's integrity check and reset the device —
+# new host key, provisioned pubkeys gone. See docs/IPV6.md.
 
 # Enables the SFTP OTA Subsystem. Use packer to pack a binary and PUT it over sftp
 sftp-ota = []

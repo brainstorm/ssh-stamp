@@ -37,6 +37,7 @@ use sunset_async::{ChanInOut, SSHServer, SunsetMutex};
 pub mod env_parser {
     use super::String;
     use core::str::FromStr;
+    use ssh_stamp_hal::Ipv6Mode;
 
     /// Limit the maximum length accepted for an SSH key, Ed25519 lines
     /// should be less than this.
@@ -69,6 +70,22 @@ pub mod env_parser {
         }
 
         Some(trimmed)
+    }
+
+    /// Parses an IPv6 configuration from an environment variable value.
+    ///
+    /// Accepts `off`, `slaac`, or `<address>/<prefix>` with an optional
+    /// `,<gateway>` suffix. The address form is validated by
+    /// [`Ipv6Mode::new_static`], which rejects a prefix over 128 and any
+    /// address smoltcp would panic on rather than install.
+    ///
+    /// Returns `None` if the value is not one of those forms.
+    #[must_use]
+    pub fn parse_ipv6(value: &str) -> Option<Ipv6Mode> {
+        if !env_sanitize(value) {
+            return None;
+        }
+        Ipv6Mode::from_str(value).ok()
     }
 
     /// Parses and validates a `WiFi` SSID from an environment variable value.
@@ -481,7 +498,12 @@ pub async fn session_env(
             "SSH_STAMP_WIFI_STA_SSID" => {
                 wifi_sta_ssid_env(a, config, ctx).await?;
             }
-            "SSH_STAMP_WIFI_STA_PW" => {
+            // `SSH_STAMP_WIFI_STA_PSK` is the documented name and matches
+            // `SSH_STAMP_WIFI_AP_PSK`; `..._PW` is what the dispatch originally
+            // used, so it stays accepted. Sending the documented name used to
+            // fall through to the catch-all below, which reports success and
+            // drops the value — leaving the station with no password.
+            "SSH_STAMP_WIFI_STA_PSK" | "SSH_STAMP_WIFI_STA_PW" => {
                 wifi_sta_psk_env(a, config, ctx).await?;
             }
             "SSH_STAMP_WIFI_MAC_ADDRESS" => {
@@ -489,6 +511,9 @@ pub async fn session_env(
             }
             "SSH_STAMP_WIFI_MAC_RANDOM" => {
                 wifi_mac_random_env(a, config, ctx).await?;
+            }
+            "SSH_STAMP_IPV6" => {
+                ipv6_env(a, config, ctx).await?;
             }
             "SSH_STAMP_UART_BAUD" => {
                 uart_env(UartParam::Baud, a, config, ctx).await?;
@@ -635,6 +660,41 @@ pub async fn wifi_band_env(
         }
     } else {
         warn!("SSH_STAMP_WIFI_BAND env received but not authenticated; rejecting");
+        a.fail()?;
+    }
+    Ok(())
+}
+
+/// Handles `SSH_STAMP_IPV6` environment variable requests.
+///
+/// Accepts `off` to drop back to link-local only, `slaac` to autoconfigure
+/// from router advertisements (station mode; an access point has no router to
+/// solicit), or `<address>/<prefix>[,<gateway>]` for a fixed address — for
+/// example `fd00::1/64` on an access point or `2001:db8::2/64,2001:db8::1` on
+/// a station. Triggers a config save + reset on success, because the stack is
+/// configured once at bring-up.
+///
+/// # Errors
+/// Returns an error if SSH protocol operations fail.
+pub async fn ipv6_env(
+    a: sunset::event::ServEnvironmentRequest<'_, '_>,
+    config: &SunsetMutex<SSHStampConfig>,
+    ctx: &mut EventContext<'_>,
+) -> Result<(), sunset::Error> {
+    let mut config_guard = config.lock().await;
+    if *ctx.auth_checked || config_guard.first_login {
+        if let Some(mode) = env_parser::parse_ipv6(a.value()?) {
+            config_guard.ipv6 = mode;
+            debug!("Set IPv6 mode from ENV: {mode:?}");
+            a.succeed()?;
+            *ctx.config_changed = true;
+            *ctx.needs_reset = true;
+        } else {
+            warn!("SSH_STAMP_IPV6 must be off, slaac, or <address>/<prefix>[,<gateway>]");
+            a.fail()?;
+        }
+    } else {
+        warn!("SSH_STAMP_IPV6 env received but not authenticated; rejecting");
         a.fail()?;
     }
     Ok(())

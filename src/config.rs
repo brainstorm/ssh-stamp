@@ -16,17 +16,13 @@
 
 use log::{debug, warn};
 
-use core::net::Ipv4Addr;
-#[cfg(feature = "ipv6")]
-use core::net::Ipv6Addr;
+use core::net::{Ipv4Addr, Ipv6Addr};
 use core::str::FromStr;
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
-#[cfg(feature = "ipv6")]
-use embassy_net::{Ipv6Cidr, StaticConfigV6};
 use heapless::String;
 use ssh_key::PublicKey;
 use ssh_key::public::KeyData;
-use ssh_stamp_hal::UartParams;
+use ssh_stamp_hal::{Ipv6Mode, UartParams};
 
 use sunset::packets::Ed25519PubKey;
 use sunset::{KeyType, Result};
@@ -59,10 +55,12 @@ pub struct SSHStampConfig {
     /// - `[0xFF; 6]`: Generate random MAC on each boot
     /// - Otherwise: Use the stored MAC (defaults to hardware eFuse MAC)
     pub mac: [u8; 6],
-    /// `None` for DHCP
+    /// `None` for DHCP. Persisted, but nothing applies it to the network
+    /// stack yet — AP mode is hardwired to [`settings::DEFAULT_IP`] and
+    /// station mode to a DHCP lease.
+    ///
+    /// [`settings::DEFAULT_IP`]: crate::settings::DEFAULT_IP
     pub ipv4_static: Option<StaticConfigV4>,
-    #[cfg(feature = "ipv6")]
-    pub ipv6_static: Option<StaticConfigV6>,
     /// UART
     pub uart_pins: UartPins,
     /// UART line parameters (baud, data bits, parity, stop bits) for the
@@ -70,6 +68,8 @@ pub struct SSHStampConfig {
     pub uart_params: UartParams,
     /// True until a pubkey is provisioned. Further changes require authentication.
     pub first_login: bool,
+    /// How to configure IPv6. Settable over SSH with `SSH_STAMP_IPV6`.
+    pub ipv6: Ipv6Mode,
 }
 
 /// UART pin assignment.
@@ -87,8 +87,13 @@ pub struct UartPins {
 const MAC_RANDOM_SENTINEL: [u8; 6] = [0xFF; 6];
 
 impl SSHStampConfig {
-    /// Bump this when the format changes
-    pub const CURRENT_VERSION: u8 = 12;
+    /// Bump this when the format changes.
+    ///
+    /// Version 13 added [`SSHStampConfig::ipv6`]. There is no migration from
+    /// 12: a device carrying an older config mints a fresh one on first boot
+    /// of this firmware, which means a new host key and re-provisioning the
+    /// admin pubkey.
+    pub const CURRENT_VERSION: u8 = 13;
 
     /// Check if configured for random MAC on each boot
     #[must_use]
@@ -145,11 +150,10 @@ impl SSHStampConfig {
             wifi_sta_pw,
             mac,
             ipv4_static: None,
-            #[cfg(feature = "ipv6")]
-            ipv6_static: None,
             uart_pins,
             uart_params: UartParams::default(),
             first_login: true,
+            ipv6: Ipv6Mode::default(),
         })
     }
 
@@ -267,18 +271,6 @@ fn enc_ipv4_config(v: Option<&StaticConfigV4>, s: &mut dyn SSHSink) -> WireResul
     Ok(())
 }
 
-#[cfg(feature = "ipv6")]
-fn enc_ipv6_config(v: Option<&StaticConfigV6>, s: &mut dyn SSHSink) -> WireResult<()> {
-    v.is_some().enc(s)?;
-    if let Some(v) = v {
-        v.address.address().octets().enc(s)?;
-        v.address.prefix_len().enc(s)?;
-        let gw = v.gateway.as_ref().map(core::net::Ipv6Addr::octets);
-        enc_option(gw.as_ref(), s)?;
-    }
-    Ok(())
-}
-
 fn dec_ipv4_config<'de, S>(s: &mut S) -> WireResult<Option<StaticConfigV4>>
 where
     S: SSHSource<'de>,
@@ -305,29 +297,50 @@ where
     .transpose()
 }
 
-#[cfg(feature = "ipv6")]
-fn dec_ipv6_config<'de, S>(s: &mut S) -> WireResult<Option<StaticConfigV6>>
+/// Wire tags for [`Ipv6Mode`]. Stable: they are on flash.
+const IPV6_TAG_DISABLED: u8 = 0;
+const IPV6_TAG_SLAAC: u8 = 1;
+const IPV6_TAG_STATIC: u8 = 2;
+
+fn enc_ipv6_mode(v: Ipv6Mode, s: &mut dyn SSHSink) -> WireResult<()> {
+    match v {
+        Ipv6Mode::Disabled => IPV6_TAG_DISABLED.enc(s),
+        Ipv6Mode::Slaac => IPV6_TAG_SLAAC.enc(s),
+        Ipv6Mode::Static {
+            address,
+            prefix_len,
+            gateway,
+        } => {
+            IPV6_TAG_STATIC.enc(s)?;
+            address.octets().enc(s)?;
+            prefix_len.enc(s)?;
+            let gw = gateway.as_ref().map(Ipv6Addr::octets);
+            enc_option(gw.as_ref(), s)
+        }
+    }
+}
+
+fn dec_ipv6_mode<'de, S>(s: &mut S) -> WireResult<Ipv6Mode>
 where
     S: SSHSource<'de>,
 {
-    let opt = bool::dec(s)?;
-    opt.then(|| {
-        let ad: [u8; 16] = SSHDecode::dec(s)?;
-        let ad = Ipv6Addr::from(ad);
-        let prefix = SSHDecode::dec(s)?;
-        if prefix > 32 {
-            // embassy panics, so test it here
-            return Err(WireError::PacketWrong);
+    let tag: u8 = SSHDecode::dec(s)?;
+    match tag {
+        IPV6_TAG_DISABLED => Ok(Ipv6Mode::Disabled),
+        IPV6_TAG_SLAAC => Ok(Ipv6Mode::Slaac),
+        IPV6_TAG_STATIC => {
+            let address = Ipv6Addr::from(<[u8; 16] as SSHDecode>::dec(s)?);
+            let prefix_len: u8 = SSHDecode::dec(s)?;
+            let gw: Option<[u8; 16]> = dec_option(s)?;
+            // `Ipv6Mode::new_static` is the bounds check: an IPv6 prefix runs
+            // 0..=128 and smoltcp asserts on anything past that, exactly as it
+            // panics on a non-unicast address. Flash bytes are untrusted input,
+            // so a bad one has to fail the decode rather than reach the stack.
+            Ipv6Mode::new_static(address, prefix_len, gw.map(Ipv6Addr::from))
+                .map_err(|_| WireError::PacketWrong)
         }
-        let gw: Option<[u8; 16]> = dec_option(s)?;
-        let gateway = gw.map(Ipv6Addr::from);
-        Ok(StaticConfigV6 {
-            address: Ipv6Cidr::new(ad, prefix),
-            gateway,
-            dns_servers: Default::default(),
-        })
-    })
-    .transpose()
+        _ => Err(WireError::UnknownVariant),
+    }
 }
 
 impl SSHEncode for SSHStampConfig {
@@ -348,8 +361,6 @@ impl SSHEncode for SSHStampConfig {
         self.mac.enc(s)?;
 
         enc_ipv4_config(self.ipv4_static.as_ref(), s)?;
-        #[cfg(feature = "ipv6")]
-        enc_ipv6_config(self.ipv6_static.as_ref(), s)?;
 
         // Encode UartPins
         self.uart_pins.rx.enc(s)?;
@@ -364,7 +375,7 @@ impl SSHEncode for SSHStampConfig {
         // Persist first-login marker
         self.first_login.enc(s)?;
 
-        Ok(())
+        enc_ipv6_mode(self.ipv6, s)
     }
 }
 
@@ -396,8 +407,6 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         let mac = SSHDecode::dec(s)?;
 
         let ipv4_static = dec_ipv4_config(s)?;
-        #[cfg(feature = "ipv6")]
-        let ipv6_static = dec_ipv6_config(s)?;
 
         // Not supported by sshwire-derive nor virtue (no Option<u8> support)
         // let uart_pins = SSHDecode::dec(s)?;
@@ -419,6 +428,8 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
 
         let first_login = SSHDecode::dec(s)?;
 
+        let ipv6 = dec_ipv6_mode(s)?;
+
         Ok(Self {
             hostkey,
             pubkeys,
@@ -429,11 +440,205 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
             wifi_sta_pw,
             mac,
             ipv4_static,
-            #[cfg(feature = "ipv6")]
-            ipv6_static,
             uart_pins,
             uart_params,
             first_login,
+            ipv6,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sunset::sshwire;
+
+    /// Drives the private `enc_ipv6_mode`/`dec_ipv6_mode` pair on its own, so a
+    /// test does not have to hand-roll the rest of the config stream.
+    struct Ipv6Slot(Ipv6Mode);
+
+    impl SSHEncode for Ipv6Slot {
+        fn enc(&self, s: &mut dyn SSHSink) -> WireResult<()> {
+            enc_ipv6_mode(self.0, s)
+        }
+    }
+
+    impl<'de> SSHDecode<'de> for Ipv6Slot {
+        fn dec<S>(s: &mut S) -> WireResult<Self>
+        where
+            S: SSHSource<'de>,
+        {
+            dec_ipv6_mode(s).map(Ipv6Slot)
+        }
+    }
+
+    /// Tag + 16 address bytes + prefix + tag for an absent gateway.
+    const STATIC_SLOT_NO_GW_LEN: usize = 1 + 16 + 1 + 1;
+    const STATIC_PREFIX_OFFSET: usize = 17;
+
+    fn documentation_addr() -> Ipv6Addr {
+        Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1)
+    }
+
+    fn round_trip(mode: Ipv6Mode) -> Ipv6Mode {
+        let mut buf = [0u8; 64];
+        let n = sshwire::write_ssh(&mut buf, &Ipv6Slot(mode)).expect("encode");
+        let (slot, used): (Ipv6Slot, usize) = sshwire::read_ssh(&buf[..n], None).expect("decode");
+        assert_eq!(used, n, "decoder consumed a different number of bytes");
+        slot.0
+    }
+
+    #[test]
+    fn disabled_and_slaac_round_trip() {
+        assert_eq!(round_trip(Ipv6Mode::Disabled), Ipv6Mode::Disabled);
+        assert_eq!(round_trip(Ipv6Mode::Slaac), Ipv6Mode::Slaac);
+    }
+
+    /// A /64 is the ordinary case. An earlier decoder checked the decoded
+    /// prefix against the IPv4 bound of 32, so every realistic IPv6 config
+    /// failed to decode — and a decode failure sends `store::load_or_create`
+    /// down its recreate path, taking the host key and stored pubkeys with it.
+    #[test]
+    fn static_prefix_64_round_trips() {
+        let mode = Ipv6Mode::new_static(documentation_addr(), 64, None).expect("valid /64");
+        assert_eq!(round_trip(mode), mode);
+    }
+
+    /// 128 is the largest legal prefix and must be accepted, not rejected as
+    /// an off-by-one.
+    #[test]
+    fn static_prefix_128_round_trips() {
+        let mode = Ipv6Mode::new_static(documentation_addr(), 128, None).expect("valid /128");
+        assert_eq!(round_trip(mode), mode);
+    }
+
+    #[test]
+    fn static_gateway_round_trips() {
+        let gateway = Ipv6Addr::new(0xfe80, 0, 0, 0, 0, 0, 0, 1);
+        let mode =
+            Ipv6Mode::new_static(documentation_addr(), 64, Some(gateway)).expect("valid config");
+        assert_eq!(round_trip(mode), mode);
+    }
+
+    /// Above 128 `Ipv6Cidr::new` asserts, so the decoder has to reject the
+    /// bytes rather than hand them to smoltcp and panic the device on boot.
+    #[test]
+    fn static_prefix_over_128_rejected() {
+        let mode = Ipv6Mode::new_static(documentation_addr(), 64, None).expect("valid /64");
+        let mut buf = [0u8; 64];
+        let n = sshwire::write_ssh(&mut buf, &Ipv6Slot(mode)).expect("encode");
+        assert_eq!(n, STATIC_SLOT_NO_GW_LEN, "unexpected static slot layout");
+        buf[STATIC_PREFIX_OFFSET] = 129;
+        let decoded: Result<(Ipv6Slot, usize), _> = sshwire::read_ssh(&buf[..n], None);
+        assert!(decoded.is_err(), "prefix 129 must not decode");
+    }
+
+    /// `Interface::update_ip_addrs` panics outright on a non-unicast address,
+    /// so flash bytes carrying one have to fail the decode.
+    #[test]
+    fn multicast_address_rejected() {
+        let mode = Ipv6Mode::new_static(documentation_addr(), 64, None).expect("valid /64");
+        let mut buf = [0u8; 64];
+        let n = sshwire::write_ssh(&mut buf, &Ipv6Slot(mode)).expect("encode");
+        // Overwrite the address with ff02::1, the all-nodes multicast group.
+        buf[1..17].copy_from_slice(&Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1).octets());
+        let decoded: Result<(Ipv6Slot, usize), _> = sshwire::read_ssh(&buf[..n], None);
+        assert!(decoded.is_err(), "a multicast address must not decode");
+    }
+
+    #[test]
+    fn unknown_tag_rejected() {
+        let decoded: Result<(Ipv6Slot, usize), _> = sshwire::read_ssh(&[0xAA], None);
+        assert!(decoded.is_err(), "an unknown mode tag must not decode");
+    }
+
+    /// The env-var syntax users are told to type in `docs/IPV6.md`.
+    #[test]
+    fn env_syntax_parses() {
+        assert_eq!("off".parse::<Ipv6Mode>(), Ok(Ipv6Mode::Disabled));
+        assert_eq!("SLAAC".parse::<Ipv6Mode>(), Ok(Ipv6Mode::Slaac));
+        assert_eq!(
+            "fd00::1/64".parse::<Ipv6Mode>(),
+            Ipv6Mode::new_static(Ipv6Addr::new(0xfd00, 0, 0, 0, 0, 0, 0, 1), 64, None)
+        );
+        assert_eq!(
+            "2001:db8::2/64,2001:db8::1".parse::<Ipv6Mode>(),
+            Ipv6Mode::new_static(
+                Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 2),
+                64,
+                Some(documentation_addr()),
+            )
+        );
+
+        for bad in [
+            "2001:db8::1",            // no prefix
+            "2001:db8::1/129",        // prefix out of range
+            "ff02::1/64",             // multicast, panics smoltcp
+            "::/0",                   // unspecified
+            "2001:db8::1/64,ff02::1", // multicast gateway
+            "not-an-address/64",
+            "",
+        ] {
+            assert!(bad.parse::<Ipv6Mode>().is_err(), "{bad} must be rejected");
+        }
+    }
+
+    /// The IPv4 guard is the one the IPv6 bound was mistakenly copied from;
+    /// pin it so a future edit cannot widen it to 128 as well.
+    #[test]
+    fn ipv4_prefix_over_32_rejected() {
+        struct Ipv4Slot(Option<StaticConfigV4>);
+
+        impl SSHEncode for Ipv4Slot {
+            fn enc(&self, s: &mut dyn SSHSink) -> WireResult<()> {
+                enc_ipv4_config(self.0.as_ref(), s)
+            }
+        }
+
+        impl<'de> SSHDecode<'de> for Ipv4Slot {
+            fn dec<S>(s: &mut S) -> WireResult<Self>
+            where
+                S: SSHSource<'de>,
+            {
+                dec_ipv4_config(s).map(Ipv4Slot)
+            }
+        }
+
+        let cfg = StaticConfigV4 {
+            address: Ipv4Cidr::new(Ipv4Addr::new(192, 168, 4, 1), 24),
+            gateway: None,
+            dns_servers: Default::default(),
+        };
+        let mut buf = [0u8; 64];
+        let n = sshwire::write_ssh(&mut buf, &Ipv4Slot(Some(cfg))).expect("encode");
+        // bool tag + 4 address bytes + prefix + bool tag for an absent gateway.
+        assert_eq!(n, 1 + 4 + 1 + 1, "unexpected ipv4 slot wire layout");
+        buf[5] = 33;
+        let decoded: Result<(Ipv4Slot, usize), _> = sshwire::read_ssh(&buf[..n], None);
+        assert!(decoded.is_err(), "prefix 33 must not decode");
+    }
+
+    /// The whole config has to survive a flash round trip with each IPv6 mode,
+    /// since the slot sits in the middle of the stream and a wrong length
+    /// there shifts every field after it.
+    #[test]
+    fn whole_config_round_trips_for_every_mode() {
+        for mode in [
+            Ipv6Mode::Disabled,
+            Ipv6Mode::Slaac,
+            Ipv6Mode::new_static(documentation_addr(), 64, Some(documentation_addr()))
+                .expect("valid config"),
+        ] {
+            let mut config =
+                SSHStampConfig::new([0x02, 0, 0, 0, 0, 1], UartPins { rx: 4, tx: 5 }).expect("new");
+            config.ipv6 = mode;
+
+            let mut buf = [0u8; 512];
+            let n = sshwire::write_ssh(&mut buf, &config).expect("encode");
+            let (decoded, used): (SSHStampConfig, usize) =
+                sshwire::read_ssh(&buf[..n], None).expect("decode");
+            assert_eq!(used, n, "decoder consumed a different number of bytes");
+            assert_eq!(decoded, config);
+        }
     }
 }
