@@ -3,6 +3,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use core::future::{Future, ready};
+
 use crate::handler::{OtaError, UpdateProcessor};
 use ssh_stamp_hal::OtaActions;
 
@@ -77,16 +79,16 @@ impl<W: OtaActions> SftpOtaServer<W> {
 }
 
 impl<W: OtaActions> SftpServer for SftpOtaServer<W> {
-    async fn open(
+    fn open(
         &mut self,
         path: &str,
         mode: &PFlags,
-    ) -> sunset_sftp::server::SftpOpResult<FileHandle> {
+    ) -> impl Future<Output = sunset_sftp::server::SftpOpResult<FileHandle>> {
         if self.open_handle.is_some() {
             error!(
                 "SftpServer Open operation failed: already writing OTA, path = {path:?}, attrs = {mode:?}"
             );
-            return Err(StatusCode::SSH_FX_PERMISSION_DENIED);
+            return ready(Err(StatusCode::SSH_FX_PERMISSION_DENIED));
         }
 
         let num_mode = u32::from(mode);
@@ -99,7 +101,7 @@ impl<W: OtaActions> SftpServer for SftpOtaServer<W> {
             "SftpServer Open operation: path = {:?}, write_permission = {:?}, handle = {:?}",
             path, self.write_permission, OTA_FILE_HANDLE
         );
-        Ok(OTA_FILE_HANDLE)
+        ready(Ok(OTA_FILE_HANDLE))
     }
 
     async fn close(&mut self, handle: FileHandle) -> sunset_sftp::server::SftpOpResult<()> {
@@ -179,26 +181,32 @@ impl<W: OtaActions> SftpServer for SftpOtaServer<W> {
         Ok(())
     }
 
-    async fn opendir(&mut self, dir: &str) -> sunset_sftp::server::SftpOpResult<DirHandle> {
+    fn opendir(
+        &mut self,
+        dir: &str,
+    ) -> impl Future<Output = sunset_sftp::server::SftpOpResult<DirHandle>> {
         info!("SftpServer OpenDir: dir = {dir:?}. Returning {OTA_DIR_HANDLE:?}");
-        Ok(OTA_DIR_HANDLE)
+        ready(Ok(OTA_DIR_HANDLE))
     }
 
-    async fn readdir<W2: Write>(
+    fn readdir<W2: Write>(
         &mut self,
         handle: DirHandle,
         _reply: DirReadHeaderReply<'_, '_, W2>,
-    ) -> sunset_sftp::server::SftpOpResult<DirReadReplyFinished> {
+    ) -> impl Future<Output = sunset_sftp::server::SftpOpResult<DirReadReplyFinished>> {
         info!("SftpServer ReadDir called for OTA SFTP server on handle: {handle:?}");
-        Err(StatusCode::SSH_FX_EOF)
+        ready(Err(StatusCode::SSH_FX_EOF))
     }
 
-    async fn realpath(&mut self, dir: &str) -> sunset_sftp::server::SftpOpResult<NameEntry<'_>> {
+    fn realpath(
+        &mut self,
+        dir: &str,
+    ) -> impl Future<Output = sunset_sftp::server::SftpOpResult<NameEntry<'_>>> {
         info!("SftpServer RealPath: dir = {dir:?}");
-        Ok(NameEntry {
+        ready(Ok(NameEntry {
             filename: Filename::from("/"),
             _longname: Filename::from("/"),
             attrs: sunset_sftp::protocol::Attrs::default(),
-        })
+        }))
     }
 }

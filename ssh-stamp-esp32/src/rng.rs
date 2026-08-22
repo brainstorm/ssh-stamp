@@ -25,6 +25,7 @@
 //! below. That keeps this crate `#![forbid(unsafe_code)]`.
 
 use core::cell::RefCell;
+use core::future::{Future, ready};
 
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -59,13 +60,13 @@ impl Default for EspRng {
 }
 
 impl RngHal for EspRng {
-    async fn fill_bytes(&mut self, buf: &mut [u8]) -> Result<(), HalError> {
-        RNG_MUTEX.lock(|t| {
+    fn fill_bytes(&mut self, buf: &mut [u8]) -> impl Future<Output = Result<(), HalError>> {
+        ready(RNG_MUTEX.lock(|t| {
             let mut rng = t.borrow_mut();
             let rng = rng.as_mut().ok_or(HalError::Rng)?;
             rng.read(buf);
             Ok(())
-        })
+        }))
     }
 }
 
