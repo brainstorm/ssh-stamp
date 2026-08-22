@@ -121,7 +121,6 @@ once_cell = { version = "1", features = [
 portable-atomic = "1"
 snafu = { version = "0.8", default-features = false }
 pastey = "0.1"
-pretty-hex = { version = "0.4", default-features = false }
 embedded-io-async = "0.7"
 embassy-embedded-hal = "0.6"
 embedded-can = "0.4"
@@ -161,7 +160,6 @@ embedded-storage-async = { workspace = true }
 portable-atomic = { workspace = true }
 snafu = { workspace = true }
 pastey = { workspace = true }
-pretty-hex = { workspace = true }
 
 [profile.dev]
 opt-level = 0

@@ -476,7 +476,8 @@ pub async fn session_env(
     if let ServEvent::SessionEnv(a) = ev {
         debug!("Got ENV request");
         debug!("ENV name: {}", a.name()?);
-        debug!("ENV value: {}", a.value()?);
+        // Don't log the value: SSH_STAMP_WIFI_AP_PSK / SSH_STAMP_WIFI_STA_PW
+        // and friends carry secrets straight to the serial/RTT log sink.
 
         match a.name()? {
             "LANG" => {

@@ -91,7 +91,8 @@
 //! [`prepare_ap_config`]: app::prepare_ap_config
 //! [`run_app`]: app::run_app
 
-// `no_std` on device; the host test harness needs `std`, matching `ota`.
+// `no_std` on device; under `cargo test` the std test harness needs std, same
+// pattern as the `ota` crate. `src/` stays platform-agnostic either way.
 #![cfg_attr(not(test), no_std)]
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]

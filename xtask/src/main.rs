@@ -399,14 +399,12 @@ fn open(page: &Path) -> Result<(), String> {
 }
 
 fn test(root: &Path, registry: &Registry) -> Result<(), String> {
-    // Both crates are `no_std` on device and `cfg_attr(not(test), no_std)` on
-    // the host, so their unit tests run here without a board attached.
+    // Crates whose unit tests run on the host. Both are `no_std` on device and
+    // drop to std under `cfg(test)` so the standard test harness can link.
+    // The port crates (ssh-stamp-esp32 &co) cannot be tested this way: they
+    // pull in esp-hal and only build for the MCU triples.
     let mut cmd = cargo(registry.host_toolchain());
-    cmd.args(["test", "-p", "ota"]);
-    exec(root, cmd)?;
-
-    let mut cmd = cargo(registry.host_toolchain());
-    cmd.args(["test", "-p", "ssh-stamp"]);
+    cmd.args(["test", "-p", "ota", "-p", "ssh-stamp"]);
     exec(root, cmd)
 }
 
