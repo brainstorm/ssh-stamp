@@ -90,7 +90,13 @@
 //!
 //! [`prepare_ap_config`]: app::prepare_ap_config
 //! [`run_app`]: app::run_app
-
+//!
+//! ## Build-time configuration
+//!
+//! The heap and buffer sizes below are declared in `build.rs` via `esp-config`
+//! and overridable at build time with the matching environment variable. Note that
+//! these are build time config variables, they are not used at runtime.
+#![doc = include_str!(concat!(env!("OUT_DIR"), "/ssh_stamp_config_table.md"))]
 // `no_std` on device; under `cargo test` the std test harness needs std, same
 // pattern as the `ota` crate. `src/` stays platform-agnostic either way.
 #![cfg_attr(not(test), no_std)]
@@ -107,6 +113,7 @@ pub mod can;
 pub mod config;
 pub mod errors;
 pub mod handle;
+pub mod mem_probe;
 pub mod platform;
 pub mod serial;
 pub mod serve;

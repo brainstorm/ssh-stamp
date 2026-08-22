@@ -103,7 +103,15 @@ impl NetworkProviderHal for EspWifi {
         let (ap_radio_config, net_config, wifi_interface) =
             build_radio_config(&ap_config, sta_ssid_static, self.gateway);
 
-        let controller_config = ControllerConfig::default().with_initial_config(ap_radio_config);
+        // The ssh-stamp workload is relatively small, mostly smaller packets, and
+        // unlikely to have many connections, so these values are safe to reduce.
+        let controller_config = ControllerConfig::default()
+            .with_initial_config(ap_radio_config)
+            .with_static_rx_buf_num(4)
+            .with_dynamic_rx_buf_num(16)
+            .with_dynamic_tx_buf_num(16)
+            .with_ampdu_rx_enable(false)
+            .with_ampdu_tx_enable(false);
         let mut wifi_controller = WifiController::new(wifi_peri, controller_config)
             .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
 

@@ -4,8 +4,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use embedded_storage::ReadStorage;
-use embedded_storage::nor_flash::NorFlash;
+use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 
 use ssh_key::sha2::Digest;
 
@@ -60,7 +59,7 @@ pub fn load_or_create<F>(
     default_uart_pins: UartPins,
 ) -> Result<SSHStampConfig, SunsetError>
 where
-    F: NorFlash + ReadStorage,
+    F: NorFlash,
 {
     match load_checked(flash, buf) {
         Ok(mut c) => {
@@ -131,7 +130,7 @@ enum LoadError {
 /// wiping stored keys on the latter.
 fn load_checked<F>(flash: &mut F, buf: &mut [u8]) -> Result<SSHStampConfig, LoadError>
 where
-    F: ReadStorage,
+    F: ReadNorFlash,
 {
     // If at some point you target a 64bit arch these can truncate and cause
     // corruption of the bootloader or the ota partition.
@@ -181,7 +180,7 @@ where
 /// hash mismatches.
 pub fn load<F>(flash: &mut F, buf: &mut [u8]) -> Result<SSHStampConfig, SunsetError>
 where
-    F: ReadStorage,
+    F: ReadNorFlash,
 {
     match load_checked(flash, buf) {
         Ok(c) => Ok(c),
@@ -244,7 +243,57 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::settings::KEY_SLOTS;
+    use core::str::FromStr;
     use embedded_storage::nor_flash::{ErrorType, NorFlashErrorKind, ReadNorFlash};
+    use embedded_storage_inmemory::MemFlash;
+    use heapless::String;
+    use sunset::packets::Ed25519PubKey;
+    use sunset::sshwire::Blob;
+
+    type TestFlash = MemFlash<{ CONFIG_OFFSET + CONFIG_AREA_SIZE }, CONFIG_AREA_SIZE, 4>;
+
+    fn round_trip(config: &SSHStampConfig) {
+        let mut flash = TestFlash::new(0);
+        let mut buf = [0u8; CONFIG_AREA_SIZE];
+        save(&mut flash, &mut buf, config).unwrap();
+        let loaded = load(&mut flash, &mut buf).unwrap();
+        assert_eq!(&loaded, config);
+    }
+
+    fn test_config() -> SSHStampConfig {
+        SSHStampConfig::new([0x02; 6], UartPins { rx: 10, tx: 11 }).unwrap()
+    }
+
+    #[test]
+    fn config_with_round_trip() {
+        round_trip(&test_config());
+    }
+
+    #[test]
+    fn config_with_wifi_round_trip() {
+        let mut config = test_config();
+        config.pubkeys = [Some(Ed25519PubKey {
+            key: Blob([0x5a; 32]),
+        }); KEY_SLOTS];
+        config.wifi_sta_ssid = String::from_str(&"s".repeat(32)).unwrap();
+        config.wifi_sta_pw = String::from_str(&"p".repeat(63)).unwrap();
+
+        round_trip(&config);
+
+        let mut buf = [0u8; CONFIG_AREA_SIZE];
+        let written = sshwire::write_ssh(
+            &mut buf,
+            &FlashConfig {
+                version: SSHStampConfig::CURRENT_VERSION,
+                config: OwnOrBorrow::Borrow(&config),
+                hash: config_hash(&config).unwrap(),
+            },
+        )
+        .unwrap();
+        assert!(written <= FlashConfig::BUF_SIZE);
+        assert!(written <= CONFIG_AREA_SIZE);
+    }
 
     const MAC: [u8; 6] = [0x02, 0x00, 0x00, 0x00, 0x00, 0x01];
     /// Matches esp-storage's word-sized writes.
@@ -323,7 +372,9 @@ mod tests {
         }
 
         fn write(&mut self, offset: u32, bytes: &[u8]) -> Result<(), Self::Error> {
-            if offset as usize % Self::WRITE_SIZE != 0 || bytes.len() % Self::WRITE_SIZE != 0 {
+            if !(offset as usize).is_multiple_of(Self::WRITE_SIZE)
+                || !bytes.len().is_multiple_of(Self::WRITE_SIZE)
+            {
                 return Err(NorFlashErrorKind::NotAligned);
             }
             let (start, end) = self.bounds(offset, bytes.len())?;
@@ -331,18 +382,6 @@ mod tests {
                 *cell &= byte;
             }
             Ok(())
-        }
-    }
-
-    impl ReadStorage for MockFlash {
-        type Error = NorFlashErrorKind;
-
-        fn read(&mut self, offset: u32, bytes: &mut [u8]) -> Result<(), Self::Error> {
-            ReadNorFlash::read(self, offset, bytes)
-        }
-
-        fn capacity(&self) -> usize {
-            self.cells.len()
         }
     }
 

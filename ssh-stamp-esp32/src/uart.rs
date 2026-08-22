@@ -5,6 +5,7 @@
 // SPDX-FileCopyrightText: 2026 pancake <pancake@nopcode.org>
 // SPDX-FileCopyrightText: 2026 Gabriel Ku Wei Bin <gabriel.ku@fsfe.org>
 // SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
+// SPDX-FileCopyrightText: 2026 Marko Malenic <mmalenic1@gmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -22,6 +23,8 @@ use embassy_sync::signal::Signal;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pipe::Pipe};
 use esp_hal::Async;
 use esp_hal::gpio::AnyPin;
+#[cfg(feature = "bench-loopback")]
+use esp_hal::gpio::Flex;
 use esp_hal::peripherals::UART1;
 use esp_hal::uart::{Config, DataBits, Parity, RxConfig, StopBits, Uart};
 use portable_atomic::{AtomicUsize, Ordering};
@@ -209,6 +212,15 @@ pub async fn uart_task(
     );
 
     let uart = Uart::new(uart1, uart_config).expect("UART config error");
+
+    // Route the TX back into the RX input to measure round trip.
+    #[cfg(feature = "bench-loopback")]
+    let uart = {
+        log::warn!("bench-loopback active, the TX is looped back to RX.");
+        let (rx_sig, tx_sig) = Flex::new(pins.tx).split();
+        uart.with_rx(rx_sig).with_tx(tx_sig).into_async()
+    };
+    #[cfg(not(feature = "bench-loopback"))]
     let uart = uart.with_rx(pins.rx).with_tx(pins.tx).into_async();
 
     uart_buf.run(uart).await;

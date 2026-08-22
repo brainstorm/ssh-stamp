@@ -7,8 +7,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 //! Compile-time constants: default IP, `WiFi` character set, buffer sizes.
+//!
+//! The heap and buffer sizes are build-time config values declared in this crate's
+//! `build.rs` via `esp-config`. They can be overridden with `SSH_STAMP_CONFIG_*`
+//! environment variables.
 
 use core::net::Ipv4Addr;
+use esp_config::esp_config_int;
 
 // SSH server settings
 //pub(crate) const MTU: usize = 1536;
@@ -24,5 +29,14 @@ pub(crate) const WIFI_PASSWORD_CHARS: &[u8; 62] =
 // Wifi Station Mode Connection
 pub const STATION_MODE_MAX_RETRY_SECONDS: u8 = 10;
 
-// UART settings
+/// UART buffer size in bytes.
 pub const UART_BUFFER_SIZE: usize = 4096;
+
+/// Receive buffer for the SSH TCP socket.
+pub const TCP_RX_BUF: usize = 8192;
+
+/// Transmit buffer for the SSH TCP socket.
+pub const TCP_TX_BUF: usize = 4096;
+
+/// Global allocator heap size in bytes.
+pub const HEAP_SIZE: usize = esp_config_int!(usize, "SSH_STAMP_CONFIG_HEAP_SIZE");

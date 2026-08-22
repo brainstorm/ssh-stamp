@@ -90,14 +90,12 @@ To see which GPIO each bus uses on each board, and which buses a board does
 not support yet, build the documentation:
 
 ```
-cargo xtask doc
+cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask
 ```
 
 Then open the board support crate's front page,
-`target/riscv32imac-unknown-none-elf/doc/ssh_stamp_esp32_boards/index.html`.
+`target/boards/esp32c6-devkitc/riscv32imac-unknown-none-elf/doc/ssh_stamp_esp32_boards/index.html`.
 Its catalog table is regenerated from the TOML files on every run.
-(`cargo xtask doc --open` opens a browser on the `ssh-stamp` crate instead;
-the crate list in the sidebar reaches every other crate, this one included.)
 
 (`cargo xtask list` gives the board list as a quick terminal summary, without
 the pins.)

@@ -84,7 +84,7 @@ emulation.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/espressif/esp-emulator/main/install.sh | sh
-./hil/emulator/run-esp32c6.sh --ssh-port 2222
+./test/emulator/run-esp32c6.sh --ssh-port 2222
 ```
 
 The script builds the firmware, merges bootloader + partition table + app into

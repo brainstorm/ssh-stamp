@@ -12,7 +12,7 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/brainstorm/ssh-stamp"
 
 [dependencies]
-ssh-stamp = { path = ".." }
+ssh-stamp = { path = "..", default-features = false }
 ssh-stamp-hal = { path = "../ssh-stamp-hal" }
 ota = { path = "../ota" }
 
@@ -64,12 +64,14 @@ can = ["ssh-stamp/can"]
 can-no-ack = ["can"]
 ipv6 = ["ssh-stamp/ipv6"]
 
+mem-probe = ["ssh-stamp/mem-probe", "esp-alloc/internal-heap-stats"]
+bench-loopback = []
+
 # Board features — select a specific PCB. Each enables the corresponding
 # board definition in ssh-stamp-esp32-boards AND the IC feature it targets.
 board-esp32c5-devkitc = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32c5-devkitc", "esp32c5"]
 board-esp32c61-devkitc = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32c61-devkitc", "esp32c61"]
 board-esp32c6-devkitc = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32c6-devkitc", "esp32c6"]
-board-esp32c6-generic = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32c6-generic", "esp32c6"]
 board-esp32-s2-saola = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-esp32-s2-saola", "esp32s2"]
 board-waveshare-esp32-s3-touch-lcd-43 = ["dep:ssh-stamp-esp32-boards", "ssh-stamp-esp32-boards/board-waveshare-esp32-s3-touch-lcd-43", "esp32s3"]
 

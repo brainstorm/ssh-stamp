@@ -21,5 +21,8 @@ target/
 # VSCode workspace(s)
 *.code-workspace
 
+# JetBrains IDE
+.idea/
+
 # Temporarily ignore book from this branch
 docs/book

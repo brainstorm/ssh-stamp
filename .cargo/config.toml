@@ -3,19 +3,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [alias]
-# Every build goes through the xtask runner: `cargo xtask <command>`.
-# Board/chip/toolchain knowledge lives in xtask/targets.toml and the
-# `[build]` section of each ssh-stamp-*-boards/boards/*.toml, instead of one
-# alias per board*feature combination (see issue #116).
+# Every build goes through the xtask runner: `cargo xtask <command>` for
+# project tasks, `cargo xtask <target> <cargo command...>` to forward any
+# cargo command line to a board or chip. Board/chip/toolchain knowledge
+# lives in xtask/src/board.rs, instead of one alias per board*feature
+# combination (see issue #116).
 #
 #   cargo xtask list
-#   cargo xtask build esp32c6-devkitc
-#   cargo xtask run waveshare-esp32-s3-touch-lcd-43 --features can-no-ack
-#   cargo xtask ci
-xtask = "run --package xtask --"
+#   cargo xtask esp32c6-devkitc build --release
+#   cargo xtask waveshare-esp32-s3-touch-lcd-43 run --release --features can-no-ack
+xtask = "run --package xtask --release --"
 
-# The OTA image packer is a host tool, not a build target.
-packer = "run --package ota --bin packer"
+# The OTA image packer is a host tool, not a build target. `std` satisfies
+# the binary's `required-features`.
+packer = "run --package ota --bin packer --features std"
 
 # NOTE: there is deliberately no `[build] target` or `[unstable] build-std`
 # here. Both used to be global, which forced *every* cargo invocation —
@@ -25,6 +26,10 @@ packer = "run --package ota --bin packer"
 # Editors wanting cross-compilation diagnostics should set the target in
 # their own rust-analyzer config, e.g.:
 #   "rust-analyzer.cargo.target": "riscv32imac-unknown-none-elf"
+
+# Enforce arithmetic overflow checks on every target.
+[target.'cfg(target_os = "none")']
+rustflags = ["-C", "overflow-checks=on"]
 
 [target.xtensa-esp32-none-elf] # ESP32
 runner = "espflash flash --baud=921600 --monitor --chip esp32"

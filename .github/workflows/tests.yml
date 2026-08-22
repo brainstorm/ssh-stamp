@@ -30,4 +30,4 @@ jobs:
         with:
           toolchain: stable
       - name: Package test
-        run: cargo xtask test
+        run: cargo test

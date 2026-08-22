@@ -399,24 +399,25 @@ pub async fn pubkey_auth(
         let config_guard = config.lock().await;
         let client_pubkey = a.pubkey()?;
 
-        match client_pubkey {
-            PubKey::Ed25519(presented) => {
-                let matched = config_guard
-                    .pubkeys
-                    .iter()
-                    .any(|slot| slot.as_ref().is_some_and(|stored| *stored == presented));
+        let matched = match &client_pubkey {
+            PubKey::Ed25519(presented) => config_guard
+                .pubkeys
+                .iter()
+                .any(|slot| slot.as_ref().is_some_and(|stored| stored == presented)),
+            PubKey::Unknown(_) => false,
+        };
 
-                if matched {
-                    *ctx.auth_checked = true;
-                    a.allow()?;
-                } else {
-                    debug!("No matching pubkey slot found");
-                    a.reject()?;
-                }
-            }
-            PubKey::Unknown(_) => {
-                a.reject()?;
-            }
+        match client_pubkey.fingerprint() {
+            Ok(fingerprint) if matched => info!("Accepted pubkey {fingerprint}"),
+            Ok(fingerprint) => warn!("Rejected pubkey {fingerprint}: not enrolled in any slot"),
+            Err(err) => warn!("Rejected pubkey: {err:?}"),
+        }
+
+        if matched {
+            *ctx.auth_checked = true;
+            a.allow()?;
+        } else {
+            a.reject()?;
         }
     }
     Ok(())

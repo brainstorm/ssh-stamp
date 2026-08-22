@@ -5,6 +5,7 @@
 // SPDX-FileCopyrightText: 2026 pancake <pancake@nopcode.org>
 // SPDX-FileCopyrightText: 2026 Gabriel Ku Wei Bin <gabriel.ku@fsfe.org>
 // SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
+// SPDX-FileCopyrightText: 2026 Marko Malenic <mmalenic1@gmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -37,11 +38,15 @@ use log::{debug, error, warn};
 use ssh_stamp::config::{SSHStampConfig, UartPins};
 use ssh_stamp::platform::PlatformServices;
 use ssh_stamp::store;
-use ssh_stamp::{app, settings::DEFAULT_IP};
+use ssh_stamp::{
+    app,
+    mem_probe::{self, Checkpoint},
+    settings::{DEFAULT_IP, HEAP_SIZE},
+};
 #[cfg(feature = "can")]
 use ssh_stamp_esp32::{BufferedCan, CAN_BUF, EspCanPins, can_task};
 use ssh_stamp_esp32::{
-    BufferedUart, EspPlatform, EspUartPins, EspWifi, UART_BUF, flash, mac_address,
+    BufferedUart, EspPlatform, EspUartPins, EspWifi, UART_BUF, bench, flash, mac_address,
     register_custom_rng, uart_task,
 };
 use ssh_stamp_esp32_boards::Board;
@@ -64,16 +69,21 @@ async fn main(spawner: Spawner) -> ! {
         if #[cfg(feature = "esp32s2")] {
             // TODO: This heap size will crash at runtime (only for the ESP32S2);
             // see https://github.com/brainstorm/ssh-stamp/pull/41#issuecomment-2964775170
-            esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 72 * 1024);
+            esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: HEAP_SIZE);
         } else {
-            esp_alloc::heap_allocator!(size: 72 * 1024);
+            esp_alloc::heap_allocator!(size: HEAP_SIZE);
         }
     );
     esp_bootloader_esp_idf::esp_app_desc!();
     logger::init_logger_from_env();
+    bench::log_heap("boot");
+
     debug!("HSM: initialising peripherals");
 
-    let peripherals = esp_hal::init(esp_hal::Config::default());
+    // Note that benches do depend on a stable clock speed across comparisons. The default
+    // shouldn't change much, but theoretically an upgrade could change it.
+    let config = esp_hal::Config::default();
+    let peripherals = esp_hal::init(config);
 
     // Enable true random number generation using ADC entropy source before config creation.
     // The ESP32 hardware RNG only produces true random numbers when RF subsystem is enabled
@@ -206,6 +216,7 @@ async fn main(spawner: Spawner) -> ! {
        }
     }
 
+    mem_probe::checkpoint(Checkpoint::Boot);
     let uart_buf = UART_BUF.init_with(BufferedUart::new);
     let interrupt_executor =
         INT_EXECUTOR.init_with(|| InterruptExecutor::new(sw_int.software_interrupt1));
@@ -243,6 +254,9 @@ async fn main(spawner: Spawner) -> ! {
     let platform = EspPlatform::new(can_buf);
     #[cfg(not(feature = "can"))]
     let platform = EspPlatform::new();
+
+    mem_probe::checkpoint(Checkpoint::PeripheralsReady);
+    bench::log_heap("peripherals");
 
     debug!("Initialising radio");
 
@@ -289,6 +303,9 @@ async fn main(spawner: Spawner) -> ! {
             }
         }
     }
+
+    mem_probe::checkpoint(Checkpoint::WifiUp);
+    bench::log_heap("wifi_up");
 
     // The radio should have picked up the entropy duty dropped above:
     // esp-radio bumps esp-hal's entropy-source count once the RF subsystem is

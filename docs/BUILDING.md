@@ -31,28 +31,28 @@ source $HOME/export-esp.sh
 
 ## Building
 
-Pass either a **board** (builds the firmware binary) or a bare **chip**
-(builds the library only, for chips with no board definition yet):
+Name either a **board** (builds the firmware binary) or a library only **chip**
+(for chips with no board definition yet), then write the rest of the line as
+you would for plain cargo:
 
 ```
-cargo xtask build esp32c6-devkitc                    # a board
-cargo xtask build esp32c3                            # a chip, library only
-cargo xtask build waveshare-esp32-s3-touch-lcd-43    # Xtensa, picks the esp toolchain itself
+cargo xtask esp32c6-devkitc build --release                    # a board
+cargo xtask esp32c3 build --release                            # a chip, library only
+cargo xtask waveshare-esp32-s3-touch-lcd-43 build --release    # Xtensa, picks the esp toolchain itself
 ```
 
-Optional features and profiles are flags rather than separate commands, and
-anything after `--` goes straight to cargo:
+Because the rest of the line is cargo's, every cargo flag works unchanged:
 
 ```
-cargo xtask build esp32c6-devkitc --features sftp-ota
-cargo xtask build waveshare-esp32-s3-touch-lcd-43 --features can-no-ack
-cargo xtask build esp32c6-devkitc --profile dev -- --timings
+cargo xtask esp32c6-devkitc build --release --features sftp-ota
+cargo xtask waveshare-esp32-s3-touch-lcd-43 build --release --features can-no-ack
+cargo xtask esp32c6-devkitc build --timings
+cargo xtask esp32c6-devkitc tree -i esp-hal
 ```
 
-You do not need to remember which targets need `+esp`, `-Zbuild-std` or a
-special profile: that lives in [`xtask/targets.toml`](../xtask/targets.toml)
-and in the `[build]` section of each board definition under
-`ssh-stamp-esp32-boards/boards/`.
+You do not need to remember which targets need `+esp` or `-Zbuild-std`:
+that lives in [`xtask/src/board.rs`](../xtask/src/board.rs), and
+`cargo xtask list` prints the known boards.
 
 ## Flashing
 
@@ -60,18 +60,22 @@ and in the `[build]` section of each board definition under
 configured per target triple in `.cargo/config.toml`):
 
 ```
-cargo xtask run esp32c6-devkitc
+cargo xtask esp32c6-devkitc run --release
 ```
 
 ## Everything CI checks
 
 ```
-cargo xtask clippy      # lints one representative board
-cargo xtask fmt         # --check to verify instead of rewrite
-cargo xtask doc
-cargo xtask test        # host-side crates
-cargo xtask ci          # all of the above, for every board and chip
+cargo xtask esp32c6-devkitc build --release    # one CI job per board and chip
+cargo xtask esp32c6-devkitc clippy --release -- -D warnings
+cargo clippy -p xtask --all-targets -- -D warnings
+cargo fmt --all -- --check
+cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask
+cargo test              # host-side crates, scoped by workspace default-members
 ```
+
+Docs build against a board so the build script generates a real pin layout
+for the crate front pages.
 
 ## Adding a board
 
@@ -89,16 +93,16 @@ cargo xtask ci          # all of the above, for every board and chip
    # features = ["can"]   # optional: features this board always needs
    ```
 2. Add the matching `board-<name>` feature in that platform's `Cargo.toml`.
+3. Register the board in `BOARDS` in
+   [`xtask/src/board.rs`](../xtask/src/board.rs) using the name, feature, target
+   triple, toolchain and RAM windows. This is what `cargo xtask list` will use.  
+   Add it to the matrix in `.github/workflows/build.yml` if it should get its own CI job.
 
-That is it — `cargo xtask list` picks it up by scanning the boards
-directory, so no alias, matrix entry or xtask code has to change. The pin
-catalog on the BSP crate's documentation front page is regenerated from the
-TOML files by `cargo xtask doc`, so the new board appears there too without
-anyone editing a table.
+The `build.rs` validates the feature against the TOML files, and the
+pin layout on the crate's documentation front page is regenerated from
+them on the next doc build.
 
-## Adding a chip or a new vendor
+## Adding a chip
 
-Add a `[chips.<name>]` entry to `xtask/targets.toml` with its target triple
-(plus `toolchain`, `build-std` or `profile` if it needs them). A whole new
-manufacturer is a `[platforms.<vendor>]` entry pointing at that vendor's
-crate and boards directory; nothing in the xtask code is Espressif-specific.
+Add a `Chip` entry to `CHIPS` in [`xtask/src/board.rs`](../xtask/src/board.rs) with its target triple and
+toolchain.

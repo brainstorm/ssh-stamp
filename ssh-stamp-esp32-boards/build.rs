@@ -302,7 +302,7 @@ fn gen_structs(out: &mut String, boards: &[Board]) -> Result<()> {
 const CATALOG_TMPL: &str = r"# Board catalog
 
 Pin allocation for every board of this platform, generated from its
-`boards/*.toml` files on each `cargo doc` (`cargo xtask doc`) run. The TOML
+`boards/*.toml` files on each `cargo doc` (`cargo xtask <board> doc`) run. The TOML
 files are the single source of truth: this table is the only place the
 allocation is written down, and no README, guide or hand-written doc page
 repeats it.
@@ -313,7 +313,7 @@ on that board yet — either the hardware does not break it out, or nothing has
 driven it there so far. Adding the pins to the board's TOML is what fills the
 cell in, here and in the firmware.
 {mux_note}
-Select a board with `cargo xtask build <board>`, or with
+Select a board with `cargo xtask <board> build`, or with
 `--features board-<board>` when driving cargo directly.
 ";
 

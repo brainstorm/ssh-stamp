@@ -23,7 +23,7 @@
 //!
 //! No `.rs` file, no macro editing, no binary changes. The `build.rs`
 //! validates that selected features have matching TOML files, and the board
-//! shows up in the catalog above on the next `cargo xtask doc`.
+//! shows up in the catalog above on the next `cargo xtask <board> doc`.
 #![no_std]
 
 /// Board identification trait.

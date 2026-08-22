@@ -8,8 +8,8 @@
 # No hardware required. Builds the firmware, merges it into a flash image with
 # espflash, and runs it under esp-emu (Espressif's RISC-V emulator).
 #
-#   ./hil/emulator/run-esp32c6.sh                 # boot, print serial output
-#   ./hil/emulator/run-esp32c6.sh --ssh-port 2222 # also forward SSH to :2222
+#   ./test/emulator/run-esp32c6.sh                 # boot, print serial output
+#   ./test/emulator/run-esp32c6.sh --ssh-port 2222 # also forward SSH to :2222
 #
 # Requires: esp-emu (https://github.com/espressif/esp-emulator), espflash.
 #
@@ -23,7 +23,7 @@
 set -euo pipefail
 
 CHIP=esp32c6
-BOARD=board-esp32c6-devkitc
+BOARD=esp32c6-devkitc
 TARGET=riscv32imac-unknown-none-elf
 WIFI_SSID=myssid
 WIFI_PASS=mypassword
@@ -49,13 +49,12 @@ done
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$root"
 
-elf="target/$TARGET/release/ssh-stamp-esp32"
+elf="target/boards/$BOARD/$TARGET/release/ssh-stamp-esp32"
 image="$(mktemp -t ssh-stamp-XXXXXX.bin)"
 trap 'rm -f "$image"' EXIT
 
 echo ">> building $BOARD"
-cargo build --release --target "$TARGET" -p ssh-stamp-esp32 --bin ssh-stamp-esp32 \
-    --no-default-features --features "$BOARD"
+cargo xtask "$BOARD" build --release
 
 # esp-emu wants one merged flash image (bootloader + partition table + app),
 # which espflash can produce directly from the Rust ELF — no ESP-IDF needed.
