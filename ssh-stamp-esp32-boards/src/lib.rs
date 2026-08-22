@@ -12,20 +12,18 @@
 //!
 //! The TOML files are the single source of truth for pin numbers. No human
 //! writes or edits the generated Rust code.
-//!
+#![doc = include_str!(concat!(env!("OUT_DIR"), "/board_catalog.md"))]
 //! # Adding a board
 //!
-//! 1. Create `boards/{board-name}.toml` with a `[pins]` section (`uart_rx`,
-//!    `uart_tx`) and an optional `url`.
+//! 1. Create `boards/{board-name}.toml` with a `[pins]` section (`uart_rx`
+//!    and `uart_tx`, plus `can_tx`/`can_rx` and `i2c_sda`/`i2c_scl` for the
+//!    buses the board breaks out), a `[build]` section naming its chip, and
+//!    an optional `url`.
 //! 2. Add `board-{name} = []` to `[features]` in `Cargo.toml`.
 //!
 //! No `.rs` file, no macro editing, no binary changes. The `build.rs`
-//! validates that selected features have matching TOML files.
-//!
-//! # Available boards
-//!
-//! See the [`board_catalog`] module for the generated table.
-
+//! validates that selected features have matching TOML files, and the board
+//! shows up in the catalog above on the next `cargo xtask <board> doc`.
 #![no_std]
 
 /// Board identification trait.

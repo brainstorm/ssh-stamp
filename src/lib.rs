@@ -74,6 +74,10 @@
 //! and `SSH_STAMP_WIFI_PSK` env vars. Changes are persisted to flash and the
 //! device performs a software reset.
 //!
+//! The serial bridge line settings follow the same route through the
+//! `SSH_STAMP_UART_BAUD`, `SSH_STAMP_UART_DATA_BITS`, `SSH_STAMP_UART_PARITY`
+//! and `SSH_STAMP_UART_STOP_BITS` env vars, defaulting to 115200 8N1.
+//!
 //! ## Testing
 //!
 //! Host-side OTA TLV tests:
@@ -93,7 +97,9 @@
 //! and overridable at build time with the matching environment variable. Note that
 //! these are build time config variables, they are not used at runtime.
 #![doc = include_str!(concat!(env!("OUT_DIR"), "/ssh_stamp_config_table.md"))]
-#![no_std]
+// `no_std` on device; under `cargo test` the std test harness needs std, same
+// pattern as the `ota` crate. `src/` stays platform-agnostic either way.
+#![cfg_attr(not(test), no_std)]
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 #![deny(unused_imports)]

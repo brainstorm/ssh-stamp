@@ -16,24 +16,27 @@ on:
       - main
 
 jobs:
-  espressif-targets:
-    name: Espressif target ${{ matrix.device.soc }}
+  targets:
+    name: Build ${{ matrix.target.name }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # Just the target name plus which toolchain has to be installed before
+      # xtask can run. Everything else (triple, profile, features, build-std)
+      # comes from xtask/src/board.rs, see `cargo xtask list`.
       matrix:
-        device: [
-            # RISC-V devices:
-            { soc: "esp32c2", board: "esp32c2", target: "riscv32imc-unknown-none-elf", toolchain: "stable", buildstd: "", binlib: "--lib" },
-            { soc: "esp32c3", board: "esp32c3", target: "riscv32imc-unknown-none-elf", toolchain: "stable", buildstd: "", binlib: "--lib" },
-            { soc: "esp32c5", board: "board-esp32c5-devkitc", target: "riscv32imac-unknown-none-elf", toolchain: "stable", buildstd: "", binlib: "--bin ssh-stamp-esp32" },
-            { soc: "esp32c6", board: "board-esp32c6-devkitc", target: "riscv32imac-unknown-none-elf", toolchain: "stable", buildstd: "", binlib: "--bin ssh-stamp-esp32" },
-            { soc: "esp32c61", board: "board-esp32c61-devkitc", target: "riscv32imac-unknown-none-elf", toolchain: "stable", buildstd: "", binlib: "--bin ssh-stamp-esp32" },
-            # Xtensa devices:
-            { soc: "esp32", board: "esp32", target: "xtensa-esp32-none-elf", toolchain: "esp", buildstd: "-Z build-std=core,alloc", binlib: "--lib" },
-            { soc: "esp32s2", board: "board-esp32-s2-saola", target: "xtensa-esp32s2-none-elf", toolchain: "esp", buildstd: "-Z build-std=core,alloc", binlib: "--bin ssh-stamp-esp32" },
-            { soc: "esp32s3", board: "esp32s3", target: "xtensa-esp32s3-none-elf", toolchain: "esp", buildstd: "-Z build-std=core,alloc", binlib: "--lib" },
-            { soc: "esp32s3", board: "board-waveshare-esp32-s3-touch-lcd-43,can", target: "xtensa-esp32s3-none-elf", toolchain: "esp", buildstd: "-Z build-std=core,alloc", binlib: "--bin ssh-stamp-esp32" },
+        target: [
+            # Chips without a BSP entry, i.e. library-only builds.
+            { name: "esp32c2", xtensa: false },
+            { name: "esp32c3", xtensa: false },
+            { name: "esp32", xtensa: true },
+            { name: "esp32s3", xtensa: true },
+            # Boards, i.e. full firmware binaries.
+            { name: "esp32c5-devkitc", xtensa: false },
+            { name: "esp32c6-devkitc", xtensa: false },
+            { name: "esp32c61-devkitc", xtensa: false },
+            { name: "esp32-s2-saola", xtensa: true },
+            { name: "waveshare-esp32-s3-touch-lcd-43", xtensa: true },
         ]
     steps:
       - name: Cache
@@ -41,27 +44,43 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
       - name: Setup Rust toolchain for RISC-V
-        if: ${{ !contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.device.soc) }}
+        if: ${{ !matrix.target.xtensa }}
         uses: dtolnay/rust-toolchain@v1
         with:
           target: riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf
           toolchain: stable
           components: rust-src, clippy, rustfmt
       - name: Setup Rust toolchain for Xtensa
-        if: ${{ contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.device.soc) }}
+        if: ${{ matrix.target.xtensa }}
         uses: esp-rs/xtensa-toolchain@v1.7.0
         with:
           ldproxy: false
           version: 1.96.0
 
-      - name: Build project
-        run: cargo +${{ matrix.device.toolchain }} build --release --target ${{ matrix.device.target }} -p ssh-stamp-esp32 ${{ matrix.device.binlib }} --no-default-features --features ${{ matrix.device.board }} ${{ matrix.device.buildstd }}
+      - name: Build
+        run: cargo xtask ${{ matrix.target.name }} build --release
+      # Per-target so chip-gated code (`cfg(feature = "esp32")`, ...) is
+      # linted too, not just what the esp32c6-devkitc build compiles.
+      - name: Clippy
+        run: cargo xtask ${{ matrix.target.name }} clippy --release -- -D warnings
 
-      - name: Check lints and format
-        if: ${{ matrix.device.board == 'board-esp32c6-devkitc' }}
-        run: |
-          cargo +${{ matrix.device.toolchain }} clippy --release --features board-esp32c6-devkitc --target riscv32imac-unknown-none-elf -p ssh-stamp-esp32 --bin ssh-stamp-esp32 --no-default-features -- -D warnings -A clippy::default_trait_access
-          cargo +${{ matrix.device.toolchain }} fmt -- --check
+  lint:
+    name: Lints and format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Setup Stable Rust Toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+      # Firmware clippy runs per target in the build matrix above.
+      - name: Clippy host tools
+        run: cargo clippy -p xtask --all-targets -- -D warnings
+      - name: Format
+        run: cargo fmt --all -- --check
+
   packer:
     name: OTA Packer
     runs-on: ubuntu-latest
@@ -73,10 +92,10 @@ jobs:
       - name: Setup Stable Rust Toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
-          target: riscv32imac-unknown-none-elf
           toolchain: stable
       - name: Build utility
-        run: cargo build-packer
+        run: cargo build --package ota --bin packer
+
   docs:
     name: Documentation
     runs-on: ubuntu-latest
@@ -89,6 +108,6 @@ jobs:
           target: riscv32imac-unknown-none-elf
           toolchain: stable
       - name: Build all docs
-        run: cargo build-doc
+        run: cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask
       - name: Check doc warnings
-        run: cargo build-doc 2>&1 | grep -iE "broken|warning.*link" || true
+        run: cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask 2>&1 | grep -iE "broken|warning.*link" || true

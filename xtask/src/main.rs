@@ -1,8 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Marko Malenic <mmalenic1@gmail.com>
+// SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! The `ssh_stamp` xtask runner.
+//! The `ssh_stamp` xtask runner. `cargo xtask <command>` for project tasks,
+//! and `cargo xtask <target> <cargo command> [args...]` to run a cargo
+//! command against a board or chip.
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -22,7 +25,14 @@ mod stats;
     name = "xtask",
     about = "ssh-stamp xtask runner",
     version,
-    long_about = None
+    after_help = "\
+Any board or chip name is also a command, where the rest of the line is a cargo command
+line, forwarded with the target's toolchain, triple and feature selection applied.
+
+  cargo xtask esp32c6-devkitc build --release
+  cargo xtask esp32c6-devkitc run --release --features sftp-ota
+  cargo xtask esp32c3 clippy -- -D warnings
+  cargo xtask esp32-s2-saola tree -i esp-hal"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -31,19 +41,29 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// List known boards and chips.
+    List,
     /// Benchmark ssh-stamp from boot startup to sessions.
     Bench(cmd::bench::Args),
     /// Convert benchmark results.json into Bencher Metric Format.
     Bmf(cmd::bmf::Args),
     /// Determine the size of a firmware build.
     Size(cmd::size::Args),
+    /// `<target> <cargo command> [args...]` forwarded to cargo.
+    #[command(external_subcommand)]
+    Cargo(Vec<String>),
 }
 
 fn main() -> Result<()> {
     match Cli::parse().command {
+        Command::List => {
+            cmd::list::run();
+            Ok(())
+        }
         Command::Bench(mut args) => cmd::bench::run(&mut args),
         Command::Bmf(args) => cmd::bmf::run(&args),
         Command::Size(args) => cmd::size::run(&args),
+        Command::Cargo(argv) => cmd::cargo::run(&argv),
     }
 }
 
@@ -51,11 +71,6 @@ fn main() -> Result<()> {
 mod tests {
     use super::*;
     use clap::CommandFactory as _;
-
-    #[test]
-    fn cli_is_consistent() {
-        Cli::command().debug_assert();
-    }
 
     fn size_cmd(argv: &[&str]) -> Result<cmd::size::Args, Box<clap::Error>> {
         Cli::try_parse_from(["xtask", "size"].into_iter().chain(argv.iter().copied()))
@@ -73,6 +88,52 @@ mod tests {
                 _ => unreachable!(),
             })
             .map_err(Box::new)
+    }
+
+    #[test]
+    fn cli_is_consistent() {
+        Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn commands_and_targets_disjoint() {
+        let command = Cli::command();
+        let commands = command
+            .get_subcommands()
+            .map(clap::Command::get_name)
+            .collect::<Vec<_>>();
+
+        let targets = board::BOARDS
+            .iter()
+            .map(|b| b.name)
+            .chain(board::CHIPS.iter().map(|c| c.name));
+        for target in targets {
+            assert!(!commands.contains(&target));
+        }
+    }
+
+    #[test]
+    fn forwards_targets_to_cargo() {
+        let cli = Cli::try_parse_from([
+            "xtask",
+            "esp32c6-devkitc",
+            "build",
+            "--release",
+            "--",
+            "--timings",
+        ])
+        .unwrap();
+        let Command::Cargo(argv) = cli.command else {
+            panic!();
+        };
+        assert_eq!(
+            argv,
+            ["esp32c6-devkitc", "build", "--release", "--", "--timings"]
+        );
+
+        let cli = Cli::try_parse_from(["xtask", "esp32-fake-name", "build"]).unwrap();
+        assert!(matches!(cli.command, Command::Cargo(_)));
+        assert!(Cli::try_parse_from(["xtask"]).is_err());
     }
 
     #[test]

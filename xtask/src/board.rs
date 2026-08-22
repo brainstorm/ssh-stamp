@@ -37,6 +37,20 @@ pub struct Board {
     pub max_ram_kib: Option<u64>,
 }
 
+/// A bare chip with no board definition yet: the firmware binary would hit
+/// the "No board feature selected" guard, so only the library is built.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Chip {
+    /// The chip name, which is also the cargo feature that selects it.
+    pub name: &'static str,
+    /// The rust target.
+    pub target: &'static str,
+    /// The toolchain that builds this target.
+    pub toolchain: &'static str,
+    /// For xtensa, adds `-Z build-std=core,alloc`.
+    pub build_std: bool,
+}
+
 /// The partition table to flash the firmware with.
 const PARTITIONS: &str = "ssh-stamp-esp32/partitions.csv";
 
@@ -153,6 +167,60 @@ pub const BOARDS: &[Board] = &[
     },
 ];
 
+/// Every chip supported by the xtask. Chips targeted by a board are
+/// still listed so the library remains buildable for custom boards or
+/// future entries.
+pub const CHIPS: &[Chip] = &[
+    Chip {
+        name: "esp32",
+        target: "xtensa-esp32-none-elf",
+        toolchain: "esp",
+        build_std: true,
+    },
+    Chip {
+        name: "esp32c2",
+        target: "riscv32imc-unknown-none-elf",
+        toolchain: "stable",
+        build_std: false,
+    },
+    Chip {
+        name: "esp32c3",
+        target: "riscv32imc-unknown-none-elf",
+        toolchain: "stable",
+        build_std: false,
+    },
+    Chip {
+        name: "esp32c5",
+        target: "riscv32imac-unknown-none-elf",
+        toolchain: "stable",
+        build_std: false,
+    },
+    Chip {
+        name: "esp32c6",
+        target: "riscv32imac-unknown-none-elf",
+        toolchain: "stable",
+        build_std: false,
+    },
+    Chip {
+        name: "esp32c61",
+        target: "riscv32imac-unknown-none-elf",
+        toolchain: "stable",
+        build_std: false,
+    },
+    Chip {
+        name: "esp32s2",
+        target: "xtensa-esp32s2-none-elf",
+        toolchain: "esp",
+        build_std: true,
+    },
+    Chip {
+        name: "esp32s3",
+        target: "xtensa-esp32s3-none-elf",
+        toolchain: "esp",
+        build_std: true,
+    },
+];
+
 /// A struct representing the `cargo bloat` result.
 #[derive(serde::Deserialize)]
 pub struct Bloat {
@@ -180,6 +248,106 @@ pub fn find(name: &str) -> Option<&'static Board> {
 pub fn name_parser() -> impl TypedValueParser<Value = &'static Board> {
     PossibleValuesParser::new(BOARDS.iter().map(|b| b.name))
         .map(|name: String| find(&name).expect("only accepting args from here"))
+}
+
+/// What a target name resolves to: a board builds the firmware binary, a
+/// bare chip builds the library only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Target {
+    Board(&'static Board),
+    Chip(&'static Chip),
+}
+
+impl Target {
+    /// Looks up a board or chip by name, boards first.
+    pub fn find(name: &str) -> Option<Self> {
+        find(name)
+            .map(Target::Board)
+            .or_else(|| CHIPS.iter().find(|c| c.name == name).map(Target::Chip))
+    }
+
+    /// The target name.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Target::Board(board) => board.name,
+            Target::Chip(chip) => chip.name,
+        }
+    }
+
+    /// The toolchain that builds this target.
+    pub fn toolchain(&self) -> &'static str {
+        match self {
+            Target::Board(board) => board.toolchain,
+            Target::Chip(chip) => chip.toolchain,
+        }
+    }
+
+    /// The directory where cargo puts the artifacts.
+    pub fn target_dir(&self) -> PathBuf {
+        match self {
+            Target::Board(board) => board.target_dir(),
+            Target::Chip(chip) => chip.target_dir(),
+        }
+    }
+
+    /// The cargo arguments that select the targe triple, package,
+    /// artifact kind and base feature.
+    pub fn selection_args(&self) -> Vec<String> {
+        let mut arguments = vec![
+            "--target".into(),
+            self.triple().into(),
+            "-p".into(),
+            "ssh-stamp-esp32".into(),
+        ];
+
+        if let Target::Chip(_) = self {
+            arguments.push("--lib".into());
+        }
+
+        arguments.extend([
+            "--no-default-features".into(),
+            "--features".into(),
+            self.feature().into(),
+        ]);
+
+        if self.build_std() {
+            arguments.push("-Z".into());
+            arguments.push("build-std=core,alloc".into());
+        }
+
+        arguments
+    }
+
+    /// The rust target triple.
+    fn triple(&self) -> &'static str {
+        match self {
+            Target::Board(board) => board.target,
+            Target::Chip(chip) => chip.target,
+        }
+    }
+
+    /// The feature selecting the target.
+    fn feature(&self) -> &'static str {
+        match self {
+            Target::Board(board) => board.feature,
+            Target::Chip(chip) => chip.name,
+        }
+    }
+
+    /// Adds `-Z build-std=core,alloc`.
+    fn build_std(&self) -> bool {
+        match self {
+            Target::Board(board) => board.build_std,
+            Target::Chip(chip) => chip.build_std,
+        }
+    }
+}
+
+impl Chip {
+    /// The directory for artifacts.
+    pub fn target_dir(&self) -> PathBuf {
+        PathBuf::from("target").join("chips").join(self.name)
+    }
 }
 
 /// Resolves a `--board` / `--all` selection.
@@ -370,6 +538,29 @@ mod tests {
             board.features(&["board-esp32c6-devkitc"]),
             "board-esp32c6-devkitc"
         );
+    }
+
+    #[test]
+    fn selection_args() {
+        let board = Target::find("esp32c6-devkitc").unwrap();
+        assert_eq!(
+            board.selection_args(),
+            [
+                "--target",
+                "riscv32imac-unknown-none-elf",
+                "-p",
+                "ssh-stamp-esp32",
+                "--no-default-features",
+                "--features",
+                "board-esp32c6-devkitc",
+            ]
+        );
+
+        let chip = Target::find("esp32s3").unwrap();
+        let args = chip.selection_args();
+        assert!(args.contains(&"--lib".to_string()));
+        assert!(args.ends_with(&["-Z".into(), "build-std=core,alloc".into()]));
+        assert_eq!(Target::find("esp32c3"), Some(Target::Chip(&CHIPS[2])));
     }
 
     #[test]

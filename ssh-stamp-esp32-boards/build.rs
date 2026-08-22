@@ -13,7 +13,11 @@
 //!   files, which are the single source of truth.
 //! - The `select_board!` macro that expands to the `cfg_if!` + `use` block,
 //!   so the binary has zero per-board lines.
-//! - A rustdoc board-catalog table.
+//!
+//! It also writes `OUT_DIR/board_catalog.md`, the UART/CAN/I2C pin table that
+//! `src/lib.rs` includes into this crate's front page. Every platform's BSP
+//! crate generates its own, so the table always sits with the boards it
+//! describes instead of in a top-level page or a Markdown file under `docs/`.
 //!
 //! Adding a board = add a `boards/{name}.toml` file + a `board-{name}` feature
 //! in `Cargo.toml`. No `.rs` file, no macro editing.
@@ -81,6 +85,7 @@ struct BoardDef {
     url: Option<String>,
     pins: Pins,
     can_mux: Option<CanMux>,
+    build: Option<BuildSection>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -89,6 +94,15 @@ struct Pins {
     uart_tx: u8,
     can_tx: Option<u8>,
     can_rx: Option<u8>,
+    i2c_sda: Option<u8>,
+    i2c_scl: Option<u8>,
+}
+
+/// The `[build]` section belongs to `cargo xtask`; the catalog reads the
+/// chip name out of it so the table can say which MCU each board carries.
+#[derive(Debug, Deserialize)]
+struct BuildSection {
+    chip: Option<String>,
 }
 
 /// Boards that share their CAN pins with other functions behind an
@@ -108,10 +122,13 @@ struct Board {
     struct_name: String,
     feature: String,
     url: Option<String>,
+    chip: Option<String>,
     uart_rx: u8,
     uart_tx: u8,
     can_tx: Option<u8>,
     can_rx: Option<u8>,
+    i2c_sda: Option<u8>,
+    i2c_scl: Option<u8>,
     can_mux: Option<CanMux>,
 }
 
@@ -163,8 +180,8 @@ fn main() -> Result<()> {
     validate_features(&boards)?;
 
     let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").ok_or("OUT_DIR not set by cargo")?);
-    let out_path = out_dir.join("boards_gen.rs");
-    fs::write(&out_path, generate_code(&boards)?)?;
+    fs::write(out_dir.join("boards_gen.rs"), generate_code(&boards)?)?;
+    fs::write(out_dir.join("board_catalog.md"), generate_catalog(&boards)?)?;
 
     Ok(())
 }
@@ -205,10 +222,13 @@ fn load_boards(boards_dir: &Path) -> Result<Vec<Board>> {
             struct_name: to_pascal_case(&stem),
             feature: format!("board-{stem}"),
             url: def.url,
+            chip: def.build.and_then(|b| b.chip),
             uart_rx: def.pins.uart_rx,
             uart_tx: def.pins.uart_tx,
             can_tx: def.pins.can_tx,
             can_rx: def.pins.can_rx,
+            i2c_sda: def.pins.i2c_sda,
+            i2c_scl: def.pins.i2c_scl,
             can_mux: def.can_mux,
         });
     }
@@ -249,7 +269,6 @@ fn generate_code(boards: &[Board]) -> Result<String> {
 
     out.push_str(HEADER);
     gen_structs(&mut out, boards)?;
-    gen_catalog(&mut out, boards)?;
     gen_take_uart_pins(&mut out, boards);
     gen_take_can_pins(&mut out, boards);
     gen_setup_can_transceiver(&mut out, boards);
@@ -277,29 +296,92 @@ fn gen_structs(out: &mut String, boards: &[Board]) -> Result<()> {
     Ok(())
 }
 
-fn gen_catalog(out: &mut String, boards: &[Board]) -> Result<()> {
-    // A rustdoc table summarising all boards — rendered in `cargo doc` output
-    // as the `board_catalog` module page. This is the "one place to look" that
-    // replaces the old hand-maintained README pin table.
-    writeln!(
-        out,
-        "/// # Available boards\n///\n/// | Board feature | UART RX | UART TX | CAN TX | CAN RX | URL |\n/// |---|---|---|---|---|---|"
-    )?;
+/// Prose around the generated pin table. `{table}` receives the rows,
+/// `{mux_note}` a sentence that is only relevant when some board on this
+/// platform muxes its pins.
+const CATALOG_TMPL: &str = r"# Board catalog
+
+Pin allocation for every board of this platform, generated from its
+`boards/*.toml` files on each `cargo doc` (`cargo xtask <board> doc`) run. The TOML
+files are the single source of truth: this table is the only place the
+allocation is written down, and no README, guide or hand-written doc page
+repeats it.
+
+{table}
+Cells are GPIO numbers. `x` marks a bus that is neither supported nor tested
+on that board yet — either the hardware does not break it out, or nothing has
+driven it there so far. Adding the pins to the board's TOML is what fills the
+cell in, here and in the firmware.
+{mux_note}
+Select a board with `cargo xtask <board> build`, or with
+`--features board-<board>` when driving cargo directly.
+";
+
+/// Appended to the catalog when at least one board has a `[can_mux]`.
+const CATALOG_MUX_NOTE: &str = "
+Pins marked `(mux)` are not a bus of their own: the firmware drives them to
+steer an on-board switch or IO expander (the `[can_mux]` section of the
+board's TOML) before it can use the bus they route.
+";
+
+/// The table's fixed part: header row plus alignment row.
+const CATALOG_HEADER: &str = "\
+| Board | Chip | UART RX | UART TX | CAN TX | CAN RX | I2C SDA | I2C SCL |
+|---|---|---|---|---|---|---|---|
+";
+
+/// A GPIO cell: the number, or `x` when the board has no such pin.
+fn pin_cell(pin: Option<u8>) -> String {
+    pin.map_or_else(|| "x".to_string(), |n| n.to_string())
+}
+
+/// An I2C cell. A board can expose I2C pins in `[pins]`, or carry them only
+/// as the control bus of a `[can_mux]`; the two are worth telling apart.
+fn i2c_cell(pin: Option<u8>, mux_pin: Option<u8>) -> String {
+    match (pin, mux_pin) {
+        (Some(n), _) => n.to_string(),
+        (None, Some(n)) => format!("{n} (mux)"),
+        (None, None) => "x".to_string(),
+    }
+}
+
+/// Render the board catalog as a Markdown page.
+///
+/// Included verbatim into the crate documentation by `src/lib.rs`, which puts
+/// the table on this platform's front page rather than in a module of its own
+/// or in a Markdown file under `docs/`.
+fn generate_catalog(boards: &[Board]) -> Result<String> {
+    let mut table = String::from(CATALOG_HEADER);
     for b in boards {
-        let url = match &b.url {
-            Some(u) => format!("<{u}>"),
-            None => "—".to_string(),
+        // The board name doubles as the link to the vendor's board page, so
+        // the table stays narrow enough to read without a URL column.
+        let name = match &b.url {
+            Some(url) => format!("[`{}`]({url})", b.name),
+            None => format!("`{}`", b.name),
         };
-        let can_tx = b.can_tx.map_or("—".to_string(), |v| v.to_string());
-        let can_rx = b.can_rx.map_or("—".to_string(), |v| v.to_string());
+        let mux = b.can_mux.as_ref();
         writeln!(
-            out,
-            "/// | `{}` | {} | {} | {} | {} | {} |",
-            b.feature, b.uart_rx, b.uart_tx, can_tx, can_rx, url,
+            table,
+            "| {name} | {chip} | {} | {} | {} | {} | {} | {} |",
+            b.uart_rx,
+            b.uart_tx,
+            pin_cell(b.can_tx),
+            pin_cell(b.can_rx),
+            i2c_cell(b.i2c_sda, mux.map(|m| m.i2c_sda)),
+            i2c_cell(b.i2c_scl, mux.map(|m| m.i2c_scl)),
+            chip = b.chip.as_deref().unwrap_or("x"),
         )?;
     }
-    writeln!(out, "pub mod board_catalog {{}}\n")?;
-    Ok(())
+
+    let mux_note = if boards.iter().any(|b| b.can_mux.is_some()) {
+        CATALOG_MUX_NOTE
+    } else {
+        ""
+    };
+
+    Ok(CATALOG_TMPL
+        .replace("{table}", &table)
+        .replace("{mux_note}", mux_note))
 }
 
 /// Per-board `#[cfg]` branch inside `take_uart_pins!`.

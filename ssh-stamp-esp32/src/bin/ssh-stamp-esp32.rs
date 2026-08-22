@@ -14,16 +14,16 @@
 //! Brings up ESP-specific peripherals (heap, flash, RNG, UART, radio), then
 //! hands control to the platform-agnostic [`ssh_stamp::app::run_app`].
 //!
-//! # UART Pin Assignments
+//! # Pin assignments
 //!
-//! UART pin numbers are defined per-board in `boards/*.toml` files in the
-//! `ssh-stamp-esp32-boards` crate. Select a board via a `board-<name>` feature
-//! (e.g. `board-esp32c6-devkitc`). See the `ssh-stamp-esp32-boards` crate
-//! documentation for the full list.
+//! UART, CAN and I2C pin numbers are defined per-board in `boards/*.toml`
+//! files in the `ssh-stamp-esp32-boards` crate. Select a board via a
+//! `board-<name>` feature (e.g. `board-esp32c6-devkitc`). That crate's front
+//! page carries the generated catalog: which GPIO each bus uses on each
+//! board, and which buses a board does not support yet.
 
 #![no_std]
 #![no_main]
-#![forbid(unsafe_code)]
 
 extern crate alloc;
 
@@ -98,14 +98,35 @@ async fn main(spawner: Spawner) -> ! {
     cfg_if::cfg_if! {
         if #[cfg(any(feature = "esp32c5", feature = "esp32c61"))] {
             // ESP32-C5/C61 have no TRNG peripheral — use the basic Rng directly.
+            // Until the TODO above is resolved, key material on these chips is
+            // only as good as the bare RNG register, so say so out loud.
+            warn!("No TRNG on this chip: RNG is not cryptographically secure until the radio is up");
             let rng = esp_hal::rng::Rng::new();
             register_custom_rng(rng);
         } else {
+            // The RNG register only yields true randomness while an entropy
+            // source is active. There are two, and this firmware uses both in
+            // sequence:
+            //
+            //   1. the SAR ADC source enabled here, covering early boot, and
+            //   2. the RF subsystem, once WiFi is up.
+            //
+            // `Trng::downgrade` returns `Rng`, a zero-sized handle that just
+            // reads the register, so it carries no guarantee of its own —
+            // whichever source is live at the time is what decides quality.
+            //
+            // The ADC source must therefore stay enabled until the radio takes
+            // over, because everything minted in between depends on it: the
+            // SSH host key, WiFi SSID/PSK and MAC all come from
+            // `store::load_or_create` and `prepare_ap_config` below. It is
+            // handed over (and explicitly dropped) just before the radio is
+            // initialised — see the drop site further down for why it cannot
+            // simply be left running.
             let trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
-            let trng = Trng::try_new().unwrap();
+            let trng = Trng::try_new()
+                .expect("TrngSource was just created, so the TRNG must be available");
             let rng = trng.downgrade();
             register_custom_rng(rng);
-            drop(trng_source);
         }
     }
 
@@ -136,6 +157,18 @@ async fn main(spawner: Spawner) -> ! {
         tx: tx_num,
     };
 
+    // On first boot this mints the SSH host key and the WiFi PSK, so the
+    // entropy source enabled above has to still be running. Guard the
+    // invariant rather than trusting a comment: `debug-assertions` are on
+    // even in release for this workspace, so reintroducing an early drop of
+    // the `TrngSource` fails loudly on the bench instead of silently
+    // producing predictable keys.
+    #[cfg(not(any(feature = "esp32c5", feature = "esp32c61")))]
+    debug_assert!(
+        TrngSource::is_enabled(),
+        "entropy source was disabled before host key generation"
+    );
+
     debug!("Loading config");
     let flash_config = {
         let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
@@ -145,7 +178,21 @@ async fn main(spawner: Spawner) -> ! {
         let (flash_storage, buf) = fb.split_ref_mut();
         store::load_or_create(flash_storage, buf, mac_address(), uart_pins)
     }
-    .expect("Could not load or create SSHStampConfig");
+    // Deliberately fatal. `load_or_create` only errors when a config *is*
+    // present but fails its version or integrity check; recreating one there
+    // would regenerate the host key (breaking client host-key pinning) and
+    // reopen the unauthenticated first-login window. Refusing to boot is the
+    // safe side of that trade. Recover by erasing the config sector, e.g.
+    // `espflash erase-region 0x9000 0x1000`, which makes the next boot mint a
+    // fresh config.
+    .expect(
+        "Stored config is present but invalid; refusing to overwrite it. \
+         Erase the config sector (espflash erase-region 0x9000 0x1000) to reprovision.",
+    );
+
+    // Line settings for the bridge; the UART task is configured with them
+    // below, so `SSH_STAMP_UART_*` changes take effect on the next boot.
+    let uart_params = flash_config.uart_params;
 
     static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
     let config: &'static SunsetMutex<SSHStampConfig> = CONFIG.init(SunsetMutex::new(flash_config));
@@ -182,8 +229,9 @@ async fn main(spawner: Spawner) -> ! {
             let interrupt_spawner = interrupt_executor.start(Priority::Priority1);
         }
     }
-    interrupt_spawner
-        .spawn(uart_task(uart_buf, peripherals.UART1, pins).expect("uart_task spawn failed"));
+    interrupt_spawner.spawn(
+        uart_task(uart_buf, peripherals.UART1, pins, uart_params).expect("uart_task spawn failed"),
+    );
 
     #[cfg(feature = "can")]
     let can_buf: &'static BufferedCan = {
@@ -212,9 +260,30 @@ async fn main(spawner: Spawner) -> ! {
 
     debug!("Initialising radio");
 
+    // Last consumer of randomness before the radio: mints the WiFi PSK if the
+    // config did not already carry one.
     let ap_config = app::prepare_ap_config(config, &platform)
         .await
         .expect("Failed to prepare AP config");
+
+    // Hand the entropy source over to the radio.
+    //
+    // The SAR ADC source cannot simply be left running: Espressif requires it
+    // to be switched off "before RF subsystem features, ADC, or I2S (ESP32
+    // only) are initialized", warning that it "is not safe to use if any other
+    // subsystem is accessing the RF subsystem or the ADC at the same time"
+    // (ESP-IDF, Random Number Generation). It also commandeers the SAR ADC —
+    // and I2S0 on the classic ESP32 — which the radio needs back.
+    //
+    // Nothing is lost by dropping it here: `WifiController::new` inside
+    // `bring_up()` enables the RF subsystem, which is itself an entropy
+    // source, and esp-radio registers that fact with esp-hal. So the SSH
+    // session and key-exchange material sunset draws per connection is still
+    // covered, just by the radio rather than the ADC.
+    //
+    // https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/random.html
+    #[cfg(not(any(feature = "esp32c5", feature = "esp32c61")))]
+    drop(trng_source);
 
     let mut wifi = EspWifi::new(spawner, peripherals.WIFI, rng, DEFAULT_IP);
     wifi.configure_ap(ap_config)
@@ -238,12 +307,50 @@ async fn main(spawner: Spawner) -> ! {
     mem_probe::checkpoint(Checkpoint::WifiUp);
     bench::log_heap("wifi_up");
 
+    // The radio should have picked up the entropy duty dropped above:
+    // esp-radio bumps esp-hal's entropy-source count once the RF subsystem is
+    // running. sunset draws fresh key-exchange material from `getrandom` for
+    // every SSH connection served below, so if this does not hold the handover
+    // has a hole in it.
+    #[cfg(not(any(feature = "esp32c5", feature = "esp32c61")))]
+    debug_assert!(
+        TrngSource::is_enabled(),
+        "no entropy source active after WiFi came up"
+    );
+
     if let Err(e) = app::run_app(stack.unwrap(), uart_buf, config, &platform).await {
         error!("run_app exited with error: {e}");
     }
 
     warn!("End of main, resetting");
     esp_hal::system::software_reset();
+}
+
+/// `getrandom` custom backend.
+///
+/// getrandom 0.4 picks its entropy backend by cfg rather than by cargo
+/// feature: every bare-metal target here is built with
+/// `--cfg getrandom_backend="custom"` (see `.cargo/config.toml`), which
+/// makes getrandom link this symbol. It must be defined exactly once in the
+/// whole program, so it lives in the binary — as getrandom's own docs
+/// recommend — and forwards to the hardware TRNG registered at boot by
+/// [`register_custom_rng`].
+///
+/// This is what feeds the SSH host key and the `WiFi` PSK, so it must be a
+/// real entropy source, never a stub.
+#[unsafe(no_mangle)]
+unsafe extern "Rust" fn __getrandom_v03_custom(
+    dest: *mut u8,
+    len: usize,
+) -> Result<(), getrandom::Error> {
+    // SAFETY: getrandom guarantees `dest` is valid for writes of `len`
+    // bytes. The buffer may be uninitialised, so it is zeroed before a
+    // slice is formed over it, as getrandom's documentation prescribes.
+    let buf = unsafe {
+        core::ptr::write_bytes(dest, 0, len);
+        core::slice::from_raw_parts_mut(dest, len)
+    };
+    ssh_stamp_esp32::rng_fill_bytes(buf)
 }
 
 #[panic_handler]

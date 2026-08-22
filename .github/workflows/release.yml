@@ -65,29 +65,17 @@ jobs:
       matrix:
         target:
           - soc: esp32c6
-            toolchain: stable
+            board: esp32c6-devkitc
             triple: riscv32imac-unknown-none-elf
-            profile: release
-          - soc: esp32c2
-            toolchain: stable
-            triple: riscv32imc-unknown-none-elf
-            profile: release
-          - soc: esp32c3
-            toolchain: stable
-            triple: riscv32imc-unknown-none-elf
-            profile: release
-          - soc: esp32
-            toolchain: esp
-            triple: xtensa-esp32-none-elf
-            profile: release
+            xtensa: false
           - soc: esp32s2
-            toolchain: esp
+            board: esp32-s2-saola
             triple: xtensa-esp32s2-none-elf
-            profile: release
+            xtensa: true
           - soc: esp32s3
-            toolchain: esp
+            board: waveshare-esp32-s3-touch-lcd-43
             triple: xtensa-esp32s3-none-elf
-            profile: release
+            xtensa: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -96,7 +84,7 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Setup Rust toolchain for RISC-V
-        if: ${{ !contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.target.soc) }}
+        if: ${{ !matrix.target.xtensa }}
         uses: dtolnay/rust-toolchain@v1
         with:
           target: ${{ matrix.target.triple }}
@@ -104,14 +92,14 @@ jobs:
           components: rust-src
 
       - name: Setup Rust toolchain for Xtensa
-        if: ${{ contains(fromJson('["esp32", "esp32s2", "esp32s3"]'), matrix.target.soc) }}
+        if: ${{ matrix.target.xtensa }}
         uses: esp-rs/xtensa-toolchain@v1.7.0
         with:
           ldproxy: false
           version: 1.95.0.0
 
       - name: Build firmware
-        run: cargo +${{ matrix.target.toolchain }} build-${{ matrix.target.soc }}
+        run: cargo xtask ${{ matrix.target.board }} build --release
 
       - name: Install espflash
         uses: taiki-e/install-action@v2
@@ -121,7 +109,7 @@ jobs:
       - name: Generate .bin image from ELF
         run: |
           mkdir -p release-assets
-          ELF_PATH="target/${{ matrix.target.triple }}/${{ matrix.target.profile }}/ssh-stamp-esp32"
+          ELF_PATH="target/boards/${{ matrix.target.board }}/${{ matrix.target.triple }}/release/ssh-stamp-esp32"
           espflash save-image --chip ${{ matrix.target.soc }} --partition-table ssh-stamp-esp32/partitions.csv "$ELF_PATH" "release-assets/ssh-stamp-${{ matrix.target.soc }}.bin"
           cp "$ELF_PATH" "release-assets/ssh-stamp-${{ matrix.target.soc }}.elf"
 

@@ -7,8 +7,8 @@
 //! Configuration types and serialization.
 //!
 //! [`SSHStampConfig`] holds all persistent device state: host key, public keys,
-//! `WiFi` credentials, MAC address, UART pin assignment, and the first-login
-//! flag. It is serialized to flash via the `sunset` SSH wire format and
+//! `WiFi` credentials, MAC address, UART pins and line parameters, and the
+//! first-login flag. It is serialized to flash via the `sunset` SSH wire format and
 //! deserialized on boot by [`store::load_or_create`](crate::store::load_or_create).
 //!
 //! On first boot, [`SSHStampConfig::new`] generates a random SSID and WPA2
@@ -26,6 +26,7 @@ use embassy_net::{Ipv6Cidr, StaticConfigV6};
 use heapless::String;
 use ssh_key::PublicKey;
 use ssh_key::public::KeyData;
+use ssh_stamp_hal::UartParams;
 
 use sunset::packets::Ed25519PubKey;
 use sunset::{KeyType, Result};
@@ -64,6 +65,9 @@ pub struct SSHStampConfig {
     pub ipv6_static: Option<StaticConfigV6>,
     /// UART
     pub uart_pins: UartPins,
+    /// UART line parameters (baud, data bits, parity, stop bits) for the
+    /// serial bridge. Settable via the `SSH_STAMP_UART_*` env vars.
+    pub uart_params: UartParams,
     /// True until a pubkey is provisioned. Further changes require authentication.
     pub first_login: bool,
 }
@@ -84,7 +88,7 @@ const MAC_RANDOM_SENTINEL: [u8; 6] = [0xFF; 6];
 
 impl SSHStampConfig {
     /// Bump this when the format changes
-    pub const CURRENT_VERSION: u8 = 11;
+    pub const CURRENT_VERSION: u8 = 12;
 
     /// Check if configured for random MAC on each boot
     #[must_use]
@@ -144,13 +148,14 @@ impl SSHStampConfig {
             #[cfg(feature = "ipv6")]
             ipv6_static: None,
             uart_pins,
+            uart_params: UartParams::default(),
             first_login: true,
         })
     }
 
     pub(crate) fn generate_wifi_ssid() -> Result<String<32>> {
         let mut rnd = [0u8; 16];
-        getrandom::getrandom(&mut rnd).map_err(|_| sunset::Error::msg("RNG failed"))?;
+        getrandom::fill(&mut rnd).map_err(|_| sunset::Error::msg("RNG failed"))?;
         let mut ssid = String::<32>::new();
         for &byte in &rnd {
             let _ = ssid.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
@@ -160,7 +165,7 @@ impl SSHStampConfig {
 
     pub(crate) fn generate_wifi_password() -> Result<String<63>> {
         let mut rnd = [0u8; 24];
-        getrandom::getrandom(&mut rnd).map_err(|_| sunset::Error::msg("RNG failed"))?;
+        getrandom::fill(&mut rnd).map_err(|_| sunset::Error::msg("RNG failed"))?;
         let mut pw = String::<63>::new();
         for &byte in &rnd {
             let _ = pw.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
@@ -209,7 +214,7 @@ impl SSHStampConfig {
 
 fn random_mac() -> Result<[u8; 6]> {
     let mut mac = [0u8; 6];
-    getrandom::getrandom(&mut mac).map_err(|_| sunset::Error::msg("RNG failed"))?;
+    getrandom::fill(&mut mac).map_err(|_| sunset::Error::msg("RNG failed"))?;
     // unicast, locally administered
     mac[0] = (mac[0] & 0xfc) | 0x02;
     Ok(mac)
@@ -350,6 +355,12 @@ impl SSHEncode for SSHStampConfig {
         self.uart_pins.rx.enc(s)?;
         self.uart_pins.tx.enc(s)?;
 
+        // Encode UartParams
+        self.uart_params.baud.enc(s)?;
+        self.uart_params.data_bits.enc(s)?;
+        (self.uart_params.parity as u8).enc(s)?;
+        self.uart_params.stop_bits.enc(s)?;
+
         // Persist first-login marker
         self.first_login.enc(s)?;
 
@@ -394,6 +405,18 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
         let tx: u8 = SSHDecode::dec(s)?;
         let uart_pins = UartPins { rx, tx };
 
+        // Decode UartParams
+        let baud: u32 = SSHDecode::dec(s)?;
+        let data_bits: u8 = SSHDecode::dec(s)?;
+        let parity: u8 = SSHDecode::dec(s)?;
+        let stop_bits: u8 = SSHDecode::dec(s)?;
+        let uart_params = UartParams {
+            baud,
+            data_bits,
+            parity: parity.into(),
+            stop_bits,
+        };
+
         let first_login = SSHDecode::dec(s)?;
 
         Ok(Self {
@@ -409,6 +432,7 @@ impl<'de> SSHDecode<'de> for SSHStampConfig {
             #[cfg(feature = "ipv6")]
             ipv6_static,
             uart_pins,
+            uart_params,
             first_login,
         })
     }

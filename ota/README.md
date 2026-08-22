@@ -26,7 +26,7 @@ Following you can find the steps to perform an OTA. Some steps are optionals.
 #### 1. Build and extract app bin from elf file
 
 ```
-cargo build-esp32c6
+cargo xtask esp32c6-devkitc build --release
 espflash save-image --chip=esp32c6 target/riscv32imac-unknown-none-elf/release/ssh-stamp ssh-stamp.bin
 ```
 
@@ -46,7 +46,7 @@ Optionally erase the flash for a fresh test
 # optional
 espflash erase-flash
 
-cargo run-esp32c6 --features sftp-ota
+cargo xtask esp32c6-devkitc run --release --features sftp-ota
 ```
 
 At the end of the bootloader log look for the app offset (At this point Factory)

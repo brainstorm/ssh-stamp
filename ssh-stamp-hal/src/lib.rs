@@ -66,6 +66,6 @@ pub mod config;
 pub mod error;
 pub mod traits;
 
-pub use config::{BandMode, UartConfig, WifiApConfigStatic};
+pub use config::{BandMode, Parity, UartConfig, UartParams, WifiApConfigStatic};
 pub use error::{FlashError, HalError, HashError, UartError, WifiError};
 pub use traits::*;

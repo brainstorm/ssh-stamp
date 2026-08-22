@@ -6,8 +6,8 @@
 //!
 //! Every incoming SSH event is dispatched here by the connection loop in
 //! [`serve`](crate::serve). The main entry point is [`session_env`], which
-//! routes environment variable requests to handlers like [`pubkey_env`] and
-//! [`wifi_ssid_env`].
+//! routes environment variable requests to handlers like [`pubkey_env`],
+//! [`wifi_ap_ssid_env`] and [`wifi_sta_ssid_env`].
 //!
 //! First-boot provisioning also flows through here: when `first_login` is true,
 //! the device accepts any SSH connection (empty password) and allows the
@@ -30,7 +30,6 @@ use embassy_sync::channel::Channel;
 
 use core::result::Result;
 
-use ssh_key::HashAlg;
 use sunset::packets::PubKey;
 use sunset::{ChanFail, ChanHandle, ServEvent};
 use sunset_async::{ChanInOut, SSHServer, SunsetMutex};
@@ -146,6 +145,40 @@ pub mod env_parser {
         ssh_stamp_hal::BandMode::from_str(value)
             .ok()
             .map(|band| band as u8)
+    }
+
+    // Slowest and fastest baud rates accepted for the bridge. The ceiling is
+    // what the UART peripherals themselves top out at.
+    const UART_BAUD_MIN: u32 = 300;
+    const UART_BAUD_MAX: u32 = 5_000_000;
+
+    /// Parses a UART baud rate, accepting 300 to 5000000 baud.
+    #[must_use]
+    pub fn parse_uart_baud(value: &str) -> Option<u32> {
+        let baud: u32 = value.trim().parse().ok()?;
+        (UART_BAUD_MIN..=UART_BAUD_MAX)
+            .contains(&baud)
+            .then_some(baud)
+    }
+
+    /// Parses the UART data bits per frame, accepting 5 to 8.
+    #[must_use]
+    pub fn parse_uart_data_bits(value: &str) -> Option<u8> {
+        let bits: u8 = value.trim().parse().ok()?;
+        (5..=8).contains(&bits).then_some(bits)
+    }
+
+    /// Parses the UART parity setting, accepting `none`, `even` or `odd`.
+    #[must_use]
+    pub fn parse_uart_parity(value: &str) -> Option<ssh_stamp_hal::Parity> {
+        ssh_stamp_hal::Parity::from_str(value.trim()).ok()
+    }
+
+    /// Parses the UART stop bits per frame, accepting 1 or 2.
+    #[must_use]
+    pub fn parse_uart_stop_bits(value: &str) -> Option<u8> {
+        let bits: u8 = value.trim().parse().ok()?;
+        matches!(bits, 1 | 2).then_some(bits)
     }
 }
 
@@ -275,7 +308,7 @@ pub async fn session_shell<P: PlatformServices>(
                     .map_err(|_| sunset::error::BadUsage.build())?;
                 drop(config_guard);
                 if *ctx.needs_reset {
-                    info!("Configuration saved. Rebooting to apply WiFi changes...");
+                    info!("Configuration saved. Rebooting to apply the changes...");
                     platform.reset();
                 }
             }
@@ -374,7 +407,7 @@ pub async fn pubkey_auth(
             PubKey::Unknown(_) => false,
         };
 
-        match client_pubkey.fingerprint(HashAlg::Sha256) {
+        match client_pubkey.fingerprint() {
             Ok(fingerprint) if matched => info!("Accepted pubkey {fingerprint}"),
             Ok(fingerprint) => warn!("Rejected pubkey {fingerprint}: not enrolled in any slot"),
             Err(err) => warn!("Rejected pubkey: {err:?}"),
@@ -427,7 +460,8 @@ pub async fn session_env(
     if let ServEvent::SessionEnv(a) = ev {
         debug!("Got ENV request");
         debug!("ENV name: {}", a.name()?);
-        debug!("ENV value: {}", a.value()?);
+        // Don't log the value: SSH_STAMP_WIFI_AP_PSK / SSH_STAMP_WIFI_STA_PW
+        // and friends carry secrets straight to the serial/RTT log sink.
 
         match a.name()? {
             "LANG" => {
@@ -456,6 +490,18 @@ pub async fn session_env(
             }
             "SSH_STAMP_WIFI_MAC_RANDOM" => {
                 wifi_mac_random_env(a, config, ctx).await?;
+            }
+            "SSH_STAMP_UART_BAUD" => {
+                uart_env(UartParam::Baud, a, config, ctx).await?;
+            }
+            "SSH_STAMP_UART_DATA_BITS" => {
+                uart_env(UartParam::DataBits, a, config, ctx).await?;
+            }
+            "SSH_STAMP_UART_PARITY" => {
+                uart_env(UartParam::Parity, a, config, ctx).await?;
+            }
+            "SSH_STAMP_UART_STOP_BITS" => {
+                uart_env(UartParam::StopBits, a, config, ctx).await?;
             }
             _ => {
                 debug!("Ignoring unknown environment variable: {}", a.name()?);
@@ -697,6 +743,81 @@ pub async fn wifi_mac_random_env(
         *ctx.needs_reset = true;
     } else {
         warn!("SSH_STAMP_WIFI_MAC_RANDOM env received but not authenticated; rejecting");
+        a.fail()?;
+    }
+    Ok(())
+}
+
+/// A UART line parameter, one per `SSH_STAMP_UART_*` environment variable.
+#[derive(Clone, Copy, Debug)]
+pub enum UartParam {
+    Baud,
+    DataBits,
+    Parity,
+    StopBits,
+}
+
+impl UartParam {
+    /// The environment variable this parameter is set from.
+    const fn env_name(self) -> &'static str {
+        match self {
+            Self::Baud => "SSH_STAMP_UART_BAUD",
+            Self::DataBits => "SSH_STAMP_UART_DATA_BITS",
+            Self::Parity => "SSH_STAMP_UART_PARITY",
+            Self::StopBits => "SSH_STAMP_UART_STOP_BITS",
+        }
+    }
+
+    /// The values this parameter accepts, for the rejection log line.
+    const fn accepted(self) -> &'static str {
+        match self {
+            Self::Baud => "300-5000000",
+            Self::DataBits => "5-8",
+            Self::Parity => "none, even or odd",
+            Self::StopBits => "1 or 2",
+        }
+    }
+}
+
+/// Handles the `SSH_STAMP_UART_*` environment variable requests.
+///
+/// The bridge configures its UART once at boot, so a change is persisted and
+/// applied after the reset triggered on the next shell request, like the
+/// `WiFi` settings.
+///
+/// # Errors
+/// Returns an error if SSH protocol operations fail.
+pub async fn uart_env(
+    param: UartParam,
+    a: sunset::event::ServEnvironmentRequest<'_, '_>,
+    config: &SunsetMutex<SSHStampConfig>,
+    ctx: &mut EventContext<'_>,
+) -> Result<(), sunset::Error> {
+    let mut config_guard = config.lock().await;
+    if !(*ctx.auth_checked || config_guard.first_login) {
+        warn!(
+            "{} env received but not authenticated; rejecting",
+            param.env_name()
+        );
+        return a.fail();
+    }
+
+    let value = a.value()?;
+    let uart = &mut config_guard.uart_params;
+    let applied = match param {
+        UartParam::Baud => env_parser::parse_uart_baud(value).map(|v| uart.baud = v),
+        UartParam::DataBits => env_parser::parse_uart_data_bits(value).map(|v| uart.data_bits = v),
+        UartParam::Parity => env_parser::parse_uart_parity(value).map(|v| uart.parity = v),
+        UartParam::StopBits => env_parser::parse_uart_stop_bits(value).map(|v| uart.stop_bits = v),
+    };
+
+    if applied.is_some() {
+        debug!("Set UART {param:?} from ENV: {uart:?}");
+        a.succeed()?;
+        *ctx.config_changed = true;
+        *ctx.needs_reset = true;
+    } else {
+        warn!("{} must be {}", param.env_name(), param.accepted());
         a.fail()?;
     }
     Ok(())
