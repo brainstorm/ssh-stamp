@@ -372,7 +372,9 @@ mod tests {
         }
 
         fn write(&mut self, offset: u32, bytes: &[u8]) -> Result<(), Self::Error> {
-            if offset as usize % Self::WRITE_SIZE != 0 || bytes.len() % Self::WRITE_SIZE != 0 {
+            if !(offset as usize).is_multiple_of(Self::WRITE_SIZE)
+                || !bytes.len().is_multiple_of(Self::WRITE_SIZE)
+            {
                 return Err(NorFlashErrorKind::NotAligned);
             }
             let (start, end) = self.bounds(offset, bytes.len())?;
