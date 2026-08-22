@@ -780,10 +780,10 @@ where
         debug!("Checking bridge session type");
         match session_type {
             SessionType::Bridge(ch) => {
-                debug!("Handling bridge session");
+                info!("Handling bridge session");
                 let chan_io: ChanInOut<'_> = ssh_server.stdio(ch).await?;
                 let (stdin, stdout) = chan_io.split();
-                debug!("Starting bridge");
+                info!("Starting bridge");
                 serial_bridge(stdin, stdout, uart_buff).await?;
             }
             #[cfg(feature = "sftp-ota")]
@@ -801,10 +801,10 @@ where
     let result = {
         let can_session = async {
             let ch = can_queue.receive().await;
-            debug!("Handling CAN session");
+            info!("Handling CAN session");
             let chan_io: ChanInOut<'_> = ssh_server.stdio(ch).await?;
             let (stdin, stdout) = chan_io.split();
-            debug!("Starting CAN bridge");
+            info!("Starting CAN bridge");
             can_bridge(stdin, stdout, platform.can()).await
         };
         match select(session, can_session).await {
