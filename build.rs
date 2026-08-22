@@ -15,7 +15,7 @@ fn main() {
         &[option(
             "heap_size",
             "Global allocator heap size in bytes",
-            72 * 1024,
+            60 * 1024,
             16 * 1024..257 * 1024,
         )],
         true,

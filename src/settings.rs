@@ -33,10 +33,10 @@ pub const STATION_MODE_MAX_RETRY_SECONDS: u8 = 10;
 pub const UART_BUFFER_SIZE: usize = 4096;
 
 /// Receive buffer for the SSH TCP socket.
-pub const TCP_RX_BUF: usize = 1536;
+pub const TCP_RX_BUF: usize = 8192;
 
 /// Transmit buffer for the SSH TCP socket.
-pub const TCP_TX_BUF: usize = 1536;
+pub const TCP_TX_BUF: usize = 4096;
 
 /// Global allocator heap size in bytes.
 pub const HEAP_SIZE: usize = esp_config_int!(usize, "SSH_STAMP_CONFIG_HEAP_SIZE");
