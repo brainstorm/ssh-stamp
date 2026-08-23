@@ -136,7 +136,7 @@ jobs:
         run: pip install "sbom-cve-check[extra]"
 
       - name: Run CVE analysis
-        run: sbom-cve-check --sbom-path sbom.spdx.json --export-type spdx --export-path cve-report.spdx.json
+        run: sbom-cve-check --sbom-path sbom.spdx.json --export-type spdx3 --export-path cve-report.spdx.json
 
       - name: Upload CVE report
         uses: actions/upload-artifact@v4
