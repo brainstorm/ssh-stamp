@@ -124,7 +124,7 @@ jobs:
           cp "$ELF_PATH" "release-assets/ssh-stamp-${{ matrix.target.soc }}.elf"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: firmware-${{ matrix.target.soc }}
           path: release-assets/
@@ -151,7 +151,7 @@ jobs:
         run: cargo audit --json > cve-report.json || true
 
       - name: Upload CVE report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cve-report
           path: cve-report.json
@@ -180,19 +180,19 @@ jobs:
           fi
 
       - name: Download SBOM artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: sbom.spdx.json
           path: release-assets/
 
       - name: Download CVE report artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: cve-report
           path: release-assets/
 
       - name: Download all firmware artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: firmware-*
           path: release-assets/
@@ -202,7 +202,7 @@ jobs:
         run: ls -la release-assets/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.tag.outputs.name }}
           files: release-assets/*
