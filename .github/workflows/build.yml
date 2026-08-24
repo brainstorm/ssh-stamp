@@ -88,7 +88,7 @@ jobs:
       # lints every host crate instead, the default set already includes
       # xtask and ota.
       - name: Clippy host crates
-        run: cargo clippy --all-targets --features ota/packer -- -D warnings
+        run: cargo clippy --all-targets --features ota/std -- -D warnings
       - name: Format
         run: cargo fmt --all -- --check
 
@@ -105,7 +105,7 @@ jobs:
         with:
           toolchain: stable
       - name: Build utility
-        run: cargo build --package ota --bin packer --features packer
+        run: cargo build --package ota --bin packer --features std
 
   docs:
     name: Documentation

@@ -9,7 +9,7 @@ edition = "2024"
 
 [features]
 default = []
-packer = ["dep:clap"]
+std = []
 sftp = ["dep:sunset-sftp"]
 
 [dependencies]
@@ -21,9 +21,9 @@ sunset-sftp = { workspace = true, optional = true }
 log.workspace = true
 sha2.workspace = true
 
-# Only for the packer binary
+# Only for helpers and tests
 [target.'cfg(not(target_os = "none"))'.dependencies]
-clap = { version = "4.5", optional = true }
+clap = "4.5"
 
 [lints]
 workspace = true
@@ -31,4 +31,4 @@ workspace = true
 [[bin]]
 name = "packer"
 path = "src/bin/packer.rs"
-required-features = ["packer"]
+required-features = ["std"]
