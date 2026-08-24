@@ -80,9 +80,8 @@ commands expect a public key to be available under `~/.ssh/id_ed25519.pub` for f
 
 The general process that happens per run:
 
-* Build and flash the firmware with the right features.
-* Paint the stack to measure the stack usage using `probe-rs`.
-* Boot the actual board and take boot measurements.
+* Build and flash the firmware with the right features, with resets and capturing boot lines.
+* Attach `probe-rs` and paint the stack to measure the stack usage.
 * Join the device access point automatically and enrol a public key if needed.
 * Run the sessions, read the stack painting, and then output the results.
 
@@ -167,6 +166,7 @@ bencher run \
     --start-point main \
     --start-point-hash "$(git merge-base origin/main HEAD)" \
     --start-point-reset \
+    --start-point-clone-thresholds \
     --branch "$(git branch --show-current)" \
     --hash "$(git rev-parse HEAD)" \
     --testbed esp32c6-devkitc \
@@ -174,8 +174,30 @@ bencher run \
     --file bmf.json
 ```
 
-The `--start-point` flags will draw a comparison against the main branch for a pull request. If benchmarking
-main itself, the `--start-point` flags should be removed.
+The `--start-point` flags will draw a comparison against the main branch for a pull request.
+
+When benchmarking main itself, drop the `--start-point` flags and declare the thresholds
+instead:
+
+```bash
+bencher run \
+    --project "ssh-stamp" \
+    --key "$BENCHER_API_KEY" \
+    --branch main \
+    --hash "$(git rev-parse HEAD)" \
+    --testbed esp32c6-devkitc \
+    --threshold-measure latency-us \
+    --threshold-test percentage \
+    --threshold-upper-boundary 0.25 \
+    --threshold-measure heap-bytes \
+    --threshold-test percentage \
+    --threshold-upper-boundary 0.05 \
+    --threshold-measure stack-bytes \
+    --threshold-test percentage \
+    --threshold-upper-boundary 0.10 \
+    --adapter json \
+    --file bmf.json
+```
 
 [Bencher]: https://bencher.dev
 [bencher-cli]: https://bencher.dev/docs/how-to/install-cli/
