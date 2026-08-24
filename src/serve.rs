@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: 2026 Sergio Gasquez <sergio.gasquez@gmail.com>
 // SPDX-FileCopyrightText: 2026 Gabriel Ku Wei Bin <gabriel.ku@fsfe.org>
 // SPDX-FileCopyrightText: 2026 Anthony Tambasco <anthony.tambasco@fastmail.com>
+// SPDX-FileCopyrightText: 2026 Marko Malenic <mmalenic1@gmail.com>
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
