@@ -16,9 +16,19 @@
 #
 # SBOM tooling: anchore/sbom-action runs Syft on the source tree (Cargo.lock
 # + Cargo.toml) to produce an SPDX JSON SBOM covering all Rust dependencies.
-# The resulting sbom.spdx.json can be fed into bootlin/sbom-cve-check for
-# downstream CVE analysis, which this workflow runs automatically on every
-# release.
+# The resulting sbom.spdx.json is attached to the release for supply-chain
+# transparency.
+#
+# CVE tooling: cargo-audit checks Cargo.lock against the RustSec advisory
+# database. It is used in preference to SBOM-consuming scanners because those
+# match Rust crates poorly -- Grype, fed this exact SBOM, missed both
+# high-severity quick-xml advisories that cargo-audit catches. Note that
+# bootlin/sbom-cve-check cannot consume this SBOM at all: its spdx2 backend
+# only accepts Yocto-style SPDX2 trees, and its spdx3 backend needs true
+# SPDX 3.0, which Syft does not emit.
+#
+# `unmaintained` advisories are reported as warnings and do not fail the
+# release; only actual vulnerabilities do.
 
 name: Release
 
@@ -114,7 +124,7 @@ jobs:
           cp "$ELF_PATH" "release-assets/ssh-stamp-${{ matrix.target.soc }}.elf"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: firmware-${{ matrix.target.soc }}
           path: release-assets/
@@ -122,27 +132,35 @@ jobs:
 
   cve-check:
     name: CVE check
-    needs: [generate-sbom]
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - name: Download SBOM artifact
-        uses: actions/download-artifact@v4
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
         with:
-          name: sbom.spdx.json
+          tool: cargo-audit
 
-      - name: Install sbom-cve-check
-        run: pip install "sbom-cve-check[extra]"
-
-      - name: Run CVE analysis
-        run: sbom-cve-check --sbom-path sbom.spdx.json --export-type spdx --export-path cve-report.spdx.json
+      # Report first, gate last: cargo-audit writes a valid JSON report even
+      # when it finds advisories, so `|| true` lets the upload below run either
+      # way. Anything that breaks the scan itself still fails the gate step.
+      - name: Generate CVE report
+        run: cargo audit --json > cve-report.json || true
 
       - name: Upload CVE report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cve-report
-          path: cve-report.spdx.json
+          path: cve-report.json
+
+      # The gate. Also the only human-readable output: with --json above,
+      # cargo-audit writes nothing to stderr, so this is what shows which
+      # advisory failed the release.
+      - name: Check for advisories
+        run: cargo audit
 
   publish-release:
     name: Publish GitHub Release
@@ -162,19 +180,19 @@ jobs:
           fi
 
       - name: Download SBOM artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: sbom.spdx.json
           path: release-assets/
 
       - name: Download CVE report artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: cve-report
           path: release-assets/
 
       - name: Download all firmware artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: firmware-*
           path: release-assets/
@@ -184,7 +202,7 @@ jobs:
         run: ls -la release-assets/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.tag.outputs.name }}
           files: release-assets/*

@@ -64,7 +64,7 @@ jobs:
         run: cargo xtask bmf --input size-${{ matrix.board.name }}.json -o bmf-size-${{ matrix.board.name }}.json
       - name: Upload size JSON
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: size-${{ matrix.board.name }}
           path: |
@@ -78,7 +78,7 @@ jobs:
     steps:
       - name: Download size JSON
         if: ${{ env.BENCHER_API_KEY != '' && env.BENCHER_PROJECT != '' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: size-*
           merge-multiple: true
