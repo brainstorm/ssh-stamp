@@ -6,6 +6,7 @@
 
 use crate::board::Board;
 use crate::cmd;
+use crate::lib::retry;
 use anyhow::{Context, Result, bail};
 use serial2::SerialPort;
 use std::io::{self, BufRead, BufReader, Read, Write};
@@ -303,11 +304,13 @@ impl Serial {
     const SERIAL_WAIT: Duration = Duration::from_millis(250);
     const CONSOLE_BAUD: u32 = 115_200;
     const READ_BUF: usize = 1024;
+    const OPEN_TIMEOUT: Duration = Duration::from_secs(15);
 
-    /// Opens the `port` and starts collecting data. The `echo` variable controls
-    /// whether each line is also printed.
+    /// Opens the `port` and starts collecting data. The `echo` variable
+    /// controls whether each line is also printed. The open retries while the
+    /// device across resets and checkpoint replays.
     pub fn open(port: &str, echo: bool) -> Result<Serial> {
-        let serial_port = Self::open_port(port)?;
+        let serial_port = Self::open_port_retry(port)?;
 
         let capture = Arc::new(Mutex::new(Capture::default()));
         let stop = Arc::new(AtomicBool::new(false));
@@ -410,6 +413,13 @@ impl Serial {
                 bail!("multiple serial ports found ({list}), pass --port explicitly")
             }
         }
+    }
+
+    /// Opens the port for capturing data, and retries across a device reset.
+    pub fn open_port_retry(port: &str) -> Result<SerialPort> {
+        retry(Self::OPEN_TIMEOUT, Self::SERIAL_WAIT, || {
+            Self::open_port(port)
+        })
     }
 
     /// Opens the port for capture.

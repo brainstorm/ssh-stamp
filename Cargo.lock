@@ -2880,6 +2880,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "probe-rs-espressif"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c6d458127eb3f5cddf9990476d1e3f54df3301f80abad0d6493b09bf6756352"
+dependencies = [
+ "bincode",
+ "bitvec",
+ "docsplay",
+ "espflash",
+ "nusb",
+ "probe-rs",
+ "probe-rs-target",
+ "serde",
+ "thiserror",
+ "tracing",
+ "yaml_serde",
+]
+
+[[package]]
 name = "probe-rs-target"
 version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4380,6 +4399,7 @@ dependencies = [
  "humansize",
  "object 0.37.3",
  "probe-rs",
+ "probe-rs-espressif",
  "quick-xml",
  "serde",
  "serde_json",
