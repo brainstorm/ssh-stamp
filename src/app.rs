@@ -13,7 +13,10 @@
 use core::result::Result;
 
 use embassy_futures::select::{Either3, select3};
-use embassy_net::{IpListenEndpoint, Stack, tcp::TcpSocket};
+use embassy_net::{
+    IpListenEndpoint, Stack,
+    tcp::{AcceptError, TcpSocket},
+};
 use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
 use heapless::String;
 use log::{debug, error, info, warn};
@@ -22,6 +25,12 @@ use ssh_stamp_hal::{BandMode, WifiApConfigStatic};
 use sunset::ChanHandle;
 use sunset::SignKey;
 use sunset_async::SunsetMutex;
+#[cfg(feature = "mem-probe")]
+use {
+    core::pin::pin,
+    embassy_futures::select::{Either, select},
+    embassy_time::Timer,
+};
 
 use crate::config::SSHStampConfig;
 use crate::handle::{self, SessionType};
@@ -104,6 +113,75 @@ fn log_ap_credentials(config: &SSHStampConfig) {
     info!("WIFI PSK: {}", config.wifi_ap_pw);
 }
 
+/// Accepts TCP connections for the server loop.
+///
+/// When running the benchmarking code, the device should wait for the host to connect before
+/// replaying checkpoints, otherwise a race condition occurs and frequently the bench fails
+/// and is flaky. This does not actually affect any of the checkpoint measurement times.
+#[cfg(feature = "mem-probe")]
+struct SessionAcceptor {
+    awaiting_first_session: bool,
+}
+
+#[cfg(feature = "mem-probe")]
+impl SessionAcceptor {
+    fn new() -> Self {
+        Self {
+            awaiting_first_session: true,
+        }
+    }
+
+    /// Accepts a TCP connection on the socket. This will wait until the host
+    /// connects in a loop.
+    async fn accept(
+        &mut self,
+        tcp_socket: &mut TcpSocket<'_>,
+        endpoint: IpListenEndpoint,
+        config: &SunsetMutex<SSHStampConfig>,
+    ) -> Result<(), AcceptError> {
+        if !self.awaiting_first_session {
+            return tcp_socket.accept(endpoint).await;
+        }
+
+        let mut accept = pin!(tcp_socket.accept(endpoint));
+        let accepted = loop {
+            match select(&mut accept, Timer::after_secs(3)).await {
+                Either::First(accepted) => break accepted,
+                Either::Second(()) => {
+                    replay_checkpoints();
+                    log_ap_credentials(&*config.lock().await);
+                }
+            }
+        };
+
+        if accepted.is_ok() {
+            self.awaiting_first_session = false;
+        }
+        accepted
+    }
+}
+
+/// Accepts TCP connections for the server loop.
+#[cfg(not(feature = "mem-probe"))]
+struct SessionAcceptor;
+
+#[cfg(not(feature = "mem-probe"))]
+impl SessionAcceptor {
+    fn new() -> Self {
+        Self
+    }
+
+    /// Accepts a TCP connection on the socket.
+    async fn accept(
+        &mut self,
+        tcp_socket: &mut TcpSocket<'_>,
+        endpoint: IpListenEndpoint,
+        _config: &SunsetMutex<SSHStampConfig>,
+    ) -> Result<(), AcceptError> {
+        tcp_socket.accept(endpoint).await
+    }
+}
+
 /// Runs the SSH server loop forever: accept TCP, run SSH, bridge to UART,
 /// then go round again. Does not return under normal operation.
 ///
@@ -126,16 +204,16 @@ where
     checkpoint(Checkpoint::TcpListening);
     replay_checkpoints();
     log_ap_credentials(&*config.lock().await);
+    let mut acceptor = SessionAcceptor::new();
     loop {
         debug!("HSM: accepting TCP on port 22");
         let mut tcp_socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
-        if let Err(e) = tcp_socket
-            .accept(IpListenEndpoint {
-                addr: None,
-                port: 22,
-            })
-            .await
-        {
+        let endpoint = IpListenEndpoint {
+            addr: None,
+            port: 22,
+        };
+
+        if let Err(e) = acceptor.accept(&mut tcp_socket, endpoint, config).await {
             error!("TCP accept error: {e:?}");
             continue;
         }
