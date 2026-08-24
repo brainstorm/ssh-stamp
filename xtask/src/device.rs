@@ -6,7 +6,7 @@
 
 use crate::board::Board;
 use crate::cmd;
-use crate::lib::retry;
+use crate::util::{retry, retry_until};
 use anyhow::{Context, Result, bail};
 use serial2::SerialPort;
 use std::io::{self, BufRead, BufReader, Read, Write};
@@ -441,22 +441,13 @@ impl Serial {
     /// Waits for the device to be ready and listening.
     pub fn wait_for_ready(&self, timeout: Duration) -> bool {
         let needle = format!("checkpoint={}", cmd::TCP_LISTENING);
-        let timeout = Instant::now() + timeout;
-        while Instant::now() < timeout {
+        retry_until(timeout, Self::SERIAL_WAIT, || {
             // Locked directly rather than through `current_capture`.
-            let contains = Self::lock_capture(&self.capture)
+            Self::lock_capture(&self.capture)
                 .lines
                 .iter()
-                .any(|l| l.contains(&needle));
-
-            if contains {
-                return true;
-            }
-
-            thread::sleep(Self::SERIAL_WAIT);
-        }
-
-        false
+                .any(|l| l.contains(&needle))
+        })
     }
 
     /// Reports the current status of the capture.

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Top-level library module.
+//! Utility functions.
 
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -21,4 +21,14 @@ pub fn retry<T, E>(
             result => return result,
         }
     }
+}
+
+/// A helper function to call the `condition` until it holds or the `timeout` passes, sleeping
+/// for the `interval` between attempts.
+pub fn retry_until(
+    timeout: Duration,
+    interval: Duration,
+    mut condition: impl FnMut() -> bool,
+) -> bool {
+    retry(timeout, interval, || condition().then_some(()).ok_or(())).is_ok()
 }
