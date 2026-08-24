@@ -24,6 +24,9 @@ jobs:
       # Just the target name plus which toolchain has to be installed before
       # xtask can run. Everything else (triple, profile, features, build-std)
       # comes from xtask/src/board.rs, see `cargo xtask list`.
+      #
+      # `extra_features` applies the additional features for lints, only using
+      # one representative board to avoid re-compiling everything unnecessarily.
       matrix:
         target: [
             # Chips without a BSP entry, i.e. library-only builds.
@@ -33,10 +36,10 @@ jobs:
             { name: "esp32s3", xtensa: true },
             # Boards, i.e. full firmware binaries.
             { name: "esp32c5-devkitc", xtensa: false },
-            { name: "esp32c6-devkitc", xtensa: false },
+            { name: "esp32c6-devkitc", xtensa: false, extra_features: "sftp-ota,mem-probe,bench-loopback,ipv6" },
             { name: "esp32c61-devkitc", xtensa: false },
             { name: "esp32-s2-saola", xtensa: true },
-            { name: "waveshare-esp32-s3-touch-lcd-43", xtensa: true },
+            { name: "waveshare-esp32-s3-touch-lcd-43", xtensa: true, extra_features: "can-no-ack" },
         ]
     steps:
       - name: Cache
@@ -63,6 +66,11 @@ jobs:
       # linted too, not just what the esp32c6-devkitc build compiles.
       - name: Clippy
         run: cargo xtask ${{ matrix.target.name }} clippy --release -- -D warnings
+      # Also apply clippy to all features for the boards, to make sure that
+      # everything gets linted.
+      - name: Clippy with extra features.
+        if: matrix.target.extra_features
+        run: cargo xtask ${{ matrix.target.name }} clippy --release --features ${{ matrix.target.extra_features }} -- -D warnings
 
   lint:
     name: Lints and format
@@ -75,9 +83,11 @@ jobs:
         with:
           toolchain: stable
           components: clippy, rustfmt
-      # Firmware clippy runs per target in the build matrix above.
-      - name: Clippy host tools
-        run: cargo clippy -p xtask --all-targets -- -D warnings
+      # Firmware clippy runs per target in the build matrix above. This
+      # lints every host crate instead, the default set already includes
+      # xtask and ota.
+      - name: Clippy host crates
+        run: cargo clippy --all-targets --features ota/packer -- -D warnings
       - name: Format
         run: cargo fmt --all -- --check
 
