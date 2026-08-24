@@ -168,23 +168,10 @@ fn measure(args: &Args, features: &str, port: &str, heap: Option<u64>) -> Result
     board.build(&xshell::Shell::new()?, profile, features, &env)?;
     device::flash(board, profile, port)?;
 
-    // Paint the stack over the debug link.
-    let mut probe = match StackProbe::attach(board.soc, StackRegion::new(&board.elf_path(profile))?)
-    {
-        Ok(mut probe) => {
-            probe.paint()?;
-            Some(probe)
-        }
-        Err(e) => {
-            eprintln!("=== no debug link, skipping the stack measurement: {e:#} ===");
-            None
-        }
-    };
-
+    // The flash ends has a reset, and the open must retry.
     let serial = Serial::open(port, args.verbose)?;
-    if let Some(probe) = probe.as_mut() {
-        probe.run()?;
-    }
+
+    // Capture the boot before the probe-rs painting reboots the chip.
     eprintln!("=== waiting for device to be ready ===");
     if !serial.wait_for_ready(device::BOOT_TIMEOUT) {
         serial.report_health();
@@ -195,6 +182,20 @@ fn measure(args: &Args, features: &str, port: &str, heap: Option<u64>) -> Result
         });
     }
     eprintln!("=== ready ===");
+
+    // Paint the stack over the debug link.
+    let mut probe = match StackProbe::attach(board.soc, StackRegion::new(&board.elf_path(profile))?)
+    {
+        Ok(mut probe) => {
+            probe.paint()?;
+            probe.run()?;
+            Some(probe)
+        }
+        Err(e) => {
+            eprintln!("=== no debug link, skipping the stack measurement: {e:#} ===");
+            None
+        }
+    };
 
     let access_point = AccessPoint::parse(&serial.current_capture())?;
     if !access_point.wait_for_reachable(&args.host, args.interface.as_deref()) {

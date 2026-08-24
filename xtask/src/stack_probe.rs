@@ -6,8 +6,11 @@
 
 use crate::elf::StackRegion;
 use crate::results::StackSnapshot;
+use crate::lib::retry;
 use anyhow::{Context, Result};
 use probe_rs::{MemoryInterface, Session, SessionConfig};
+use probe_rs_espressif::register_plugin;
+use std::sync::Once;
 use std::time::Duration;
 
 /// The word that is used for stack painting.
@@ -15,6 +18,20 @@ const STACK_PAINT: u32 = 0xA5A5_A5A5;
 
 /// How long to wait for the core to halt.
 const HALT_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// How long to keep retrying the probe after a reset.
+const ATTACH_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How long to wait between attach attempts.
+const ATTACH_RETRY: Duration = Duration::from_millis(500);
+
+/// Must register the probe-rs espressif plugin.
+///
+/// See: <https://github.com/probe-rs/probe-rs/blob/v0.32.0/probe-rs-espressif/README.md>
+fn register_espressif() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(register_plugin);
+}
 
 /// A debug link to the board.
 pub struct StackProbe {
@@ -25,8 +42,14 @@ pub struct StackProbe {
 impl StackProbe {
     /// Attaches to the `soc` over any connected probe.
     pub fn attach(soc: &str, region: StackRegion) -> Result<StackProbe> {
-        let session = Session::auto_attach(soc, SessionConfig::default())
-            .with_context(|| format!("attaching to the {soc} debug link"))?;
+        register_espressif();
+
+        // This needs to loop in order for the attach to persist across
+        // resets, otherwise flaky benchmarking occurs.
+        let session = retry(ATTACH_TIMEOUT, ATTACH_RETRY, || {
+            Session::auto_attach(soc, SessionConfig::default())
+        })
+        .with_context(|| format!("attaching to the {soc} debug link"))?;
 
         Ok(StackProbe { session, region })
     }
