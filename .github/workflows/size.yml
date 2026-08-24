@@ -106,6 +106,12 @@ jobs:
           bencher run \
             "${start_point[@]}" \
             --testbed ci \
+            --threshold-measure flash-bytes \
+            --threshold-test percentage \
+            --threshold-upper-boundary 0.05 \
+            --threshold-measure ram-bytes \
+            --threshold-test percentage \
+            --threshold-upper-boundary 0.05 \
             --adapter json \
             --github-actions "$GITHUB_TOKEN" \
             --file bmf-size.json
