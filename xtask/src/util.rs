@@ -4,8 +4,23 @@
 
 //! Utility functions.
 
+use anyhow::Result;
+use std::path::Path;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+use xshell::Shell;
+
+/// The workspace root directory, which is the parent of the xtask crate.
+pub fn workspace_root() -> &'static Path {
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/.."))
+}
+
+/// A shell with the workspace as the root, so xtask works from any directory.
+pub fn shell() -> Result<Shell> {
+    let sh = Shell::new()?;
+    sh.change_dir(workspace_root());
+    Ok(sh)
+}
 
 /// A helper function to call the `operation` until it succeeds or the `timeout` passes, sleeping
 /// for the `interval` between attempts.

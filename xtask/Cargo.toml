@@ -19,6 +19,7 @@ workspace = true
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
 espflash = { version = "4", default-features = false }
+esp-idf-part = "0.6"
 quick-xml = { version = "0.41", default-features = false }
 tempfile = "3"
 humansize = "2"

@@ -8,7 +8,7 @@
 //! `cargo xtask <target> <cargo command> [args...]`.
 
 use crate::board::Target;
-use crate::cmd::shell;
+use crate::util::shell;
 use anyhow::{Context, Result, bail};
 use xshell::cmd;
 
