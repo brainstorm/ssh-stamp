@@ -17,9 +17,9 @@ mod elf;
 mod host;
 mod record;
 mod results;
-mod lib;
 mod stack_probe;
 mod stats;
+mod util;
 
 #[derive(Parser)]
 #[command(

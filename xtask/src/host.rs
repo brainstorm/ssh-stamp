@@ -4,12 +4,12 @@
 
 //! The host side of the device communication.
 
+use crate::util::retry_until;
 use anyhow::{Context, Result, anyhow, bail};
 use quick_xml::escape::escape;
 use std::io::Write;
 use std::net::{TcpStream, ToSocketAddrs};
-use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use strip_ansi_escapes::strip_str;
 use xshell::{Shell, cmd};
 
@@ -163,8 +163,7 @@ impl AccessPoint {
 
     /// Waits until the host can reach the device, i.e. when it `host:22` accepts the TCP connection.
     pub fn wait_for_reachable(&self, host: &str, interface: Option<&str>) -> bool {
-        let timeout = Instant::now() + Self::REACHABLE_TIMEOUT;
-        loop {
+        retry_until(Self::REACHABLE_TIMEOUT, Self::REJOIN_INTERVAL, || {
             let tcp_port_open = (host, 22).to_socket_addrs().is_ok_and(|mut addrs| {
                 addrs.any(|addr| {
                     TcpStream::connect_timeout(&addr, Self::TCP_CONNECT_INTERVAL).is_ok()
@@ -173,19 +172,15 @@ impl AccessPoint {
             if tcp_port_open {
                 return true;
             }
+
             match self.join(interface) {
                 Ok(()) => eprintln!("=== asked this host to join {} ===", self.ssid),
                 Err(err) => {
                     eprintln!("warning: could not join {}: {err:#}", self.ssid);
                 }
             }
-
-            if Instant::now() >= timeout {
-                return false;
-            }
-
-            thread::sleep(Self::REJOIN_INTERVAL);
-        }
+            false
+        })
     }
 }
 

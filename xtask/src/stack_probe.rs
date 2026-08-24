@@ -6,7 +6,7 @@
 
 use crate::elf::StackRegion;
 use crate::results::StackSnapshot;
-use crate::lib::retry;
+use crate::util::retry;
 use anyhow::{Context, Result};
 use probe_rs::{MemoryInterface, Session, SessionConfig};
 use probe_rs_espressif::register_plugin;
