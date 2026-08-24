@@ -33,6 +33,18 @@ fn register_espressif() {
     ONCE.call_once(register_plugin);
 }
 
+/// Attaches a probe-rs session to the `soc`.
+pub fn attach_session(soc: &str) -> Result<Session> {
+    register_espressif();
+
+    // This needs to loop in order for the attach to persist across
+    // resets, otherwise flaky benchmarking occurs.
+    retry(ATTACH_TIMEOUT, ATTACH_RETRY, || {
+        Session::auto_attach(soc, SessionConfig::default())
+    })
+    .with_context(|| format!("attaching to the {soc} debug link"))
+}
+
 /// A debug link to the board.
 pub struct StackProbe {
     session: Session,
@@ -42,16 +54,10 @@ pub struct StackProbe {
 impl StackProbe {
     /// Attaches to the `soc` over any connected probe.
     pub fn attach(soc: &str, region: StackRegion) -> Result<StackProbe> {
-        register_espressif();
-
-        // This needs to loop in order for the attach to persist across
-        // resets, otherwise flaky benchmarking occurs.
-        let session = retry(ATTACH_TIMEOUT, ATTACH_RETRY, || {
-            Session::auto_attach(soc, SessionConfig::default())
+        Ok(StackProbe {
+            session: attach_session(soc)?,
+            region,
         })
-        .with_context(|| format!("attaching to the {soc} debug link"))?;
-
-        Ok(StackProbe { session, region })
     }
 
     /// Paints the stack with [`STACK_PAINT`].

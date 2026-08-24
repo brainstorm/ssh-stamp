@@ -50,6 +50,8 @@ enum Command {
     Bmf(cmd::bmf::Args),
     /// Determine the size of a firmware build.
     Size(cmd::size::Args),
+    /// Resets the storage on board, while keeping the firmware intact.
+    Reset(cmd::reset::Args),
     /// `<target> <cargo command> [args...]` forwarded to cargo.
     #[command(external_subcommand)]
     Cargo(Vec<String>),
@@ -64,6 +66,7 @@ fn main() -> Result<()> {
         Command::Bench(mut args) => cmd::bench::run(&mut args),
         Command::Bmf(args) => cmd::bmf::run(&args),
         Command::Size(args) => cmd::size::run(&args),
+        Command::Reset(args) => cmd::reset::run(&args),
         Command::Cargo(argv) => cmd::cargo::run(&argv),
     }
 }
@@ -86,6 +89,15 @@ mod tests {
         Cli::try_parse_from(["xtask", "bench"].into_iter().chain(argv.iter().copied()))
             .map(|cli| match cli.command {
                 Command::Bench(parsed) => parsed,
+                _ => unreachable!(),
+            })
+            .map_err(Box::new)
+    }
+
+    fn reset_cmd(argv: &[&str]) -> Result<cmd::reset::Args, Box<clap::Error>> {
+        Cli::try_parse_from(["xtask", "reset"].into_iter().chain(argv.iter().copied()))
+            .map(|cli| match cli.command {
+                Command::Reset(parsed) => parsed,
                 _ => unreachable!(),
             })
             .map_err(Box::new)
@@ -135,6 +147,23 @@ mod tests {
         let cli = Cli::try_parse_from(["xtask", "esp32-fake-name", "build"]).unwrap();
         assert!(matches!(cli.command, Command::Cargo(_)));
         assert!(Cli::try_parse_from(["xtask"]).is_err());
+    }
+
+    #[test]
+    fn reset() {
+        assert!(reset_cmd(&["--board", "esp32c6-devkitc"]).is_ok());
+        assert!(
+            reset_cmd(&[
+                "--board",
+                "esp32c6-devkitc",
+                "--mode",
+                "probe-rs",
+                "--erase-otadata"
+            ])
+            .is_ok()
+        );
+        assert!(reset_cmd(&["--board", "esp32-fake-name"]).is_err());
+        assert!(reset_cmd(&[]).is_err());
     }
 
     #[test]

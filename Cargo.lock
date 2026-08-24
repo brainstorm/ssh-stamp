@@ -4395,6 +4395,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "esp-idf-part",
  "espflash",
  "humansize",
  "object 0.37.3",

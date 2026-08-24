@@ -4,21 +4,12 @@
 
 //! The subcommand implementations.
 
-use anyhow::Result;
-use xshell::Shell;
-
 pub mod bench;
 pub mod bmf;
 pub mod cargo;
 pub mod list;
+pub mod reset;
 pub mod size;
-
-/// A shell with the workspace as the root, so xtask works from any directory.
-pub fn shell() -> Result<Shell> {
-    let sh = Shell::new()?;
-    sh.change_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/.."));
-    Ok(sh)
-}
 
 /// The extra features every build has.
 pub const BENCH_FEATURES: &[&str] = &["mem-probe", "bench-loopback"];
