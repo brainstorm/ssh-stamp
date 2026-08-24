@@ -3,9 +3,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Release workflow: builds pre-compiled firmware binaries for all ports/targets,
-# generates an SBOM (SPDX) using Anchore Syft, and attaches everything to a
-# GitHub Release.
+# Release workflow: builds a pre-compiled firmware image for every supported
+# board, generates an SBOM (SPDX) using Anchore Syft, and attaches everything to
+# a GitHub Release.
+#
+# Assets are named per board (ssh-stamp-<board>.bin/.elf), not per SoC: several
+# boards can share a SoC while differing in pinout and features, so their images
+# are not interchangeable.
 #
 # Triggered by pushing a version tag (e.g. v0.3.0).
 #
@@ -67,26 +71,45 @@ jobs:
           upload-release-assets: false
 
   build-firmware:
-    name: Build ${{ matrix.target.soc }}
+    name: Build ${{ matrix.board.name }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
     strategy:
       fail-fast: false
+      # One entry per board in `BOARDS` (xtask/src/board.rs, `cargo xtask list`),
+      # which stays the source of truth for triple, profile and features. Release
+      # assets are named per board rather than per SoC: a SoC can back several
+      # boards, whose pinouts and features differ, so the images are not
+      # interchangeable.
       matrix:
-        target:
-          - soc: esp32c6
-            board: esp32c6-devkitc
+        board:
+          - name: esp32c5-devkitc
+            soc: esp32c5
             triple: riscv32imac-unknown-none-elf
             xtensa: false
-          - soc: esp32s2
-            board: esp32-s2-saola
+            partitions: true
+          - name: esp32c6-devkitc
+            soc: esp32c6
+            triple: riscv32imac-unknown-none-elf
+            xtensa: false
+            partitions: true
+          - name: esp32c61-devkitc
+            soc: esp32c61
+            triple: riscv32imac-unknown-none-elf
+            xtensa: false
+            partitions: true
+          # No partition table for this board; see `partitions: None` in board.rs.
+          - name: esp32-s2-saola
+            soc: esp32s2
             triple: xtensa-esp32s2-none-elf
             xtensa: true
-          - soc: esp32s3
-            board: waveshare-esp32-s3-touch-lcd-43
+            partitions: false
+          - name: waveshare-esp32-s3-touch-lcd-43
+            soc: esp32s3
             triple: xtensa-esp32s3-none-elf
             xtensa: true
+            partitions: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -95,22 +118,22 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Setup Rust toolchain for RISC-V
-        if: ${{ !matrix.target.xtensa }}
+        if: ${{ !matrix.board.xtensa }}
         uses: dtolnay/rust-toolchain@v1
         with:
-          target: ${{ matrix.target.triple }}
+          target: ${{ matrix.board.triple }}
           toolchain: stable
           components: rust-src
 
       - name: Setup Rust toolchain for Xtensa
-        if: ${{ matrix.target.xtensa }}
+        if: ${{ matrix.board.xtensa }}
         uses: esp-rs/xtensa-toolchain@v1.7.0
         with:
           ldproxy: false
           version: 1.95.0.0
 
       - name: Build firmware
-        run: cargo xtask ${{ matrix.target.board }} build --release
+        run: cargo xtask ${{ matrix.board.name }} build --release
 
       - name: Install espflash
         uses: taiki-e/install-action@v2
@@ -120,14 +143,20 @@ jobs:
       - name: Generate .bin image from ELF
         run: |
           mkdir -p release-assets
-          ELF_PATH="target/boards/${{ matrix.target.board }}/${{ matrix.target.triple }}/release/ssh-stamp-esp32"
-          espflash save-image --chip ${{ matrix.target.soc }} --partition-table ssh-stamp-esp32/partitions.csv "$ELF_PATH" "release-assets/ssh-stamp-${{ matrix.target.soc }}.bin"
-          cp "$ELF_PATH" "release-assets/ssh-stamp-${{ matrix.target.soc }}.elf"
+          ELF_PATH="target/boards/${{ matrix.board.name }}/${{ matrix.board.triple }}/release/ssh-stamp-esp32"
+          # Mirrors xtask's flash path: the partition table is passed only for
+          # boards that declare one.
+          args=(--chip "${{ matrix.board.soc }}")
+          if [ "${{ matrix.board.partitions }}" = "true" ]; then
+            args+=(--partition-table ssh-stamp-esp32/partitions.csv)
+          fi
+          espflash save-image "${args[@]}" "$ELF_PATH" "release-assets/ssh-stamp-${{ matrix.board.name }}.bin"
+          cp "$ELF_PATH" "release-assets/ssh-stamp-${{ matrix.board.name }}.elf"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: firmware-${{ matrix.target.soc }}
+          name: firmware-${{ matrix.board.name }}
           path: release-assets/
           retention-days: 1
 
