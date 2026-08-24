@@ -94,7 +94,7 @@ jobs:
         with:
           toolchain: stable
       - name: Build utility
-        run: cargo build --package ota --bin packer --features std
+        run: cargo build --package ota --bin packer --features packer
 
   docs:
     name: Documentation
