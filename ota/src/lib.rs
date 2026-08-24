@@ -13,10 +13,10 @@
 //! (`ota/src/bin/packer.rs`) wraps a raw app binary into an `.otap` blob
 //! with the required TLV header (OTA type, SHA-256 checksum, firmware size).
 //!
-//! This crate is `no_std` on embedded targets. The `std` feature gate and
-//! `cfg(target_os = "none")` keep the SFTP server and handler modules
-//! compiled out on the host, while the [`tlv`] module and [`OtaHeader`]
-//! remain usable from both host and device code.
+//! This crate is `no_std`. `cfg(target_os = "none")` keeps the SFTP server
+//! and handler modules compiled out on the host, while the [`tlv`] module
+//! and [`OtaHeader`] remain usable from both host and device code. The
+//! `packer` feature controls the `packer` binary and its `clap` dependency.
 
 #![cfg_attr(not(test), no_std)]
 

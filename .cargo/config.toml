@@ -14,9 +14,9 @@
 #   cargo xtask waveshare-esp32-s3-touch-lcd-43 run --release --features can-no-ack
 xtask = "run --package xtask --release --"
 
-# The OTA image packer is a host tool, not a build target. `std` satisfies
+# The OTA image packer is a host tool, not a build target. `packer` satisfies
 # the binary's `required-features`.
-packer = "run --package ota --bin packer --features std"
+packer = "run --package ota --bin packer --features packer"
 
 # NOTE: there is deliberately no `[build] target` or `[unstable] build-std`
 # here. Both used to be global, which forced *every* cargo invocation —
