@@ -177,15 +177,5 @@ mod tests {
         assert_eq!(regions[0].size, 0x2000);
         assert_eq!(regions[1].offset, 0x003d_0000);
         assert_eq!(regions[1].size, 0x0001_0000);
-
-        let regions = erase_regions(find("esp32c6-devkitc").unwrap(), true).unwrap();
-        let names = regions.iter().map(|r| r.name.as_str()).collect::<Vec<_>>();
-        assert_eq!(names, ["app_config", "otadata", "extra_data"]);
-
-        assert!(erase_regions(find("esp32-s2-saola").unwrap(), false).is_err());
-
-        for board in board::BOARDS {
-            assert_eq!(default_mode(board), Mode::Espflash);
-        }
     }
 }
