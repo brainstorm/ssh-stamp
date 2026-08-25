@@ -15,6 +15,7 @@ mod cmd;
 mod device;
 mod elf;
 mod host;
+mod provision;
 mod record;
 mod results;
 mod stack_probe;

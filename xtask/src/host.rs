@@ -5,12 +5,11 @@
 //! The host side of the device communication.
 
 use crate::util::retry_until;
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use quick_xml::escape::escape;
 use std::io::Write;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
-use strip_ansi_escapes::strip_str;
 use xshell::{Shell, cmd};
 
 /// The device access point.
@@ -25,27 +24,6 @@ impl AccessPoint {
     pub const REACHABLE_TIMEOUT: Duration = Duration::from_mins(1);
     pub const REJOIN_INTERVAL: Duration = Duration::from_secs(8);
     pub const TCP_CONNECT_INTERVAL: Duration = Duration::from_millis(500);
-
-    /// Parses the credentials for the access point out of the capture.
-    pub fn parse<S: AsRef<str>>(lines: &[S]) -> Result<AccessPoint> {
-        let find_field = |key: &str| {
-            lines
-                .iter()
-                .rev()
-                .find_map(|line| {
-                    strip_str(line.as_ref())
-                        .split_once(key)
-                        .map(|(_, value)| value.trim().to_string())
-                })
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| anyhow!("field `{key}` not found"))
-        };
-
-        Ok(AccessPoint {
-            ssid: find_field("WIFI SSID: ")?,
-            psk: find_field("WIFI PSK: ")?,
-        })
-    }
 
     /// Joins the access point with the ssid and psk. The `interface` can optionally be
     /// specified on multi interface hosts to avoid automatically detecting. It is
@@ -187,31 +165,6 @@ impl AccessPoint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cmd;
-
-    #[test]
-    fn reads_access_point_off_console() {
-        // This is exactly like esp-println would write.
-        let lines = [
-            "\u{1b}[32mINFO - WIFI SSID: ssh-stamp\u{1b}[0m".to_string(),
-            "\u{1b}[32mINFO - WIFI PSK: stale-before-reflash\u{1b}[0m".to_string(),
-            format!(
-                "INFO - @BENCH checkpoint={} t_us=2700000",
-                cmd::TCP_LISTENING
-            ),
-            "\u{1b}[32mINFO - WIFI SSID: ssh-stamp\u{1b}[0m".to_string(),
-            "\u{1b}[32mINFO - WIFI PSK: password\u{1b}[0m".to_string(),
-        ];
-        let ap = AccessPoint::parse(&lines).unwrap();
-        assert_eq!(ap.ssid, "ssh-stamp");
-        assert_eq!(ap.psk, "password");
-    }
-
-    #[test]
-    fn no_credentials_in_capture_fails_parse() {
-        assert!(AccessPoint::parse(&["INFO - HSM: accepting TCP on port 22"]).is_err());
-        assert!(AccessPoint::parse(&["INFO - WIFI SSID: ssh-stamp"]).is_err());
-    }
 
     #[test]
     fn profile_expected_value() {

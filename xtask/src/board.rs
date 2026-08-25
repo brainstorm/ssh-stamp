@@ -6,8 +6,11 @@
 //! The build level information on boards for ssh-stamp.
 
 use crate::results::CrateSize;
+use crate::util::workspace_root;
 use anyhow::{Context, Result};
 use clap::builder::{PossibleValuesParser, TypedValueParser};
+use ssh_stamp::config::UartPins;
+use std::fs;
 use std::path::PathBuf;
 use xshell::{Shell, cmd};
 
@@ -480,6 +483,51 @@ impl Board {
             }
         }
     }
+
+    /// The UART pins from the board's TOML definition.
+    pub fn uart_pins(&self) -> Result<UartPins> {
+        Ok(BoardToml::from_workspace(self.name)?.uarts_pins())
+    }
+}
+
+/// The parts of a board definition TOML.
+#[derive(serde::Deserialize)]
+pub struct BoardToml {
+    pins: BoardPins,
+}
+
+impl BoardToml {
+    /// Parse the board toml from a string.
+    pub fn parse_from_str(toml: &str) -> Result<BoardToml> {
+        toml::from_str(toml).with_context(|| "could not parse".to_string())
+    }
+
+    /// Create the board configuration from the workspace definition.
+    pub fn from_workspace(name: &str) -> Result<BoardToml> {
+        let path = workspace_root()
+            .join("ssh-stamp-esp32-boards")
+            .join("boards")
+            .join(format!("{name}.toml"));
+        let definition = fs::read_to_string(&path)
+            .with_context(|| format!("could not read {}", path.display()))?;
+
+        Self::parse_from_str(&definition)
+    }
+
+    /// Get the UART pins for this board toml.
+    pub fn uarts_pins(&self) -> UartPins {
+        UartPins {
+            rx: self.pins.uart_rx,
+            tx: self.pins.uart_tx,
+        }
+    }
+}
+
+/// The pin section of a board definition TOML.
+#[derive(serde::Deserialize)]
+pub struct BoardPins {
+    uart_rx: u8,
+    uart_tx: u8,
 }
 
 #[cfg(test)]
@@ -539,6 +587,12 @@ mod tests {
             board.features(&["board-esp32c6-devkitc"]),
             "board-esp32c6-devkitc"
         );
+    }
+
+    #[test]
+    fn uart_pins_from_the_board_toml() {
+        let board = find("esp32c6-devkitc").unwrap();
+        assert_eq!(board.uart_pins().unwrap(), UartPins { rx: 10, tx: 11 });
     }
 
     #[test]
