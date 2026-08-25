@@ -70,46 +70,48 @@ jobs:
           upload-artifact: true
           upload-release-assets: false
 
+  prepare-matrix:
+    name: Prepare board matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      boards: ${{ steps.targets.outputs.boards }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Cache
+        uses: mozilla-actions/sccache-action@v0.0.10
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      # `BOARDS` in xtask/src/board.rs is the single source of truth: adding a
+      # board there is enough to release it, with no edit to this workflow.
+      - name: Derive board matrix
+        id: targets
+        run: |
+          boards="$(cargo xtask list --json | jq -c '.boards')"
+          echo "boards=$boards" >> "$GITHUB_OUTPUT"
+          echo "$boards" | jq .
+
   build-firmware:
     name: Build ${{ matrix.board.name }}
+    needs: [prepare-matrix]
     runs-on: ubuntu-latest
     permissions:
       contents: read
     strategy:
       fail-fast: false
-      # One entry per board in `BOARDS` (xtask/src/board.rs, `cargo xtask list`),
-      # which stays the source of truth for triple, profile and features. Release
-      # assets are named per board rather than per SoC: a SoC can back several
-      # boards, whose pinouts and features differ, so the images are not
-      # interchangeable.
+      # Every board `cargo xtask list` reports, so this never drifts from
+      # BOARDS in xtask/src/board.rs. Assets are named per board rather than
+      # per SoC: a SoC can back several boards, whose pinouts and features
+      # differ, so the images are not interchangeable.
       matrix:
-        board:
-          - name: esp32c5-devkitc
-            soc: esp32c5
-            triple: riscv32imac-unknown-none-elf
-            xtensa: false
-            partitions: true
-          - name: esp32c6-devkitc
-            soc: esp32c6
-            triple: riscv32imac-unknown-none-elf
-            xtensa: false
-            partitions: true
-          - name: esp32c61-devkitc
-            soc: esp32c61
-            triple: riscv32imac-unknown-none-elf
-            xtensa: false
-            partitions: true
-          # No partition table for this board; see `partitions: None` in board.rs.
-          - name: esp32-s2-saola
-            soc: esp32s2
-            triple: xtensa-esp32s2-none-elf
-            xtensa: true
-            partitions: false
-          - name: waveshare-esp32-s3-touch-lcd-43
-            soc: esp32s3
-            triple: xtensa-esp32s3-none-elf
-            xtensa: true
-            partitions: true
+        board: ${{ fromJSON(needs.prepare-matrix.outputs.boards) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -145,10 +147,11 @@ jobs:
           mkdir -p release-assets
           ELF_PATH="target/boards/${{ matrix.board.name }}/${{ matrix.board.triple }}/release/ssh-stamp-esp32"
           # Mirrors xtask's flash path: the partition table is passed only for
-          # boards that declare one.
+          # boards that declare one, and is whatever board.rs declares it to be.
+          PARTITIONS="${{ matrix.board.partitions }}"
           args=(--chip "${{ matrix.board.soc }}")
-          if [ "${{ matrix.board.partitions }}" = "true" ]; then
-            args+=(--partition-table ssh-stamp-esp32/partitions.csv)
+          if [ -n "$PARTITIONS" ]; then
+            args+=(--partition-table "$PARTITIONS")
           fi
           espflash save-image "${args[@]}" "$ELF_PATH" "release-assets/ssh-stamp-${{ matrix.board.name }}.bin"
           cp "$ELF_PATH" "release-assets/ssh-stamp-${{ matrix.board.name }}.elf"

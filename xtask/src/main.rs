@@ -43,7 +43,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// List known boards and chips.
-    List,
+    List(cmd::list::Args),
     /// Benchmark ssh-stamp from boot startup to sessions.
     Bench(cmd::bench::Args),
     /// Convert benchmark results.json into Bencher Metric Format.
@@ -59,10 +59,7 @@ enum Command {
 
 fn main() -> Result<()> {
     match Cli::parse().command {
-        Command::List => {
-            cmd::list::run();
-            Ok(())
-        }
+        Command::List(args) => cmd::list::run(&args),
         Command::Bench(mut args) => cmd::bench::run(&mut args),
         Command::Bmf(args) => cmd::bmf::run(&args),
         Command::Size(args) => cmd::size::run(&args),
