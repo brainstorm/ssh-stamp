@@ -345,6 +345,52 @@ impl Target {
             Target::Chip(chip) => chip.build_std,
         }
     }
+
+    /// The `SoC` the target runs on.
+    pub fn soc(&self) -> &'static str {
+        match self {
+            Target::Board(board) => board.soc,
+            Target::Chip(chip) => chip.name,
+        }
+    }
+
+    /// The cargo arguments that select the HIL test crate for this target.
+    pub fn hil_selection_args(&self) -> Vec<String> {
+        let mut arguments = vec![
+            "--target".into(),
+            self.triple().into(),
+            "-p".into(),
+            "ssh-stamp-esp32-hil".into(),
+            "--release".into(),
+            "--no-default-features".into(),
+            "--features".into(),
+            self.feature().into(),
+        ];
+
+        if self.build_std() {
+            arguments.push("-Z".into());
+            arguments.push("build-std=core,alloc".into());
+            // This is required because otherwise cargo would error due to a
+            // clash with the workspace release profile setting `panic = "abort"`.
+            arguments.push("-Z".into());
+            arguments.push("panic-abort-tests".into());
+        }
+
+        arguments
+    }
+
+    /// The environment variable that overrides the cargo runner.
+    pub fn runner_env(&self) -> String {
+        format!(
+            "CARGO_TARGET_{}_RUNNER",
+            self.triple().to_uppercase().replace('-', "_")
+        )
+    }
+
+    /// The probe-rs run that flashes and runs each HIL test.
+    pub fn hil_runner(&self) -> String {
+        format!("probe-rs run --preverify --chip {}", self.soc())
+    }
 }
 
 impl Chip {
