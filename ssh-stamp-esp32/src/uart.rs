@@ -18,6 +18,7 @@
 
 use core::future::Future;
 
+use embassy_executor::SendSpawner;
 use embassy_sync::pipe::TryWriteError;
 use embassy_sync::signal::Signal;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pipe::Pipe};
@@ -224,4 +225,26 @@ pub async fn uart_task(
     let uart = uart.with_rx(pins.rx).with_tx(pins.tx).into_async();
 
     uart_buf.run(uart).await;
+}
+
+/// Creates the [`BufferedUart`] singleton and spawns [`uart_task`] on the
+/// given spawner, returning the buffer the rest of the system talks to. The
+/// firmware feeds it the spawner from
+/// [`start_interrupt_executor`](crate::start_interrupt_executor), so the
+/// task runs at interrupt priority. The task waits on [`UART_SIGNAL`] before
+/// touching the hardware.
+///
+/// # Panics
+///
+/// Panics if called more than once per boot: the [`BufferedUart`] singleton
+/// and the task can each only be created once.
+pub fn spawn_uart(
+    spawner: SendSpawner,
+    uart1: UART1<'static>,
+    pins: EspUartPins<'static>,
+    params: UartParams,
+) -> &'static BufferedUart {
+    let uart_buf = UART_BUF.init_with(BufferedUart::new);
+    spawner.spawn(uart_task(uart_buf, uart1, pins, params).expect("uart_task spawn failed"));
+    uart_buf
 }

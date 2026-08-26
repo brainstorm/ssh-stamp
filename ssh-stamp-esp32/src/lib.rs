@@ -18,6 +18,7 @@
 extern crate alloc;
 
 pub mod bench;
+mod boot;
 #[cfg(feature = "can")]
 mod can;
 pub mod flash;
@@ -28,15 +29,25 @@ mod rng;
 mod timer;
 mod uart;
 
+pub use boot::start_interrupt_executor;
 #[cfg(feature = "can")]
 pub use can::{BufferedCan, CAN_BUF, EspCanPins, can_task};
 pub use flash::{EspOtaWriter, FlashBuffer, get_flash_n_buffer, init as flash_init};
 pub use hash::EspHmac;
 pub use network::{EspWifi, accept_requests, dhcp_server, net_up, wifi_up};
 pub use platform::EspPlatform;
-pub use rng::{EspRng, fill_bytes as rng_fill_bytes, register_custom_rng};
+pub use rng::{
+    EntropySource, EspRng, entropy_source_active, fill_bytes as rng_fill_bytes, init_entropy,
+    register_custom_rng,
+};
 pub use timer::EspTimer;
-pub use uart::{BufferedUart, EspUartPins, UART_BUF, UART_SIGNAL, uart_task};
+pub use uart::{BufferedUart, EspUartPins, UART_BUF, UART_SIGNAL, spawn_uart, uart_task};
+
+// Re-exported for the `getrandom_backend!` expansion.
+pub use getrandom;
+
+// Re-exported for the `init_heap!` expansion.
+pub use esp_alloc;
 
 /// Read the device's hardware MAC address from eFuse.
 #[must_use]
