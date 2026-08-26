@@ -1,0 +1,84 @@
+# SPDX-FileCopyrightText: 2026 Marko Malenic <mmalenic1@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "ssh-stamp-esp32-hil"
+version = "0.1.0"
+edition = "2024"
+authors = ["Marko Malenic <mmalenic1@gmail.com>"]
+description = "HIL tests for ssh-stamp"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/brainstorm/ssh-stamp"
+publish = false
+
+# embedded-test needs it's own harness, so this must be disabled.
+[lib]
+test = false
+doctest = false
+bench = false
+
+[[test]]
+name = "flash"
+harness = false
+
+# The uart tests require a real board definition, so it's only enabled
+# if a board feature is enabled.
+[[test]]
+name = "uart"
+harness = false
+required-features = ["board-any"]
+
+[dependencies]
+ssh-stamp = { path = "..", default-features = false }
+ssh-stamp-esp32 = { path = "../ssh-stamp-esp32", default-features = false, features = [
+    "bench-loopback",
+] }
+ssh-stamp-esp32-boards = { path = "../ssh-stamp-esp32-boards", optional = true }
+ssh-stamp-hal = { path = "../ssh-stamp-hal" }
+
+embedded-test = { version = "0.7", features = ["embassy-010", "external-executor"] }
+embassy-executor = { workspace = true }
+
+esp-hal = { workspace = true }
+esp-rtos = { version = "0.3", features = ["embassy"] }
+esp-bootloader-esp-idf = { version = "0.5" }
+
+embassy-futures = { workspace = true }
+embassy-sync = { workspace = true }
+embedded-io-async = { workspace = true }
+sunset = { workspace = true }
+
+[features]
+default = []
+
+# The reason board-any exists is to ensure that the `uart` [[test]] can be selected
+# for only when a board is also enabled. Regular chip libraries can't run this test,
+# and there's no other way to specify any board for enabling the `uart` test.
+board-any = ["dep:ssh-stamp-esp32-boards"]
+
+# The board features require specifying a real board with a definition.
+board-esp32c5-devkitc = ["ssh-stamp-esp32/board-esp32c5-devkitc", "board-any", "esp32c5"]
+board-esp32c61-devkitc = ["ssh-stamp-esp32/board-esp32c61-devkitc", "board-any", "esp32c61"]
+board-esp32c6-devkitc = ["ssh-stamp-esp32/board-esp32c6-devkitc", "board-any", "esp32c6"]
+board-esp32-s2-saola = ["ssh-stamp-esp32/board-esp32-s2-saola", "board-any", "esp32s2"]
+board-waveshare-esp32-s3-touch-lcd-43 = [
+    "ssh-stamp-esp32/board-waveshare-esp32-s3-touch-lcd-43",
+    "board-any",
+    "esp32s3",
+]
+
+
+# These are the lib only features for tests that don't need a real board definition.
+# The Xtensa chips also require the embedded-test semihosting feature.
+esp32 = ["ssh-stamp-esp32/esp32", "embedded-test/xtensa-semihosting"]
+esp32c2 = ["ssh-stamp-esp32/esp32c2"]
+esp32c3 = ["ssh-stamp-esp32/esp32c3"]
+esp32c5 = ["ssh-stamp-esp32/esp32c5"]
+esp32c6 = ["ssh-stamp-esp32/esp32c6"]
+esp32c61 = ["ssh-stamp-esp32/esp32c61"]
+esp32s2 = ["ssh-stamp-esp32/esp32s2", "embedded-test/xtensa-semihosting"]
+esp32s3 = ["ssh-stamp-esp32/esp32s3", "embedded-test/xtensa-semihosting"]
+
+[lints]
+workspace = true

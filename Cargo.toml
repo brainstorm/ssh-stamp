@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Roman Valls, 2025
+# SPDX-FileCopyrightText: 2026 Marko Malenic <mmalenic1@gmail.com>
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -21,6 +22,7 @@ members = [
     "ssh-stamp-hal",
     "ssh-stamp-esp32",
     "ssh-stamp-esp32-boards",
+    "ssh-stamp-esp32-hil",
     "ota",
     "xtask",
 ]
