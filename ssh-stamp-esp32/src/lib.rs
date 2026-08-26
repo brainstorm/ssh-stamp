@@ -28,6 +28,13 @@ mod rng;
 mod timer;
 mod uart;
 
+/// Global allocator heap size in bytes.
+///
+/// Declared by this crate rather than by `ssh-stamp`, because this is the
+/// crate that installs the allocator. Override at build time with
+/// `SSH_STAMP_CONFIG_HEAP_SIZE`.
+pub const HEAP_SIZE: usize = esp_config::esp_config_int!(usize, "SSH_STAMP_CONFIG_HEAP_SIZE");
+
 #[cfg(feature = "can")]
 pub use can::{BufferedCan, CAN_BUF, EspCanPins, can_task};
 pub use flash::{EspOtaWriter, FlashBuffer, get_flash_n_buffer, init as flash_init};

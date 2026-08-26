@@ -121,7 +121,6 @@ sha2 = { workspace = true }
 rustc-hash = { workspace = true }
 
 cfg-if = "1"
-esp-config = { workspace = true }
 ed25519-dalek = { version = "3", default-features = false }
 embassy-executor = { workspace = true }
 embassy-net = { workspace = true }
@@ -154,7 +153,6 @@ pastey = { workspace = true }
 embedded-storage-inmemory = "0.1"
 
 [build-dependencies]
-esp-config = { version = "0.7", features = ["build"] }
 
 [profile.dev]
 opt-level = 0

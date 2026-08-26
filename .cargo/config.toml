@@ -41,6 +41,16 @@ rustflags = ["-C", "force-frame-pointers", '--cfg', 'getrandom_backend="custom"'
 runner = "espflash flash --baud=921600 --partition-table ssh-stamp-esp32/partitions.csv --monitor"
 rustflags = ["-C", "force-frame-pointers", '--cfg', 'getrandom_backend="custom"']
 
+# Bouffalo BL616. Hard-float: the vendor WiFi archives are ilp32f, so this is
+# riscv32imafc and not the imac used above -- linking ilp32 objects against
+# them fails, and an earlier BL616 attempt in this repo used imac because it
+# had no blobs to link yet.
+#
+# No runner here: the image needs a bootheader and post-processing that
+# espflash does not do, so flashing goes through the board entry in xtask.
+[target.riscv32imafc-unknown-none-elf] # Bouffalo BL616
+rustflags = ["-C", "force-frame-pointers", '--cfg', 'getrandom_backend="custom"']
+
 [target.xtensa-esp32s2-none-elf] # ESP32-S2
 runner = "espflash flash --baud=921600 --monitor --chip esp32s2"
 rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s2"', '--cfg', 'getrandom_backend="custom"']

@@ -5,22 +5,36 @@
 
 //! Build configuration
 
-use esp_config::{ConfigOption, Validator, Value, generate_config};
-
 fn main() {
     emit_ssh_ident();
+    emit_config_offset();
+}
 
-    generate_config(
-        "ssh-stamp",
-        &[option(
-            "heap_size",
-            "Global allocator heap size in bytes",
-            60 * 1024,
-            16 * 1024..257 * 1024,
-        )],
-        true,
-        true,
-    );
+/// Where the configuration area lives in flash.
+///
+/// A property of the port's flash layout, not of ssh-stamp: 0x9000 is where an
+/// ESP-IDF partition table puts NVS, and it means nothing on a part that does
+/// not use one. Emitted as a compile-time constant rather than passed at
+/// runtime because `store`'s tests use it to size arrays, and it follows the
+/// same shape as `SSH_STAMP_IDENT` below.
+///
+/// Override with `SSH_STAMP_CONFIG_OFFSET`, decimal or `0x`-prefixed hex.
+fn emit_config_offset() {
+    const DEFAULT: usize = 0x9000;
+    println!("cargo:rerun-if-env-changed=SSH_STAMP_CONFIG_OFFSET");
+
+    let offset = match std::env::var("SSH_STAMP_CONFIG_OFFSET") {
+        Ok(v) => {
+            let t = v.trim().to_owned();
+            let parsed = t
+                .strip_prefix("0x")
+                .or_else(|| t.strip_prefix("0X"))
+                .map_or_else(|| t.parse::<usize>(), |h| usize::from_str_radix(h, 16));
+            parsed.unwrap_or_else(|_| panic!("SSH_STAMP_CONFIG_OFFSET is not a number: {v:?}"))
+        }
+        Err(_) => DEFAULT,
+    };
+    println!("cargo::rustc-env=SSH_STAMP_CONFIG_OFFSET={offset}");
 }
 
 /// Emits `SSH_STAMP_IDENT` from the `sunset` version.
@@ -44,22 +58,4 @@ fn emit_ssh_ident() {
         env!("CARGO_PKG_VERSION")
     );
     println!("cargo::rustc-env=SSH_STAMP_IDENT={ident}");
-}
-
-/// A byte integer option.
-fn option(
-    name: &str,
-    description: &str,
-    default: i128,
-    range: std::ops::Range<i128>,
-) -> ConfigOption {
-    ConfigOption {
-        name: name.to_string(),
-        description: description.to_string(),
-        default_value: Value::Integer(default),
-        constraint: Some(Validator::IntegerInRange(range)),
-        stability: esp_config::Stability::Unstable,
-        active: true,
-        display_hint: esp_config::DisplayHint::None,
-    }
 }
