@@ -8,9 +8,10 @@ use crate::board::Board;
 use crate::cmd;
 use crate::util::{retry, retry_until};
 use anyhow::{Context, Result, bail};
+use macaddr::MacAddr6;
 use serial2::SerialPort;
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, mpsc};
@@ -28,7 +29,7 @@ pub const BOOT_TIMEOUT: Duration = Duration::from_mins(2);
 pub const SETUP_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// This will flash the firmware onto the board via espflash.
-pub fn flash(board: &Board, profile: &str, port: &str) -> Result<()> {
+pub fn flash(board: &Board, profile: &str, port: &str, config_image: &Path) -> Result<()> {
     let shell = Shell::new()?;
     let soc = board.soc;
     let elf = board.elf_path(profile).display().to_string();
@@ -40,14 +41,75 @@ pub fn flash(board: &Board, profile: &str, port: &str) -> Result<()> {
 
     eprintln!("=== flashing {elf} to {port} for {soc} ===");
 
+    // Hold the reset while the config still has to be written.
     cmd!(
         shell,
-        "espflash flash --port {port} {partitions...} --chip {soc} {elf}"
+        "espflash flash --port {port} {partitions...} --chip {soc} --after no-reset {elf}"
     )
     .run()
     .context("espflash flash failed")?;
 
+    let address = format!("{:#x}", ssh_stamp::store::CONFIG_OFFSET);
+    let image = config_image.display().to_string();
+
+    eprintln!("=== provisioning the config at {address} ===");
+
+    // The default reset after the write boots the provisioned device.
+    cmd!(
+        shell,
+        "espflash write-bin --port {port} --chip {soc} {address} {image}"
+    )
+    .run()
+    .context("espflash write-bin failed")?;
+
     Ok(())
+}
+
+/// The MAC address of the device.
+pub struct Mac([u8; 6]);
+
+impl Mac {
+    /// Reads the device's MAC address.
+    pub fn read(board: &Board, port: &str) -> Result<Self> {
+        let shell = Shell::new()?;
+        let soc = board.soc;
+
+        eprintln!("=== reading the MAC address on {port} ===");
+
+        let output = cmd!(shell, "espflash board-info --port {port} --chip {soc}")
+            .read()
+            .context("espflash board-info failed")?;
+
+        Self::parse(&output)
+    }
+
+    /// Parses the mac address from the espflash output.
+    fn parse(output: &str) -> Result<Self> {
+        let line = output
+            .lines()
+            .find_map(|line| line.strip_prefix("MAC address:"))
+            .context("espflash contains no MAC address")?;
+
+        let mac: MacAddr6 = line
+            .trim()
+            .parse()
+            .context("could not parse the MAC address")?;
+
+        Ok(Self(mac.into_array()))
+    }
+
+    /// The MAC address as bytes.
+    pub fn into_inner(self) -> [u8; 6] {
+        self.0
+    }
+}
+
+/// The settings for the SSH sessions.
+pub struct SshAuth {
+    /// The `known_hosts` file.
+    pub known_hosts: PathBuf,
+    /// The private key that the config has.
+    pub identity: PathBuf,
 }
 
 /// The SSH session report.
@@ -67,12 +129,13 @@ impl SessionReport {
     pub fn ssh_session(
         host: &str,
         user: &str,
+        auth: &SshAuth,
         extra_opts: &[String],
         envs: &[(String, String)],
         markers: u32,
     ) -> Result<Self> {
         let shell = Shell::new()?;
-        let mut child = Self::ssh_session_cmd(&shell, host, user, extra_opts, envs, true)
+        let mut child = Self::ssh_session_cmd(&shell, host, user, auth, extra_opts, envs, true)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -129,12 +192,13 @@ impl SessionReport {
         shell: &Shell,
         host: &str,
         user: &str,
+        auth: &SshAuth,
         extra_opts: &[String],
         envs: &[(String, String)],
         verbose: bool,
     ) -> Command {
-        let null_device = if cfg!(windows) { "NUL" } else { "/dev/null" };
-        let known_hosts = format!("UserKnownHostsFile={null_device}");
+        let known_hosts = format!("UserKnownHostsFile={}", auth.known_hosts.display());
+        let identity = auth.identity.display().to_string();
         let connect_timeout = format!("ConnectTimeout={}", CONNECT_TIMEOUT.as_secs());
         let verbose = verbose.then_some("-v");
         let extra_opts: Vec<String> = extra_opts
@@ -145,7 +209,7 @@ impl SessionReport {
 
         let mut command: Command = cmd!(
             shell,
-            "ssh -T -F none -o BatchMode=yes -o StrictHostKeyChecking=no -o {known_hosts} -o {connect_timeout} {verbose...} {extra_opts...} {destination}"
+            "ssh -T -F none -o BatchMode=yes -o StrictHostKeyChecking=yes -o {known_hosts} -o IdentitiesOnly=yes -i {identity} -o {connect_timeout} {verbose...} {extra_opts...} {destination}"
         )
             .into();
         command.envs(
@@ -486,6 +550,21 @@ impl Drop for Serial {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_mac_from_board_info() {
+        let output = "Chip type:         esp32c6 (revision v0.1)\n\
+            Crystal frequency: 40 MHz\n\
+            Flash size:        4MB\n\
+            MAC address:       98:a3:16:96:8c:08\n";
+        assert_eq!(
+            Mac::parse(output).unwrap().into_inner(),
+            [0x98, 0xa3, 0x16, 0x96, 0x8c, 0x08]
+        );
+        assert!(Mac::parse("Chip type: esp32c6\n").is_err());
+        assert!(Mac::parse("MAC address: 98:a3:16\n").is_err());
+        assert!(Mac::parse("MAC address: 98:a3:16:96:8c:08:ff\n").is_err());
+    }
 
     #[test]
     fn echo_split_across_reads() {

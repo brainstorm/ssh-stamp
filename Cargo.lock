@@ -2343,6 +2343,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "macaddr"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baee0bbc17ce759db233beb01648088061bf678383130602a298e6998eedb2d8"
+
+[[package]]
 name = "mach2"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4395,9 +4401,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "embedded-storage-inmemory",
  "esp-idf-part",
  "espflash",
+ "getrandom",
  "humansize",
+ "macaddr",
  "object 0.37.3",
  "probe-rs",
  "probe-rs-espressif",
@@ -4405,9 +4414,13 @@ dependencies = [
  "serde",
  "serde_json",
  "serial2",
+ "ssh-key",
+ "ssh-stamp",
  "statrs",
  "strip-ansi-escapes",
+ "sunset",
  "tempfile",
+ "toml",
  "xshell",
 ]
 
