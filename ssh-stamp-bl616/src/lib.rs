@@ -45,10 +45,17 @@ pub mod uart;
 pub use flash::Bl616Flash;
 pub use hash::Bl616Hash;
 pub use network::{Bl616Wifi, net_up};
-pub use platform::{Bl616OtaWriter, Bl616Platform};
+pub use platform::{Bl616OtaWriter, Bl616Platform, load_config};
 pub use rng::{Bl616Rng, fill_bytes as rng_fill_bytes};
 pub use timer::Bl616Timer;
 pub use uart::{Bl616Serial, UART_BUF, UART_SIGNAL, uart_task};
+
+/// UART0's pins on the Sipeed M0S Dock, as the vendor console uses them.
+///
+/// Recorded in the stored configuration as the default; a user can change
+/// them there, though nothing on this port acts on a different pair yet.
+pub const DEFAULT_UART_PINS: ssh_stamp::config::UartPins =
+    ssh_stamp::config::UartPins { rx: 22, tx: 21 };
 
 /// The station MAC, which ssh-stamp uses to name the default network.
 ///

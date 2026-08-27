@@ -6,7 +6,7 @@
 
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
-use ssh_stamp::config::SSHStampConfig;
+use ssh_stamp::config::{SSHStampConfig, UartPins};
 use ssh_stamp::platform::PlatformServices;
 use ssh_stamp::store;
 use ssh_stamp_hal::{FlashError, HalError, OtaActions};
@@ -23,6 +23,24 @@ const CONFIG_BUF: usize = 4096;
 /// concurrent operations are not merely a data race over a buffer.
 static FLASH: Mutex<CriticalSectionRawMutex, (Bl616Flash, [u8; CONFIG_BUF])> =
     Mutex::new((Bl616Flash, [0u8; CONFIG_BUF]));
+
+/// Load the stored configuration, minting a fresh one if the flash is blank.
+///
+/// # Errors
+///
+/// Only when a configuration *is* present but fails its version or integrity
+/// check. That is deliberately not recoverable here: recreating one would
+/// regenerate the SSH host key, breaking client host-key pinning and
+/// reopening the unauthenticated first-login window. Erase the config sector
+/// to reprovision.
+pub async fn load_config(
+    default_mac: [u8; 6],
+    default_uart_pins: UartPins,
+) -> Result<SSHStampConfig, sunset::Error> {
+    let mut guard = FLASH.lock().await;
+    let (flash, buf) = &mut *guard;
+    store::load_or_create(flash, buf, default_mac, default_uart_pins)
+}
 
 /// BL616 platform services.
 pub struct Bl616Platform;

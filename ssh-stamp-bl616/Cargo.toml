@@ -12,6 +12,8 @@ description = "ssh-stamp on the Bouffalo BL616"
 [dependencies]
 ssh-stamp = { path = "..", default-features = false }
 ssh-stamp-hal = { path = "../ssh-stamp-hal" }
+sunset = { workspace = true }
+sunset-async = { workspace = true }
 
 # The radio, its embassy-net Driver, the time driver, the critical section and
 # the global allocator all come from here. Nothing else in this binary may

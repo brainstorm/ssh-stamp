@@ -3682,6 +3682,8 @@ dependencies = [
  "ssh-stamp",
  "ssh-stamp-hal",
  "static_cell",
+ "sunset",
+ "sunset-async",
 ]
 
 [[package]]
