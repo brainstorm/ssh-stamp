@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "ssh-stamp-bl616"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+description = "ssh-stamp on the Bouffalo BL616"
+
+[dependencies]
+ssh-stamp = { path = "..", default-features = false }
+ssh-stamp-hal = { path = "../ssh-stamp-hal" }
+
+# The radio, its embassy-net Driver, the time driver, the critical section and
+# the global allocator all come from here. Nothing else in this binary may
+# provide any of them.
+bl616-wifi = { path = "../../bl616-radio-reveng/bl616-wifi", default-features = false, features = [
+    "alloc",
+    "panic-handler",
+    "embassy-net",
+    "usb-console",
+] }
+bl616-crypto = { path = "../../bl616-radio-reveng/bl616-crypto" }
+bl616-dhcp = { path = "../../bl616-radio-reveng/bl616-dhcp" }
+
+embassy-net = { workspace = true }
+embassy-executor = { workspace = true }
+embassy-time = { workspace = true }
+embassy-sync = { workspace = true }
+static_cell = { workspace = true }
+heapless = { workspace = true }
+log = { workspace = true }
+embedded-storage = { workspace = true }
+
+[lints]
+workspace = true
