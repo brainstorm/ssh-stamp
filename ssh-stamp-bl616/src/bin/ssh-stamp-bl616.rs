@@ -29,7 +29,11 @@ use ssh_stamp_hal::NetworkProviderHal;
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
 
-main!(app);
+// 64 KiB. `run_app` puts a 8 KiB receive buffer and a 4 KiB transmit buffer
+// on the stack before sunset's own frames, so the 8 KiB default overruns the
+// moment an SSH session is served -- silently, taking the radio with it a
+// little later.
+main!(app, stack = 16 * 1024);
 
 fn app() -> ! {
     println!("[ssh-stamp] bl616 starting");
@@ -68,7 +72,15 @@ fn app() -> ! {
             halt();
         }
     };
-    println!("[ssh-stamp] ssid {:?}", ap_config.ap_ssid.as_str());
+    // Print both. The password is generated on first boot and stored, so
+    // without this a headless board is unreachable: there is nowhere else to
+    // read it from. `ssh-stamp` logs it through `info!`, which needs a logger
+    // this port does not install.
+    println!(
+        "[ssh-stamp] ssid {:?} psk {:?}",
+        ap_config.ap_ssid.as_str(),
+        ap_config.ap_password.as_str()
+    );
 
     // The last vendor call, and still before the executor.
     let address = match Bl616Wifi::start_radio(&radio, &ap_config) {
