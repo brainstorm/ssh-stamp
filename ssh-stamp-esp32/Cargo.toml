@@ -12,6 +12,20 @@ description = "ESP32 implementation of the ssh-stamp-hal traits and bootable bin
 license = "GPL-3.0-or-later"
 repository = "https://github.com/brainstorm/ssh-stamp"
 
+# This crate is no_std, and because libtest pulls in std, it will never be valid to
+# compile them. Disabling here means `--tests` will work correctly in the current
+# multi-crate setup.
+[lib]
+test = false
+doctest = false
+bench = false
+
+[[bin]]
+name = "ssh-stamp-esp32"
+path = "src/bin/ssh-stamp-esp32.rs"
+test = false
+bench = false
+
 [dependencies]
 ssh-stamp = { path = "..", default-features = false }
 ssh-stamp-hal = { path = "../ssh-stamp-hal" }
