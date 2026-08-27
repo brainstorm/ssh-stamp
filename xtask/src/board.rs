@@ -26,6 +26,15 @@ pub struct Board {
     /// Not every board is an Espressif one: the BL616 port is a separate
     /// crate, with its own dependencies and its own linker arrangement.
     pub package: &'static str,
+    /// Where the configuration area lives in this board's flash, as
+    /// `SSH_STAMP_CONFIG_OFFSET`.
+    ///
+    /// `None` keeps the 0x9000 default, which is where an ESP-IDF partition
+    /// table puts NVS. On a part with a different layout that address is not
+    /// free — on BL616 it is inside Boot2 — and `store` erases before it
+    /// writes, so leaving this unset corrupts the bootloader rather than
+    /// failing.
+    pub config_offset: Option<&'static str>,
     /// The `SoC` for this board.
     pub soc: &'static str,
     /// The rust target.
@@ -123,6 +132,7 @@ pub const BOARDS: &[Board] = &[
         name: "esp32c5-devkitc",
         feature: "board-esp32c5-devkitc",
         package: "ssh-stamp-esp32",
+        config_offset: None,
         soc: "esp32c5",
         target: "riscv32imac-unknown-none-elf",
         toolchain: "stable",
@@ -137,6 +147,7 @@ pub const BOARDS: &[Board] = &[
         name: "esp32c6-devkitc",
         feature: "board-esp32c6-devkitc",
         package: "ssh-stamp-esp32",
+        config_offset: None,
         soc: "esp32c6",
         target: "riscv32imac-unknown-none-elf",
         toolchain: "stable",
@@ -151,6 +162,7 @@ pub const BOARDS: &[Board] = &[
         name: "esp32c61-devkitc",
         feature: "board-esp32c61-devkitc",
         package: "ssh-stamp-esp32",
+        config_offset: None,
         soc: "esp32c61",
         target: "riscv32imac-unknown-none-elf",
         toolchain: "stable",
@@ -165,6 +177,7 @@ pub const BOARDS: &[Board] = &[
         name: "esp32-s2-saola",
         feature: "board-esp32-s2-saola",
         package: "ssh-stamp-esp32",
+        config_offset: None,
         soc: "esp32s2",
         target: "xtensa-esp32s2-none-elf",
         toolchain: "esp",
@@ -182,6 +195,9 @@ pub const BOARDS: &[Board] = &[
         name: "sipeed-m0s-dock",
         feature: "board-sipeed-m0s-dock",
         package: "ssh-stamp-bl616",
+        // The DATA partition from the vendor's 4 MB layout: 0x3F3000, 20 KB,
+        // past the firmware, mfg and media regions.
+        config_offset: Some("0x3F3000"),
         soc: "bl616",
         // Hard float. The vendor archives are ilp32f, so an ilp32 target
         // (riscv32imac, as the ESP32-C6 uses) will not link against them.
@@ -200,6 +216,7 @@ pub const BOARDS: &[Board] = &[
         name: "waveshare-esp32-s3-touch-lcd-43",
         feature: "board-waveshare-esp32-s3-touch-lcd-43",
         package: "ssh-stamp-esp32",
+        config_offset: None,
         soc: "esp32s3",
         target: "xtensa-esp32s3-none-elf",
         toolchain: "esp",
@@ -376,6 +393,14 @@ impl Target {
         match self {
             Target::Board(board) => board.target,
             Target::Chip(chip) => chip.target,
+        }
+    }
+
+    /// Where the configuration area lives, if the board moves it.
+    pub fn config_offset(&self) -> Option<&'static str> {
+        match self {
+            Target::Board(board) => board.config_offset,
+            Target::Chip(_) => None,
         }
     }
 

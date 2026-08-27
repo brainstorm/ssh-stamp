@@ -33,11 +33,19 @@ pub fn run(argv: &[String]) -> Result<()> {
 
     eprintln!("=== {action} {} ===", target.name());
 
-    cmd!(
+    let mut command = cmd!(
         sh,
         "cargo {toolchain} {action} {selection...} {trailing...}"
     )
-    .env("CARGO_TARGET_DIR", target.target_dir())
+    .env("CARGO_TARGET_DIR", target.target_dir());
+
+    // Where the config area lives is a property of the board's flash layout,
+    // and the default is only right for an ESP-IDF partition table.
+    if let Some(offset) = target.config_offset() {
+        command = command.env("SSH_STAMP_CONFIG_OFFSET", offset);
+    }
+
+    command
     .run()
     .with_context(|| format!("cargo {action} for {} failed", target.name()))
 }
