@@ -29,9 +29,9 @@ macro_rules! init_heap {
         // TODO: This heap size will crash at runtime (only for the ESP32S2);
         // see https://github.com/brainstorm/ssh-stamp/pull/41#issuecomment-2964775170
         #[cfg(feature = "esp32s2")]
-        $crate::esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: ::ssh_stamp::settings::HEAP_SIZE);
+        $crate::esp_alloc::heap_allocator!(#[$crate::esp_hal::ram(reclaimed)] size: $crate::ssh_stamp::settings::HEAP_SIZE);
         #[cfg(not(feature = "esp32s2"))]
-        $crate::esp_alloc::heap_allocator!(size: ::ssh_stamp::settings::HEAP_SIZE);
+        $crate::esp_alloc::heap_allocator!(size: $crate::ssh_stamp::settings::HEAP_SIZE);
     };
 }
 
@@ -44,17 +44,17 @@ macro_rules! init_heap {
 #[macro_export]
 macro_rules! start_rtos {
     ($peripherals:ident) => {{
-        let sw_int = ::esp_hal::interrupt::software::SoftwareInterruptControl::new(
+        let sw_int = $crate::esp_hal::interrupt::software::SoftwareInterruptControl::new(
             $peripherals.SW_INTERRUPT,
         );
         #[cfg(feature = "esp32")]
-        ::esp_rtos::start(
-            ::esp_hal::timer::timg::TimerGroup::new($peripherals.TIMG1).timer0,
+        $crate::esp_rtos::start(
+            $crate::esp_hal::timer::timg::TimerGroup::new($peripherals.TIMG1).timer0,
             sw_int.software_interrupt0,
         );
         #[cfg(not(feature = "esp32"))]
-        ::esp_rtos::start(
-            ::esp_hal::timer::systimer::SystemTimer::new($peripherals.SYSTIMER).alarm0,
+        $crate::esp_rtos::start(
+            $crate::esp_hal::timer::systimer::SystemTimer::new($peripherals.SYSTIMER).alarm0,
             sw_int.software_interrupt0,
         );
         sw_int.software_interrupt1
@@ -79,7 +79,7 @@ macro_rules! boot {
 
         // Note that benches do depend on a stable clock speed across comparisons. The default
         // shouldn't change much, but theoretically an upgrade could change it.
-        let $peripherals = ::esp_hal::init(::esp_hal::Config::default());
+        let $peripherals = $crate::esp_hal::init($crate::esp_hal::Config::default());
 
         // Enable true random number generation before the config is created, so
         // the WiFi password and SSH host key have cryptographically secure values.

@@ -43,11 +43,14 @@ pub use rng::{
 pub use timer::EspTimer;
 pub use uart::{BufferedUart, EspUartPins, UART_BUF, UART_SIGNAL, spawn_uart, uart_task};
 
-// Re-exported for the `getrandom_backend!` expansion.
+// These re-exports are nice to have for macro expansions, including `getrandom_backend!`,
+// `init_heap!`, `start_rtos!` and `boot!, as they mean the calling crate doesn't have to
+// have these as direct dependencies.
 pub use getrandom;
-
-// Re-exported for the `init_heap!` expansion.
 pub use esp_alloc;
+pub use esp_hal;
+pub use esp_rtos;
+pub use ssh_stamp;
 
 /// Read the device's hardware MAC address from eFuse.
 #[must_use]

@@ -13,7 +13,6 @@ use ssh_stamp_esp32_hil as _;
 #[embedded_test::tests(default_timeout = 30, executor = esp_rtos::embassy::Executor::new())]
 mod tests {
     use ssh_stamp::config::UartPins;
-    use ssh_stamp::store;
     use ssh_stamp::store::{create, load};
     use ssh_stamp_esp32::{EntropySource, get_flash_n_buffer, boot};
 
@@ -49,7 +48,12 @@ mod tests {
         assert_eq!(loaded.uart_pins, UartPins { rx: 10, tx: 11 });
         assert_eq!(loaded.wifi_ap_ssid, created.wifi_ap_ssid);
         // Avoid using assert_eq to not show any PSK or secret values on failure.
-        #[allow(clippy::manual_assert_eq)]
-        assert!(created == loaded);
+        // Block-scoped because this is inside a macro invocation and would otherwise
+        // be ignored. `unknown_lints` is allowed because the esp toolchain's clippy
+        // predates `manual_assert_eq`.
+        #[allow(unknown_lints, clippy::manual_assert_eq)]
+        {
+            assert!(created == loaded);
+        }
     }
 }
