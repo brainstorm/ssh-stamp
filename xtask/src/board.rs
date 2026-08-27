@@ -568,7 +568,15 @@ impl Board {
 
     /// The UART pins from the board's TOML definition.
     pub fn uart_pins(&self) -> Result<UartPins> {
-        Ok(BoardToml::from_workspace(self.name)?.uarts_pins())
+        Ok(BoardToml::from_workspace(self.boards_crate(), self.name)?.uarts_pins())
+    }
+
+    /// The BSP crate holding this board's definition.
+    ///
+    /// One per platform, named after the port it serves, so a board's
+    /// package is enough to find it.
+    pub fn boards_crate(&self) -> String {
+        format!("{}-boards", self.package)
     }
 }
 
@@ -585,9 +593,9 @@ impl BoardToml {
     }
 
     /// Create the board configuration from the workspace definition.
-    pub fn from_workspace(name: &str) -> Result<BoardToml> {
+    pub fn from_workspace(boards_crate: String, name: &str) -> Result<BoardToml> {
         let path = workspace_root()
-            .join("ssh-stamp-esp32-boards")
+            .join(boards_crate)
             .join("boards")
             .join(format!("{name}.toml"));
         let definition = fs::read_to_string(&path)
@@ -675,6 +683,10 @@ mod tests {
     fn uart_pins_from_the_board_toml() {
         let board = find("esp32c6-devkitc").unwrap();
         assert_eq!(board.uart_pins().unwrap(), UartPins { rx: 10, tx: 11 });
+
+        // A board of another platform reads from that platform's BSP crate.
+        let board = find("sipeed-m0s-dock").unwrap();
+        assert_eq!(board.uart_pins().unwrap(), UartPins { rx: 22, tx: 21 });
     }
 
     #[test]

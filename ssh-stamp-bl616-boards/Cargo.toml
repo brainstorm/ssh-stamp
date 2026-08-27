@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "ssh-stamp-bl616-boards"
+version = "0.1.0"
+edition = "2024"
+authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
+description = "Board Support Package — per-PCB pin mappings for ssh-stamp-bl616"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/brainstorm/ssh-stamp"
+
+[features]
+board-sipeed-m0s-dock = []
+
+[build-dependencies]
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+
+[lints]
+workspace = true

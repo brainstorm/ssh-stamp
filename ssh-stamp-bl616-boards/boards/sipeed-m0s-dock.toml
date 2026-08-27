@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Sipeed M0S Dock (BL616)
+url = "https://wiki.sipeed.com/hardware/en/maixzero/m0s/m0s.html"
+
+# UART0, as the vendor SDK's own console configuration routes it. The board
+# has no USB-serial bridge — the BL616's USB peripheral is the console — so
+# these two are the header pins and nothing else contends for them.
+[pins]
+uart_rx = 22
+uart_tx = 21
+
+# Consumed by `cargo xtask`; the BSP build script ignores this section.
+[build]
+chip = "bl616"

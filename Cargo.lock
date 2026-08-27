@@ -3687,6 +3687,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ssh-stamp-bl616-boards"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "ssh-stamp-esp32"
 version = "0.2.0"
 dependencies = [

@@ -22,6 +22,7 @@ members = [
     "ssh-stamp-esp32",
     "ssh-stamp-esp32-boards",
     "ssh-stamp-bl616",
+    "ssh-stamp-bl616-boards",
     "ota",
     "xtask",
 ]
