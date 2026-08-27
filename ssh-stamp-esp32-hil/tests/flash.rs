@@ -14,7 +14,7 @@ use ssh_stamp_esp32_hil as _;
 mod tests {
     use ssh_stamp::config::UartPins;
     use ssh_stamp::store::{create, load};
-    use ssh_stamp_esp32::{EntropySource, get_flash_n_buffer, boot};
+    use ssh_stamp_esp32::{EntropySource, boot, get_flash_n_buffer};
 
     /// The test init state.
     pub struct Context {
@@ -40,8 +40,7 @@ mod tests {
         let mac = [0x02, 0x03, 0x04, 0x05, 0x06, 0x07];
         let pins = UartPins { rx: 10, tx: 11 };
 
-        let created =
-            create(flash, buf, mac, pins).expect("saving a config");
+        let created = create(flash, buf, mac, pins).expect("saving a config");
         let loaded = load(flash, buf).expect("reading the config back");
 
         assert_eq!(loaded.mac, mac);

@@ -46,10 +46,10 @@ pub use uart::{BufferedUart, EspUartPins, UART_BUF, UART_SIGNAL, spawn_uart, uar
 // These re-exports are nice to have for macro expansions, including `getrandom_backend!`,
 // `init_heap!`, `start_rtos!` and `boot!, as they mean the calling crate doesn't have to
 // have these as direct dependencies.
-pub use getrandom;
 pub use esp_alloc;
 pub use esp_hal;
 pub use esp_rtos;
+pub use getrandom;
 pub use ssh_stamp;
 
 /// Read the device's hardware MAC address from eFuse.

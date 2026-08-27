@@ -49,13 +49,15 @@ impl embedded_io_async::Write for ChanWrite<'_> {
 #[embedded_test::tests(default_timeout = 30, executor = esp_rtos::embassy::Executor::new())]
 mod tests {
     use super::{ChanRead, ChanWrite};
+    use core::array::from_fn;
     use embassy_futures::select::{Either, select};
     use embassy_sync::pipe::Pipe;
     use ssh_stamp::serial::serial_bridge;
-    use ssh_stamp_esp32::{BufferedUart, EspUartPins, UART_SIGNAL, spawn_uart, start_interrupt_executor, boot};
+    use ssh_stamp_esp32::{
+        BufferedUart, EspUartPins, UART_SIGNAL, boot, spawn_uart, start_interrupt_executor,
+    };
     use ssh_stamp_esp32_boards::take_uart_pins;
     use ssh_stamp_hal::UartParams;
-    use core::array::from_fn;
 
     pub struct Context {
         uart_buf: &'static BufferedUart,
