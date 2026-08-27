@@ -46,9 +46,27 @@ rustflags = ["-C", "force-frame-pointers", '--cfg', 'getrandom_backend="custom"'
 # them fails, and an earlier BL616 attempt in this repo used imac because it
 # had no blobs to link yet.
 #
-# No runner here: the image needs a bootheader and post-processing that
-# espflash does not do, so flashing goes through the board entry in xtask.
 [target.riscv32imafc-unknown-none-elf] # Bouffalo BL616
+# espflash cannot write this image. The boot ROM reads a header that the
+# vendor's bflb_fw_post_proc adds after linking, so `cargo run` hands the ELF
+# to the bl616-radio-reveng xtask, which does objcopy -> post-proc -> flash.
+#
+# Assumes the two repos sit side by side, which the path dependency in
+# ssh-stamp-bl616/Cargo.toml already assumes. Needs BL_SDK_BASE set, same as
+# building does.
+runner = [
+    "cargo",
+    "run",
+    "--quiet",
+    "--manifest-path",
+    "../bl616-radio-reveng/xtask/Cargo.toml",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "--release",
+    "--",
+    "flash",
+    "--elf",
+]
 # GCC drives the link, not rust-lld. The vendor archives are GCC-LTO (GIMPLE),
 # which only the GCC driver can consume, and binutils 2.35 cannot parse LLVM's
 # Tag_RISCV_arch — hence bfd and --no-warn-mismatch. rustc passes
