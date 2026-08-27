@@ -19,7 +19,7 @@
 
 use bl616_wifi::{main, println};
 use embassy_executor::Spawner;
-use ssh_stamp_bl616::{Bl616Wifi, rng_fill_bytes};
+use ssh_stamp_bl616::{Bl616Serial, Bl616Wifi, UART_BUF, rng_fill_bytes, uart_task};
 
 main!(app);
 
@@ -44,10 +44,17 @@ async fn run(spawner: Spawner) {
     };
     println!("[ssh-stamp] mac {:02x?}", wifi.mac());
 
-    // The rest — prepare_ap_config, store::load_or_create, run_app — needs the
-    // config area and the serial bridge, which are the next milestone. See
-    // the crate docs for what is deliberately not implemented yet.
-    println!("[ssh-stamp] radio up; app loop not wired yet");
+    // The serial bridge waits on UART_SIGNAL, so opening UART0 costs nothing
+    // until a session actually attaches.
+    let serial: &'static Bl616Serial = UART_BUF.init(Bl616Serial::new());
+    spawner.spawn(
+        uart_task(serial, bl616_wifi::uart::Config::default()).expect("task pool exhausted"),
+    );
+
+    // The rest — prepare_ap_config, store::load_or_create, run_app — is the
+    // next milestone. See the crate docs for what is deliberately not
+    // implemented yet.
+    println!("[ssh-stamp] radio up, serial bridge armed");
 }
 
 /// `getrandom`'s custom backend, defined exactly once per binary.

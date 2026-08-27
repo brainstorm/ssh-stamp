@@ -3671,6 +3671,7 @@ dependencies = [
  "bl616-wifi",
  "bl616-wifi-sys",
  "embassy-executor",
+ "embassy-futures",
  "embassy-net",
  "embassy-sync 0.8.0",
  "embassy-time",

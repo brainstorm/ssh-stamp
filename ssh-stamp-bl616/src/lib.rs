@@ -48,7 +48,7 @@ pub use network::{Bl616Wifi, net_up};
 pub use platform::{Bl616OtaWriter, Bl616Platform};
 pub use rng::{Bl616Rng, fill_bytes as rng_fill_bytes};
 pub use timer::Bl616Timer;
-pub use uart::{Bl616Serial, UART_SIGNAL};
+pub use uart::{Bl616Serial, UART_BUF, UART_SIGNAL, uart_task};
 
 /// The station MAC, which ssh-stamp uses to name the default network.
 ///

@@ -37,6 +37,7 @@ embassy-net = { workspace = true }
 embassy-executor = { workspace = true }
 embassy-time = { workspace = true }
 embassy-sync = { workspace = true }
+embassy-futures = { workspace = true }
 static_cell = { workspace = true }
 heapless = { workspace = true }
 log = { workspace = true }
