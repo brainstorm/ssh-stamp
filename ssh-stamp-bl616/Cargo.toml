@@ -21,9 +21,17 @@ bl616-wifi = { path = "../../bl616-radio-reveng/bl616-wifi", default-features = 
     "panic-handler",
     "embassy-net",
     "usb-console",
+    # Required, not optional: this crate uses bl616-crypto for HashHal, which
+    # defines wpa_supplicant's C crypto entry points. Without this feature the
+    # vendor's mbedTLS implementations of the same 34 symbols stay in the
+    # archive and every one of them collides at link time.
+    "rust-crypto",
 ] }
 bl616-crypto = { path = "../../bl616-radio-reveng/bl616-crypto" }
 bl616-dhcp = { path = "../../bl616-radio-reveng/bl616-dhcp" }
+# A direct dependency only so this crate's build script can see the
+# DEP_BL616_WIFI_CSDK_* metadata; nothing here calls into it.
+bl616-wifi-sys = { path = "../../bl616-radio-reveng/bl616-wifi-sys" }
 
 embassy-net = { workspace = true }
 embassy-executor = { workspace = true }
@@ -33,6 +41,21 @@ static_cell = { workspace = true }
 heapless = { workspace = true }
 log = { workspace = true }
 embedded-storage = { workspace = true }
+getrandom = "0.4"
+
+[build-dependencies]
+bl616-link = { path = "../../bl616-radio-reveng/bl616-link" }
+
+[features]
+default = []
+# One board so far. The feature exists because xtask selects a board by
+# feature and the size budget is tracked per board, not because the pin map
+# differs yet.
+board-sipeed-m0s-dock = []
+
+[[bin]]
+name = "ssh-stamp-bl616"
+path = "src/bin/ssh-stamp-bl616.rs"
 
 [lints]
 workspace = true

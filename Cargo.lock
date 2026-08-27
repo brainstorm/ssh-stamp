@@ -295,10 +295,16 @@ name = "bl616-dhcp"
 version = "0.1.0"
 
 [[package]]
+name = "bl616-link"
+version = "0.1.0"
+
+[[package]]
 name = "bl616-wifi"
 version = "0.1.0"
 dependencies = [
+ "bl616-crypto",
  "bl616-dhcp",
+ "bl616-link",
  "bl616-wifi-sys",
  "critical-section",
  "embassy-executor",
@@ -3661,12 +3667,15 @@ version = "0.1.0"
 dependencies = [
  "bl616-crypto",
  "bl616-dhcp",
+ "bl616-link",
  "bl616-wifi",
+ "bl616-wifi-sys",
  "embassy-executor",
  "embassy-net",
  "embassy-sync 0.8.0",
  "embassy-time",
  "embedded-storage",
+ "getrandom",
  "heapless 0.9.3",
  "log",
  "ssh-stamp",

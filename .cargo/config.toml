@@ -49,7 +49,18 @@ rustflags = ["-C", "force-frame-pointers", '--cfg', 'getrandom_backend="custom"'
 # No runner here: the image needs a bootheader and post-processing that
 # espflash does not do, so flashing goes through the board entry in xtask.
 [target.riscv32imafc-unknown-none-elf] # Bouffalo BL616
-rustflags = ["-C", "force-frame-pointers", '--cfg', 'getrandom_backend="custom"']
+# GCC drives the link, not rust-lld. The vendor archives are GCC-LTO (GIMPLE),
+# which only the GCC driver can consume, and binutils 2.35 cannot parse LLVM's
+# Tag_RISCV_arch — hence bfd and --no-warn-mismatch. rustc passes
+# -fuse-ld=lld first and the last flag wins, which is why ours comes after.
+linker = "riscv64-unknown-elf-gcc"
+rustflags = [
+    "-C", "force-frame-pointers",
+    '--cfg', 'getrandom_backend="custom"',
+    "-C", "linker-flavor=gcc",
+    "-C", "link-arg=-fuse-ld=bfd",
+    "-C", "link-arg=-Wl,--no-warn-mismatch",
+]
 
 [target.xtensa-esp32s2-none-elf] # ESP32-S2
 runner = "espflash flash --baud=921600 --monitor --chip esp32s2"
