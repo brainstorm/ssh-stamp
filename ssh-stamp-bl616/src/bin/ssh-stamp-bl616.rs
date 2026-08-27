@@ -18,14 +18,14 @@
 #![no_main]
 
 use bl616_wifi::{main, println};
-use embassy_executor::Spawner;
+use embassy_futures::block_on;
 use ssh_stamp::app;
 use ssh_stamp::config::SSHStampConfig;
 use ssh_stamp_bl616::{
     Bl616Platform, Bl616Serial, Bl616Wifi, DEFAULT_UART_PINS, UART_BUF, load_config,
     rng_fill_bytes, uart_task,
 };
-use ssh_stamp_hal::{NetworkProviderHal, WifiHal};
+use ssh_stamp_hal::NetworkProviderHal;
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
 
@@ -34,9 +34,69 @@ main!(app);
 fn app() -> ! {
     println!("[ssh-stamp] bl616 starting");
 
-    bl616_wifi::embassy_rt::run(|spawner| {
-        spawner.spawn(run(spawner).expect("task pool exhausted"));
+    // Everything that talks to the vendor stack happens here, before the
+    // executor exists. Those calls block on FreeRTOS primitives, and blocking
+    // inside executor.poll() hangs the board with no timeout -- found the
+    // hard way, twice.
+    let radio = match Bl616Wifi::init_radio() {
+        Ok(w) => w,
+        Err(e) => {
+            println!("[ssh-stamp] radio did not come up: {e:?}");
+            halt();
+        }
+    };
+    let mac = radio.sta_mac();
+    println!("[ssh-stamp] radio ready, mac {mac:02x?}");
+
+    let stored = match block_on(load_config(mac, DEFAULT_UART_PINS)) {
+        Ok(c) => c,
+        Err(e) => {
+            // Refusing beats recreating: a new config would regenerate the
+            // host key, breaking client pinning and reopening the
+            // unauthenticated first-login window.
+            println!("[ssh-stamp] stored config invalid ({e:?}); erase the config sector");
+            halt();
+        }
+    };
+    let config: &'static SunsetMutex<SSHStampConfig> = CONFIG.init(SunsetMutex::new(stored));
+    let platform = Bl616Platform::new();
+
+    let ap_config = match block_on(app::prepare_ap_config(config, &platform)) {
+        Ok(c) => c,
+        Err(e) => {
+            println!("[ssh-stamp] could not prepare the AP config: {e:?}");
+            halt();
+        }
+    };
+    println!("[ssh-stamp] ssid {:?}", ap_config.ap_ssid.as_str());
+
+    // The last vendor call, and still before the executor.
+    let address = match Bl616Wifi::start_radio(&radio, &ap_config) {
+        Ok(a) => a,
+        Err(e) => {
+            println!("[ssh-stamp] radio would not start: {e:?}");
+            halt();
+        }
+    };
+    println!("[ssh-stamp] radio started");
+
+    bl616_wifi::embassy_rt::run(move |spawner| {
+        let mut wifi = Bl616Wifi::new(radio, spawner);
+        wifi.adopt(ap_config, address);
+
+        let serial: &'static Bl616Serial = UART_BUF.init(Bl616Serial::new());
+        spawner.spawn(
+            uart_task(serial, bl616_wifi::uart::Config::default()).expect("task pool exhausted"),
+        );
+        spawner.spawn(run(wifi, serial, config).expect("task pool exhausted"));
     })
+}
+
+/// Stop, without returning from a `-> !` function.
+fn halt() -> ! {
+    loop {
+        bl616_wifi::delay_ms(1_000);
+    }
 }
 
 // Not yet awaiting anything: the app loop that will is the next milestone.
@@ -45,57 +105,12 @@ fn app() -> ! {
 static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
 
 #[embassy_executor::task]
-async fn run(spawner: Spawner) {
-    let mut wifi = match Bl616Wifi::new(spawner) {
-        Ok(w) => w,
-        Err(e) => {
-            println!("[ssh-stamp] radio unavailable: {e:?}");
-            return;
-        }
-    };
-    let mac = wifi.mac();
-    println!("[ssh-stamp] mac {mac:02x?}");
-
-    // The serial bridge waits on UART_SIGNAL, so opening UART0 costs nothing
-    // until a session actually attaches.
-    let serial: &'static Bl616Serial = UART_BUF.init(Bl616Serial::new());
-    spawner.spawn(
-        uart_task(serial, bl616_wifi::uart::Config::default()).expect("task pool exhausted"),
-    );
-
-    // Refusing to boot on a corrupt config is the safe side of the trade:
-    // recreating one would regenerate the SSH host key, breaking client
-    // host-key pinning and reopening the unauthenticated first-login window.
-    let stored = match load_config(mac, DEFAULT_UART_PINS).await {
-        Ok(c) => c,
-        Err(e) => {
-            println!(
-                "[ssh-stamp] stored config is present but invalid ({e:?}); \
-                 refusing to overwrite it. Erase the config sector to reprovision."
-            );
-            return;
-        }
-    };
-
-    let config: &'static SunsetMutex<SSHStampConfig> = CONFIG.init(SunsetMutex::new(stored));
-
-    let platform = Bl616Platform::new();
-
-    // Mints the WiFi password if the stored config did not carry one, so it
-    // draws on the TRNG before the radio starts.
-    let ap_config = match app::prepare_ap_config(config, &platform).await {
-        Ok(c) => c,
-        Err(e) => {
-            println!("[ssh-stamp] could not prepare the AP config: {e:?}");
-            return;
-        }
-    };
-
-    if let Err(e) = wifi.configure_ap(ap_config) {
-        println!("[ssh-stamp] AP config rejected: {e:?}");
-        return;
-    }
-
+async fn run(
+    mut wifi: Bl616Wifi,
+    serial: &'static Bl616Serial,
+    config: &'static SunsetMutex<SSHStampConfig>,
+) {
+    println!("[ssh-stamp] building the network stack");
     let stack = match wifi.bring_up().await {
         Ok(s) => s,
         Err(e) => {
@@ -103,8 +118,9 @@ async fn run(spawner: Spawner) {
             return;
         }
     };
-    println!("[ssh-stamp] network up; listening for ssh on port 22");
+    println!("[ssh-stamp] network up; ssh on port 22");
 
+    let platform = Bl616Platform::new();
     if let Err(e) = app::run_app(stack, serial, config, &platform).await {
         println!("[ssh-stamp] run_app exited: {e:?}");
     }

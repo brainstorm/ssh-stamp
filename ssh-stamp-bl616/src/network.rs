@@ -8,6 +8,7 @@
 //! so this is mostly plumbing: configure, associate, build the stack, spawn
 //! its runner. What is not plumbing is written down below.
 
+use bl616_dhcp::{CLIENT_PORT, Leases, SERVER_PORT};
 use bl616_wifi::net_al::embassy::WifiDriver;
 use bl616_wifi::{ApConfig, StaConfig, Wifi};
 use embassy_executor::Spawner;
@@ -21,6 +22,10 @@ use static_cell::StaticCell;
 /// and a spare.
 const SOCKETS: usize = 4;
 
+/// First host number handed out by the soft-AP, and how many.
+const DHCP_POOL_START: u16 = 2;
+const DHCP_POOL_LIMIT: u16 = 16;
+
 /// The stack's socket storage. `'static` because the stack and its runner
 /// outlive `bring_up`.
 static RESOURCES: StaticCell<StackResources<SOCKETS>> = StaticCell::new();
@@ -30,22 +35,39 @@ pub struct Bl616Wifi {
     wifi: Wifi,
     spawner: Spawner,
     config: Option<WifiApConfigStatic>,
+    /// The soft-AP's address, recorded by `start` so the async half does not
+    /// have to ask the vendor for it.
+    address: Option<(u32, u32)>,
+    started: bool,
 }
 
 impl Bl616Wifi {
-    /// Take the radio. The vendor stack is already initialised by
-    /// `bl616_wifi::main!`, which runs before any of this.
+    /// Wait for the vendor stack to finish coming up.
+    ///
+    /// **Call this before starting the embassy executor, not from inside a
+    /// task.** It blocks on `FreeRTOS` primitives while the radio initialises,
+    /// and doing that from within `executor.poll()` hangs: the board reaches
+    /// this call and never leaves it. `bl616-wifi`'s own embassy examples do
+    /// the same thing in the same order, which is the arrangement known to
+    /// work.
     ///
     /// # Errors
     ///
     /// Returns [`HalError::Wifi`] if the vendor manager will not start.
-    pub fn new(spawner: Spawner) -> Result<Self, HalError> {
-        let wifi = Wifi::init().map_err(|_| HalError::Wifi(WifiError::Initialization))?;
-        Ok(Self {
+    pub fn init_radio() -> Result<Wifi, HalError> {
+        Wifi::init().map_err(|_| HalError::Wifi(WifiError::Initialization))
+    }
+
+    /// Wrap an initialised radio, once there is an executor to spawn on.
+    #[must_use]
+    pub fn new(wifi: Wifi, spawner: Spawner) -> Self {
+        Self {
             wifi,
             spawner,
             config: None,
-        })
+            address: None,
+            started: false,
+        }
     }
 
     /// The station interface's MAC, which ssh-stamp uses to name the network.
@@ -67,8 +89,63 @@ impl WifiHal for Bl616Wifi {
     }
 }
 
+impl Bl616Wifi {
+    /// Start the radio in AP or station mode.
+    ///
+    /// **Call this before the executor exists.** Every vendor call here
+    /// blocks on `FreeRTOS` primitives, and doing that from inside
+    /// `executor.poll()` hangs the board with no timeout -- the same reason
+    /// [`Bl616Wifi::init_radio`] is separate.
+    ///
+    /// # Errors
+    ///
+    /// [`HalError::Config`] if no configuration was set, or
+    /// [`HalError::Wifi`] if the vendor stack refuses to start.
+    pub fn start(&mut self) -> Result<(), HalError> {
+        let cfg = self.config.clone().ok_or(HalError::Config)?;
+        let (addr, prefix) = Self::start_radio(&self.wifi, &cfg)?;
+        self.address = Some((addr, prefix));
+        self.started = true;
+        Ok(())
+    }
+
+    /// Start the radio from a bare [`Wifi`] handle, before any executor
+    /// exists. Returns the soft-AP's address and prefix length.
+    ///
+    /// This is the half that must not run inside the embassy executor. Every
+    /// call it makes blocks on `FreeRTOS` primitives, and doing that once an
+    /// executor owns the task hangs the board with no timeout.
+    ///
+    /// # Errors
+    ///
+    /// [`HalError::Wifi`] if the vendor stack refuses to start.
+    pub fn start_radio(wifi: &Wifi, cfg: &WifiApConfigStatic) -> Result<(u32, u32), HalError> {
+        if cfg.sta_ssid.is_empty() {
+            let ap = ApConfig::wpa2(&cfg.ap_ssid, &cfg.ap_password).on_channel(cfg.channel);
+            let addr = (ap.address.as_raw(), ap.netmask.prefix_len());
+            wifi.start_ap(&ap)
+                .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
+            Ok(addr)
+        } else {
+            wifi.connect(&StaConfig::wpa2(&cfg.sta_ssid, &cfg.sta_password))
+                .map_err(|_| HalError::Wifi(WifiError::StationMode))?;
+            Ok((0, 0))
+        }
+    }
+
+    /// Adopt a radio that [`Bl616Wifi::start_radio`] has already started.
+    pub fn adopt(&mut self, config: WifiApConfigStatic, address: (u32, u32)) {
+        self.config = Some(config);
+        self.address = Some(address);
+        self.started = true;
+    }
+}
+
 impl NetworkProviderHal for Bl616Wifi {
     async fn bring_up(&mut self) -> Result<Stack<'static>, HalError> {
+        if !self.started {
+            return Err(HalError::Config);
+        }
         let cfg = self.config.as_ref().ok_or(HalError::Config)?;
 
         // Station mode when an SSID has been stored, access point otherwise --
@@ -77,26 +154,15 @@ impl NetworkProviderHal for Bl616Wifi {
         let station = !cfg.sta_ssid.is_empty();
 
         let net_config = if station {
-            self.wifi
-                .connect(&StaConfig::wpa2(&cfg.sta_ssid, &cfg.sta_password))
-                .map_err(|_| HalError::Wifi(WifiError::StationMode))?;
             Config::dhcpv4(embassy_net::DhcpConfig::default())
         } else {
-            let ap = ApConfig::wpa2(&cfg.ap_ssid, &cfg.ap_password).on_channel(cfg.channel);
-            let address = ap.address;
-            let netmask = ap.netmask;
-            self.wifi
-                .start_ap(&ap)
-                .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
-
-            let octets = address.as_raw().to_le_bytes();
-            let cidr = Ipv4Cidr::new(
-                Ipv4Address::new(octets[0], octets[1], octets[2], octets[3]),
-                // A prefix length is 0..=32, so this cannot truncate.
-                u8::try_from(netmask.prefix_len()).unwrap_or(24),
-            );
+            let (addr, prefix) = self.address.ok_or(HalError::Config)?;
+            let octets = addr.to_le_bytes();
             Config::ipv4_static(StaticConfigV4 {
-                address: cidr,
+                address: Ipv4Cidr::new(
+                    Ipv4Address::new(octets[0], octets[1], octets[2], octets[3]),
+                    u8::try_from(prefix).unwrap_or(24),
+                ),
                 // An access point is the edge of its own network: there is
                 // nothing to forward to.
                 gateway: None,
@@ -129,6 +195,23 @@ impl NetworkProviderHal for Bl616Wifi {
         self.spawner
             .spawn(net_up(runner).map_err(|_| HalError::Wifi(WifiError::Initialization))?);
 
+        // An access point has to answer DHCP or nothing that joins it can
+        // reach the SSH port.
+        if !station {
+            let (addr, prefix) = self.address.ok_or(HalError::Config)?;
+            let mask = (!0u32) << (32 - prefix);
+            self.spawner.spawn(
+                dhcp_server(
+                    stack,
+                    addr,
+                    u32::from_le_bytes(mask.to_be_bytes()),
+                    DHCP_POOL_START,
+                    DHCP_POOL_LIMIT,
+                )
+                .map_err(|_| HalError::Wifi(WifiError::Initialization))?,
+            );
+        }
+
         stack.wait_config_up().await;
 
         // Hand the address back to the blob. Nothing else writes those fields
@@ -152,6 +235,52 @@ impl NetworkProviderHal for Bl616Wifi {
         }
 
         Ok(stack)
+    }
+}
+
+/// Serve DHCP to whoever joins the soft-AP.
+///
+/// embassy-net has a DHCP *client* and no server, so an access point that
+/// does not run one hands out no addresses: a client associates, waits, and
+/// gives up with "IP configuration could not be reserved". `bl616-dhcp` has
+/// the protocol; this is the socket around it.
+#[embassy_executor::task]
+pub async fn dhcp_server(stack: Stack<'static>, server: u32, mask: u32, start: u16, limit: u16) {
+    use embassy_net::IpEndpoint;
+    use embassy_net::udp::{PacketMetadata, UdpSocket};
+
+    static RX_META: StaticCell<[PacketMetadata; 8]> = StaticCell::new();
+    static TX_META: StaticCell<[PacketMetadata; 8]> = StaticCell::new();
+    static RX_BUF: StaticCell<[u8; 1500]> = StaticCell::new();
+    static TX_BUF: StaticCell<[u8; 1500]> = StaticCell::new();
+
+    let Some(mut leases) = Leases::new(server, mask, start, limit) else {
+        return;
+    };
+    let mut sock = UdpSocket::new(
+        stack,
+        RX_META.init([PacketMetadata::EMPTY; 8]),
+        RX_BUF.init([0; 1500]),
+        TX_META.init([PacketMetadata::EMPTY; 8]),
+        TX_BUF.init([0; 1500]),
+    );
+    if sock.bind(SERVER_PORT).is_err() {
+        return;
+    }
+
+    let mut req = [0u8; 1024];
+    let mut reply = [0u8; 548];
+    loop {
+        let Ok((n, _from)) = sock.recv_from(&mut req).await else {
+            continue;
+        };
+        let Some(len) = leases.handle(&req[..n], &mut reply) else {
+            continue;
+        };
+        // Always broadcast: the client has no address yet, so a unicast reply
+        // would need an ARP entry it cannot answer.
+        let to = IpEndpoint::new(Ipv4Address::BROADCAST.into(), CLIENT_PORT);
+        let _ = sock.send_to(&reply[..len], to).await;
     }
 }
 
