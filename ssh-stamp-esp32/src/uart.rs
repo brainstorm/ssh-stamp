@@ -101,7 +101,18 @@ impl BufferedUart {
             let rd_to = async {
                 loop {
                     let n = self.outward.read(&mut tx_buf).await;
-                    let _ = uart_tx.write_async(&tx_buf[..n]).await;
+
+                    // This must take into consideration the length returned by `write_async`,
+                    // as it may be less than the full buffer. Follow-up loop iterations
+                    // then write any remainder.
+                    let mut tx_slice = &tx_buf[..n];
+                    while !tx_slice.is_empty() {
+                        let Ok(written) = uart_tx.write_async(tx_slice).await else {
+                            break;
+                        };
+
+                        tx_slice = &tx_slice[written..];
+                    }
                 }
             };
 
