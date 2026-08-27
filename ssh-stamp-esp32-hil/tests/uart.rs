@@ -8,6 +8,8 @@
 #![no_std]
 #![no_main]
 
+use core::future::{Future, ready};
+
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::pipe::Pipe;
 
@@ -41,8 +43,8 @@ impl embedded_io_async::Write for ChanWrite<'_> {
         Ok(self.0.write(buf).await)
     }
 
-    async fn flush(&mut self) -> Result<(), Self::Error> {
-        Ok(())
+    fn flush(&mut self) -> impl Future<Output = Result<(), Self::Error>> {
+        ready(Ok(()))
     }
 }
 
