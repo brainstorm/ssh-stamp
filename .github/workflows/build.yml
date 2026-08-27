@@ -67,6 +67,10 @@ jobs:
       # linted too, not just what the esp32c6-devkitc build compiles.
       - name: Clippy
         run: cargo xtask ${{ matrix.target.name }} clippy --release -- -D warnings
+      # Nothing can depend on a test crate, so the HIL crate is never part of the
+      # dependency graph, which is why linting it is run separately.
+      - name: Clippy HIL tests
+        run: cargo xtask ${{ matrix.target.name }} clippy --release -p ssh-stamp-esp32-hil --tests -- -D warnings
       # Also apply clippy to all features for the boards, to make sure that
       # everything gets linted.
       - name: Clippy with extra features.
@@ -88,7 +92,7 @@ jobs:
       # lints every host crate instead, the default set already includes
       # xtask and ota.
       - name: Clippy host crates
-        run: cargo clippy --all-targets --features ota/std -- -D warnings
+        run: cargo clippy --all-targets --features ota/std,can,ipv6,mem-probe -- -D warnings
       - name: Format
         run: cargo fmt --all -- --check
 
