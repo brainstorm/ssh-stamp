@@ -23,7 +23,7 @@ use ssh_stamp::app;
 use ssh_stamp::config::SSHStampConfig;
 use ssh_stamp_bl616::{
     Bl616Platform, Bl616Serial, Bl616Wifi, DEFAULT_UART_PINS, UART_BUF, load_config,
-    rng_fill_bytes, uart_task,
+    rng_fill_bytes, uart_config, uart_task,
 };
 use ssh_stamp_hal::NetworkProviderHal;
 use static_cell::StaticCell;
@@ -62,6 +62,9 @@ fn app() -> ! {
             halt();
         }
     };
+    // Copied out before the config is locked away: the bridge configures the
+    // line once at boot, so this is the only place it is read.
+    let uart_params = stored.uart_params;
     let config: &'static SunsetMutex<SSHStampConfig> = CONFIG.init(SunsetMutex::new(stored));
     let platform = Bl616Platform::new();
 
@@ -97,9 +100,7 @@ fn app() -> ! {
         wifi.adopt(ap_config, address);
 
         let serial: &'static Bl616Serial = UART_BUF.init(Bl616Serial::new());
-        spawner.spawn(
-            uart_task(serial, bl616_wifi::uart::Config::default()).expect("task pool exhausted"),
-        );
+        spawner.spawn(uart_task(serial, uart_config(uart_params)).expect("task pool exhausted"));
         spawner.spawn(run(wifi, serial, config).expect("task pool exhausted"));
     })
 }

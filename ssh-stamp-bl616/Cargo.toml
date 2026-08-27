@@ -12,6 +12,8 @@ description = "ssh-stamp on the Bouffalo BL616"
 [dependencies]
 ssh-stamp = { path = "..", default-features = false }
 ssh-stamp-hal = { path = "../ssh-stamp-hal" }
+# Pin maps, generated from ssh-stamp-bl616-boards/boards/*.toml.
+ssh-stamp-bl616-boards = { path = "../ssh-stamp-bl616-boards" }
 sunset = { workspace = true }
 sunset-async = { workspace = true }
 
@@ -51,10 +53,9 @@ bl616-link = { path = "../../bl616-radio-reveng/bl616-link" }
 
 [features]
 default = []
-# One board so far. The feature exists because xtask selects a board by
-# feature and the size budget is tracked per board, not because the pin map
-# differs yet.
-board-sipeed-m0s-dock = []
+# One board so far. Selecting it here selects the matching pin map in the BSP
+# crate, which is where the pin numbers live.
+board-sipeed-m0s-dock = ["ssh-stamp-bl616-boards/board-sipeed-m0s-dock"]
 
 [[bin]]
 name = "ssh-stamp-bl616"

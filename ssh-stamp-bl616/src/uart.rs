@@ -9,12 +9,22 @@
 //! shape as the ESP port, because the interesting behaviour is in the
 //! overflow policy rather than the plumbing.
 //!
-//! # Polled, not interrupt-driven
+//! # Nothing here polls
 //!
-//! `bl616-wifi`'s UART has no interrupt path, so the bridge polls. The FIFO
-//! is 32 bytes, which at 115200 baud is about 2.7 ms of data, so a 1 ms idle
-//! poll has margin; the loop only sleeps when a read came back empty, so a
-//! busy line is drained as fast as the executor will run it.
+//! `bl616-wifi`'s UART is interrupt-driven, so both directions of the bridge
+//! wait on a waker: the loop selects between "the handler received
+//! something" and "the SSH side queued something", and runs at neither the
+//! line rate nor a tick.
+//!
+//! # Which pins, and which line settings
+//!
+//! The pins come from the board's TOML in `ssh-stamp-bl616-boards` and the
+//! line settings from the stored config, both by way of [`uart_config`]. The
+//! port is configured once at boot, so a change to either takes effect on the
+//! next one. They are routed to UART0 when the port is opened, which
+//! is the only thing that routes them at all in this build: the vendor SDK
+//! muxes UART0 only when it puts its own console there, and here the console
+//! is on USB.
 //!
 //! # Overflow drops the oldest, and says so
 //!
@@ -25,18 +35,26 @@
 
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-use bl616_wifi::uart::{Config, Uart};
+use bl616_wifi::uart::{Config, DataBits, Parity, StopBits, Uart};
+use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::pipe::{Pipe, TryWriteError};
 use embassy_sync::signal::Signal;
 use ssh_stamp::serial::BufferedSerial;
+use ssh_stamp_hal::{Parity as LineParity, UartParams};
 use static_cell::StaticCell;
 
 /// Buffered in each direction.
 const INWARD_BUF_SZ: usize = 2048;
 const OUTWARD_BUF_SZ: usize = 512;
-/// Bytes moved per poll.
+/// Bytes moved at a time in either direction.
 const CHUNK: usize = 64;
+
+/// The baud rates the peripheral can express, as the vendor divides its
+/// 40 MHz clock: below the floor the divisor no longer fits the register, and
+/// the ceiling is the fastest rate the vendor's own examples run.
+const MIN_BAUD: u32 = 1_200;
+const MAX_BAUD: u32 = 2_000_000;
 
 /// Raised when an SSH session attaches, so the port is not opened until
 /// something is listening.
@@ -71,34 +89,24 @@ impl Bl616Serial {
     }
 
     /// Move bytes between the pipes and the hardware. Never returns.
+    ///
+    /// Both arms are cancel-safe — neither consumes anything until it is
+    /// ready to hand it over — so losing the race costs nothing.
     pub async fn run(&self, mut uart: Uart) -> ! {
         let mut rx = [0u8; CHUNK];
         let mut tx = [0u8; CHUNK];
 
         loop {
-            let mut idle = true;
-
-            let n = uart.read(&mut rx);
-            if n > 0 {
-                idle = false;
-                self.push_inward(&rx[..n]);
-            }
-
-            // Anything the SSH side has queued goes out. try_read so a silent
-            // client never blocks the receive direction.
-            if let Ok(n) = self.outward.try_read(&mut tx)
-                && n > 0
-            {
-                idle = false;
-                uart.write(&tx[..n]);
-            }
-
-            if idle {
-                embassy_time::Timer::after_millis(1).await;
-            } else {
-                // Let other tasks run between chunks; a saturated line must
-                // not starve the network stack.
-                embassy_futures::yield_now().await;
+            match select(uart.read(&mut rx), self.outward.read(&mut tx)).await {
+                Either::First(n) => {
+                    // Bytes the driver's own ring could not hold are lost
+                    // before this sees them, and are counted in the same
+                    // place so the session reports every gap it has.
+                    self.dropped_rx_bytes
+                        .fetch_add(uart.overruns(), Ordering::Relaxed);
+                    self.push_inward(&rx[..n]);
+                }
+                Either::Second(n) => uart.write(&tx[..n]).await,
             }
         }
     }
@@ -138,6 +146,39 @@ impl BufferedSerial for Bl616Serial {
 
     fn check_dropped_bytes(&self) -> usize {
         self.dropped_rx_bytes.swap(0, Ordering::Relaxed)
+    }
+}
+
+/// How to open UART0 on this board.
+///
+/// The pins come from the board's TOML in `ssh-stamp-bl616-boards`; the line
+/// settings are the persisted, target-agnostic [`UartParams`].
+///
+/// Values the peripheral cannot honour are clamped or fall back to the 8N1
+/// default rather than refusing to bring the bridge up, so a stale or corrupt
+/// stored config still leaves a usable serial console.
+#[must_use]
+pub fn uart_config(params: UartParams) -> Config {
+    Config {
+        baudrate: params.baud.clamp(MIN_BAUD, MAX_BAUD),
+        data_bits: match params.data_bits {
+            5 => DataBits::Five,
+            6 => DataBits::Six,
+            7 => DataBits::Seven,
+            _ => DataBits::Eight,
+        },
+        parity: match params.parity {
+            LineParity::Even => Parity::Even,
+            LineParity::Odd => Parity::Odd,
+            LineParity::None => Parity::None,
+        },
+        stop_bits: if params.stop_bits == 2 {
+            StopBits::Two
+        } else {
+            StopBits::One
+        },
+        rx_pin: Some(ssh_stamp_bl616_boards::UART_RX),
+        tx_pin: Some(ssh_stamp_bl616_boards::UART_TX),
     }
 }
 
