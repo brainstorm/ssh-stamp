@@ -18,10 +18,6 @@ extern crate core;
 use core::prelude::rust_2024::*;
 extern crate alloc;
 use embassy_executor::Spawner;
-use esp_hal::interrupt::{Priority, software::SoftwareInterruptControl};
-use esp_hal::rng::{Trng, TrngSource};
-use esp_println::logger;
-use esp_rtos::embassy::InterruptExecutor;
 use heapless::String;
 use log::{debug, error, warn};
 use ssh_stamp::config::{SSHStampConfig, UartPins};
@@ -29,18 +25,17 @@ use ssh_stamp::platform::PlatformServices;
 use ssh_stamp::store;
 use ssh_stamp::{
     app, mem_probe::{self, Checkpoint},
-    settings::{DEFAULT_IP, HEAP_SIZE},
+    settings::DEFAULT_IP,
 };
 use ssh_stamp_esp32::{
-    BufferedUart, EspPlatform, EspUartPins, EspWifi, UART_BUF, bench, flash, mac_address,
-    register_custom_rng, uart_task,
+    EspPlatform, EspUartPins, EspWifi, bench, entropy_source_active, flash, mac_address,
+    spawn_uart, start_interrupt_executor,
 };
 use ssh_stamp_esp32_boards::Board;
 use ssh_stamp_hal::{HalError, WifiError};
 use ssh_stamp_hal::{NetworkProviderHal, WifiHal};
 use static_cell::StaticCell;
 use sunset_async::SunsetMutex;
-static INT_EXECUTOR: StaticCell<InterruptExecutor<1>> = StaticCell::new();
 #[doc(hidden)]
 pub(crate) mod __main {
     use super::*;
@@ -52,13 +47,15 @@ pub(crate) mod __main {
         async fn ____embassy_main_task_inner_function(spawner: Spawner) -> ! {
             {
                 {
-                    static mut HEAP: core::mem::MaybeUninit<[u8; HEAP_SIZE]> = core::mem::MaybeUninit::uninit();
+                    static mut HEAP: core::mem::MaybeUninit<
+                        [u8; ::ssh_stamp_esp32::ssh_stamp::settings::HEAP_SIZE],
+                    > = core::mem::MaybeUninit::uninit();
                     unsafe {
                         ::esp_alloc::HEAP
                             .add_region(
                                 ::esp_alloc::HeapRegion::new(
                                     HEAP.as_mut_ptr() as *mut u8,
-                                    HEAP_SIZE,
+                                    ::ssh_stamp_esp32::ssh_stamp::settings::HEAP_SIZE,
                                     ::esp_alloc::MemoryCapability::Internal.into(),
                                 ),
                             );
@@ -79,8 +76,8 @@ pub(crate) mod __main {
                     ::esp_bootloader_esp_idf::MMU_PAGE_SIZE,
                     ::esp_bootloader_esp_idf::SECURE_VERSION,
                 );
-                logger::init_logger_from_env();
-                bench::log_heap("boot");
+                ::ssh_stamp_esp32::esp_println::logger::init_logger_from_env();
+                ::ssh_stamp_esp32::bench::log_heap("boot");
                 {
                     {
                         let lvl = ::log::Level::Debug;
@@ -99,34 +96,30 @@ pub(crate) mod __main {
                         }
                     }
                 };
-                let config = esp_hal::Config::default();
-                let peripherals = esp_hal::init(config);
-                let trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
-                let trng = Trng::try_new()
-                    .expect(
-                        "TrngSource was just created, so the TRNG must be available",
+                let peripherals = ::ssh_stamp_esp32::esp_hal::init(
+                    ::ssh_stamp_esp32::esp_hal::Config::default(),
+                );
+                let (rng, entropy_source) = {
+                    let out = ::ssh_stamp_esp32::init_entropy(
+                        peripherals.RNG,
+                        peripherals.ADC1,
                     );
-                let rng = trng.downgrade();
-                register_custom_rng(rng);
-                {
-                    {
-                        let lvl = ::log::Level::Debug;
-                        if lvl <= ::log::STATIC_MAX_LEVEL && lvl <= ::log::max_level() {
-                            ::log::__private_api::log(
-                                { ::log::__private_api::GlobalLogger },
-                                format_args!("Initialising flash"),
-                                lvl,
-                                &(
-                                    "ssh_stamp_esp32::__main",
-                                    "ssh_stamp_esp32::__main",
-                                    ::log::__private_api::loc(),
-                                ),
-                                (),
-                            );
-                        }
-                    }
+                    out
                 };
-                flash::init(peripherals.FLASH);
+                ::ssh_stamp_esp32::flash_init(peripherals.FLASH);
+                let sw_int1 = {
+                    let sw_int = ::ssh_stamp_esp32::esp_hal::interrupt::software::SoftwareInterruptControl::new(
+                        peripherals.SW_INTERRUPT,
+                    );
+                    ::ssh_stamp_esp32::esp_rtos::start(
+                        ::ssh_stamp_esp32::esp_hal::timer::systimer::SystemTimer::new(
+                                peripherals.SYSTIMER,
+                            )
+                            .alarm0,
+                        sw_int.software_interrupt0,
+                    );
+                    sw_int.software_interrupt1
+                };
                 type B = ::ssh_stamp_esp32_boards::Esp32c6Devkitc;
                 {
                     {
@@ -164,7 +157,7 @@ pub(crate) mod __main {
                 };
                 let uart_pins = UartPins { rx: rx_num, tx: tx_num };
                 if true {
-                    if !TrngSource::is_enabled() {
+                    if !entropy_source_active() {
                         {
                             ::core::panicking::panic_fmt(
                                 format_args!(
@@ -212,38 +205,14 @@ pub(crate) mod __main {
                 static CONFIG: StaticCell<SunsetMutex<SSHStampConfig>> = StaticCell::new();
                 let config: &'static SunsetMutex<SSHStampConfig> = CONFIG
                     .init(SunsetMutex::new(flash_config));
-                {
-                    {
-                        let lvl = ::log::Level::Debug;
-                        if lvl <= ::log::STATIC_MAX_LEVEL && lvl <= ::log::max_level() {
-                            ::log::__private_api::log(
-                                { ::log::__private_api::GlobalLogger },
-                                format_args!("Initialising timers"),
-                                lvl,
-                                &(
-                                    "ssh_stamp_esp32::__main",
-                                    "ssh_stamp_esp32::__main",
-                                    ::log::__private_api::loc(),
-                                ),
-                                (),
-                            );
-                        }
-                    }
-                };
-                let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
-                use esp_hal::timer::systimer::SystemTimer;
-                let systimer = SystemTimer::new(peripherals.SYSTIMER);
-                esp_rtos::start(systimer.alarm0, sw_int.software_interrupt0);
                 mem_probe::checkpoint(Checkpoint::Boot);
-                let uart_buf = UART_BUF.init_with(BufferedUart::new);
-                let interrupt_executor = INT_EXECUTOR
-                    .init_with(|| InterruptExecutor::new(sw_int.software_interrupt1));
-                let interrupt_spawner = interrupt_executor.start(Priority::Priority10);
-                interrupt_spawner
-                    .spawn(
-                        uart_task(uart_buf, peripherals.UART1, pins, uart_params)
-                            .expect("uart_task spawn failed"),
-                    );
+                let interrupt_spawner = start_interrupt_executor(sw_int1);
+                let uart_buf = spawn_uart(
+                    interrupt_spawner,
+                    peripherals.UART1,
+                    pins,
+                    uart_params,
+                );
                 let platform = EspPlatform::new();
                 mem_probe::checkpoint(Checkpoint::PeripheralsReady);
                 bench::log_heap("peripherals");
@@ -268,7 +237,7 @@ pub(crate) mod __main {
                 let ap_config = app::prepare_ap_config(config, &platform)
                     .await
                     .expect("Failed to prepare AP config");
-                drop(trng_source);
+                drop(entropy_source);
                 let mut wifi = EspWifi::new(spawner, peripherals.WIFI, rng, DEFAULT_IP);
                 wifi.configure_ap(ap_config).expect("Failed to configure AP");
                 let stack = wifi.bring_up().await;
@@ -328,7 +297,7 @@ pub(crate) mod __main {
                 mem_probe::checkpoint(Checkpoint::WifiUp);
                 bench::log_heap("wifi_up");
                 if true {
-                    if !TrngSource::is_enabled() {
+                    if !entropy_source_active() {
                         {
                             ::core::panicking::panic_fmt(
                                 format_args!("no entropy source active after WiFi came up"),
@@ -448,28 +417,16 @@ pub(crate) mod __main {
             })
     }
 }
-/// `getrandom` custom backend.
-///
-/// getrandom 0.4 picks its entropy backend by cfg rather than by cargo
-/// feature: every bare-metal target here is built with
-/// `--cfg getrandom_backend="custom"` (see `.cargo/config.toml`), which
-/// makes getrandom link this symbol. It must be defined exactly once in the
-/// whole program, so it lives in the binary — as getrandom's own docs
-/// recommend — and forwards to the hardware TRNG registered at boot by
-/// [`register_custom_rng`].
-///
-/// This is what feeds the SSH host key and the `WiFi` PSK, so it must be a
-/// real entropy source, never a stub.
 #[unsafe(no_mangle)]
 unsafe extern "Rust" fn __getrandom_v03_custom(
     dest: *mut u8,
     len: usize,
-) -> Result<(), getrandom::Error> {
+) -> Result<(), ::ssh_stamp_esp32::getrandom::Error> {
     let buf = unsafe {
-        core::ptr::write_bytes(dest, 0, len);
-        core::slice::from_raw_parts_mut(dest, len)
+        ::core::ptr::write_bytes(dest, 0, len);
+        ::core::slice::from_raw_parts_mut(dest, len)
     };
-    ssh_stamp_esp32::rng_fill_bytes(buf)
+    ::ssh_stamp_esp32::rng_fill_bytes(buf)
 }
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {

@@ -17,6 +17,28 @@ pub mod bench {
     /// Empty function, compiles to a no-op if `mem-probe` is not enabled.
     pub fn log_heap(_label: &str) {}
 }
+mod boot {
+    //! The boot sequence macros which are used when initializing the device. These
+    //! are separate macros so that they remain testable. Everything that consumes
+    //! `Peripherals` must be a macro because fields like `TIMG1` or `SYSTIMER` are
+    //! different per-chip, and cannot be resolved in a single function in the
+    //! library crate.
+    use embassy_executor::SendSpawner;
+    use esp_hal::interrupt::{Priority, software::SoftwareInterrupt};
+    use esp_rtos::embassy::InterruptExecutor;
+    use static_cell::StaticCell;
+    /// Starts the `InterruptExecutor` on the [`SoftwareInterrupt<1>`](SoftwareInterrupt) left over
+    /// from  [`start_rtos!`](macro@crate::start_rtos), and returns its spawner.
+    pub fn start_interrupt_executor(
+        sw_int1: SoftwareInterrupt<'static, 1>,
+    ) -> SendSpawner {
+        static INT_EXECUTOR: StaticCell<InterruptExecutor<1>> = StaticCell::new();
+        let interrupt_executor = INT_EXECUTOR
+            .init_with(|| InterruptExecutor::new(sw_int1));
+        let interrupt_spawner = interrupt_executor.start(Priority::Priority1);
+        interrupt_spawner
+    }
+}
 pub mod flash {
     //! Flash storage and OTA implementation for ESP32 family
     //!
@@ -1368,10 +1390,12 @@ mod rng {
     //! links an `extern "Rust"` symbol that must be defined exactly once in the
     //! whole program.
     //!
-    //! Defining that symbol requires `unsafe`, so it lives in the port binary
-    //! (`src/bin/ssh-stamp-esp32.rs`) — which is also where getrandom's own
-    //! documentation says it belongs — and simply forwards to [`fill_bytes`]
-    //! below. That keeps this crate `#![forbid(unsafe_code)]`.
+    //! Defining that symbol requires `unsafe`, which this crate forbids, and
+    //! binaries cannot link each other's definitions. So, the
+    //! [`getrandom_backend!`](macro@crate::getrandom_backend) packages the
+    //! definition as a macro that every binary invokes once. The `unsafe`
+    //! only compiles where the macro is expanded, keeping this crate
+    //! `#![forbid(unsafe_code)]`.
     use core::cell::RefCell;
     use core::future::{Future, ready};
     use embassy_sync::blocking_mutex::Mutex;
@@ -1388,6 +1412,62 @@ mod rng {
     pub fn register_custom_rng(rng: Rng) {
         let rng_ref = RNG.init(rng);
         RNG_MUTEX.lock(|t| t.borrow_mut().replace(rng_ref));
+    }
+    /// This is a wrapper that sets up the boot entropy source.
+    ///
+    /// On chips with a TRNG this holds the SAR ADC entropy source that
+    /// [`init_entropy()`] enables. The RNG register only has randomness
+    /// while a source is active, and the ADC source is what occurs on boot.
+    ///
+    /// Dropping this guard switches off the source. This handover is required
+    /// because the ADC source needs to be switched off "before RF subsystem
+    /// features, ADC, or I2S (ESP32 only) are initialized" and that it's "not
+    /// safe to use if any other subsystem is accessing the RF subsystem or
+    /// the ADC at the same time".
+    ///
+    /// On the ESP32-C5/C61, there is no TRNG driver yet, so the guard is empty.
+    ///
+    /// See: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/random.html>
+    #[must_use = "dropping switches the boot-time entropy source off"]
+    pub struct EntropySource {}
+    /// Registers the hardware RNG with `getrandom`.
+    ///
+    /// The ESP32-C5/C61 have no TRNG in esp-hal yet, so the RNG register
+    /// is all the firmware has at boot. This means that anything using
+    /// this before the radio is up is only as good as that register.
+    ///
+    /// Call through [`init_entropy!`](macro@crate::init_entropy), which moves =
+    /// the peripherals needed.
+    pub fn init_entropy() -> (Rng, EntropySource) {
+        {
+            {
+                let lvl = ::log::Level::Warn;
+                if lvl <= ::log::STATIC_MAX_LEVEL && lvl <= ::log::max_level() {
+                    ::log::__private_api::log(
+                        { ::log::__private_api::GlobalLogger },
+                        format_args!(
+                            "No TRNG on this chip, RNG is not cryptographically secure until the radio is up",
+                        ),
+                        lvl,
+                        &(
+                            "ssh_stamp_esp32::rng",
+                            "ssh_stamp_esp32::rng",
+                            ::log::__private_api::loc(),
+                        ),
+                        (),
+                    );
+                }
+            }
+        };
+        let rng = Rng::new();
+        register_custom_rng(rng);
+        (rng, EntropySource {})
+    }
+    /// Whether an entropy source is currently using the RNG register.
+    /// Always true for esp32c5/c61 as there is no driver.
+    #[must_use]
+    pub fn entropy_source_active() -> bool {
+        true
     }
     /// ESP32 RNG implementation
     pub struct EspRng;
@@ -1421,8 +1501,8 @@ mod rng {
     /// Safe half of the `getrandom` custom backend: fills `buf` from the
     /// registered hardware RNG.
     ///
-    /// The binary's `__getrandom_v03_custom` shim forwards here; see the module
-    /// docs for why the split exists.
+    /// The `__getrandom_v03_custom` that  [`getrandom_backend!`](macro@crate::getrandom_backend)
+    /// defines forwards here. See the module docs for why the split exists.
     ///
     /// # Errors
     ///
@@ -1466,6 +1546,7 @@ mod uart {
     //! same UART from two futures (TX and RX) concurrently because both sides
     //! take `&self`.
     use core::future::Future;
+    use embassy_executor::SendSpawner;
     use embassy_sync::pipe::TryWriteError;
     use embassy_sync::signal::Signal;
     use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pipe::Pipe};
@@ -1538,7 +1619,13 @@ mod uart {
                 let rd_to = async {
                     loop {
                         let n = self.outward.read(&mut tx_buf).await;
-                        let _ = uart_tx.write_async(&tx_buf[..n]).await;
+                        let mut tx_slice = &tx_buf[..n];
+                        while !tx_slice.is_empty() {
+                            let Ok(written) = uart_tx.write_async(tx_slice).await else {
+                                break;
+                            };
+                            tx_slice = &tx_slice[written..];
+                        }
                     }
                 };
                 select(rd_from, rd_to).await;
@@ -1697,14 +1784,50 @@ mod uart {
                 ._spawn_async_fn(move || __uart_task_task(uart_buf, uart1, pins, params))
         }
     }
+    /// Creates the [`BufferedUart`] singleton and spawns [`uart_task`] on the
+    /// given spawner, returning the buffer the rest of the system talks to. The
+    /// firmware feeds it the spawner from
+    /// [`start_interrupt_executor`](crate::start_interrupt_executor), so the
+    /// task runs at interrupt priority. The task waits on [`UART_SIGNAL`] before
+    /// touching the hardware.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called more than once per boot: the [`BufferedUart`] singleton
+    /// and the task can each only be created once.
+    pub fn spawn_uart(
+        spawner: SendSpawner,
+        uart1: UART1<'static>,
+        pins: EspUartPins<'static>,
+        params: UartParams,
+    ) -> &'static BufferedUart {
+        let uart_buf = UART_BUF.init_with(BufferedUart::new);
+        spawner
+            .spawn(
+                uart_task(uart_buf, uart1, pins, params).expect("uart_task spawn failed"),
+            );
+        uart_buf
+    }
 }
+pub use boot::start_interrupt_executor;
 pub use flash::{EspOtaWriter, FlashBuffer, get_flash_n_buffer, init as flash_init};
 pub use hash::EspHmac;
 pub use network::{EspWifi, accept_requests, dhcp_server, net_up, wifi_up};
 pub use platform::EspPlatform;
-pub use rng::{EspRng, fill_bytes as rng_fill_bytes, register_custom_rng};
+pub use rng::{
+    EntropySource, EspRng, entropy_source_active, fill_bytes as rng_fill_bytes,
+    init_entropy, register_custom_rng,
+};
 pub use timer::EspTimer;
-pub use uart::{BufferedUart, EspUartPins, UART_BUF, UART_SIGNAL, uart_task};
+pub use uart::{BufferedUart, EspUartPins, UART_BUF, UART_SIGNAL, spawn_uart, uart_task};
+pub use esp_alloc;
+pub use esp_bootloader_esp_idf;
+pub use esp_hal;
+pub use esp_println;
+pub use esp_rtos;
+pub use getrandom;
+pub use log;
+pub use ssh_stamp;
 /// Read the device's hardware MAC address from eFuse.
 #[must_use]
 pub fn mac_address() -> [u8; 6] {
