@@ -75,7 +75,10 @@ macro_rules! start_rtos {
 macro_rules! boot {
     ($peripherals:ident, $rng:ident, $entropy_source:ident, $sw_int1:ident) => {
         $crate::init_heap!();
+        $crate::esp_bootloader_esp_idf::esp_app_desc!();
+        $crate::esp_println::logger::init_logger_from_env();
         $crate::bench::log_heap("boot");
+        $crate::log::debug!("HSM: initialising peripherals");
 
         // Note that benches do depend on a stable clock speed across comparisons. The default
         // shouldn't change much, but theoretically an upgrade could change it.

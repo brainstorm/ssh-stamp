@@ -15,8 +15,5 @@
 
 #![no_std]
 
-// The application descriptor the esp-idf bootloader expects in the app image.
-esp_bootloader_esp_idf::esp_app_desc!();
-
 // The `getrandom` custom backend.
 ssh_stamp_esp32::getrandom_backend!();

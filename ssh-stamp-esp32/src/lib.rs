@@ -47,9 +47,12 @@ pub use uart::{BufferedUart, EspUartPins, UART_BUF, UART_SIGNAL, spawn_uart, uar
 // `init_heap!`, `start_rtos!` and `boot!, as they mean the calling crate doesn't have to
 // have these as direct dependencies.
 pub use esp_alloc;
+pub use esp_bootloader_esp_idf;
 pub use esp_hal;
+pub use esp_println;
 pub use esp_rtos;
 pub use getrandom;
+pub use log;
 pub use ssh_stamp;
 
 /// Read the device's hardware MAC address from eFuse.

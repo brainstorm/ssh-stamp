@@ -3695,7 +3695,6 @@ dependencies = [
  "embassy-sync 0.8.0",
  "embedded-io-async 0.7.0",
  "embedded-test",
- "esp-bootloader-esp-idf",
  "esp-hal",
  "esp-rtos",
  "ssh-stamp",
