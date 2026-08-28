@@ -80,19 +80,21 @@ revision in the root `Cargo.toml`. Bump the revision there to take a newer
 one. Nothing in CI builds this board — no runner has the SDK — so the
 documentation job excludes `ssh-stamp-bl616` as well.
 
-To work on both repositories at once, override the git source with your local
-checkout. Put it in a `.cargo/config.toml` **above** both, or in
-`~/.cargo/config.toml`, so it stays out of this repository:
+To work on both repositories at once, point the five entries at your checkout
+and leave that change uncommitted:
 
 ```toml
-paths = [
-    "/path/to/bl616-radio-reveng/bl616-wifi",
-    "/path/to/bl616-radio-reveng/bl616-wifi-sys",
-    "/path/to/bl616-radio-reveng/bl616-crypto",
-    "/path/to/bl616-radio-reveng/bl616-dhcp",
-    "/path/to/bl616-radio-reveng/bl616-link",
-]
+bl616-wifi = { path = "../bl616-radio-reveng/bl616-wifi", default-features = false }
+bl616-wifi-sys = { path = "../bl616-radio-reveng/bl616-wifi-sys" }
+bl616-crypto = { path = "../bl616-radio-reveng/bl616-crypto" }
+bl616-dhcp = { path = "../bl616-radio-reveng/bl616-dhcp" }
+bl616-link = { path = "../bl616-radio-reveng/bl616-link" }
 ```
+
+Editing the manifest rather than a `paths` override in `.cargo/config.toml`:
+a path override may not change the dependency graph, so it stops applying —
+silently, falling back to the pinned revision — the moment a local crate
+gains a dependency that revision does not have.
 
 ## Everything CI checks
 
