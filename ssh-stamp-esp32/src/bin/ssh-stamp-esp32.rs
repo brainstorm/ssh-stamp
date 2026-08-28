@@ -28,7 +28,6 @@
 extern crate alloc;
 
 use embassy_executor::Spawner;
-use esp_println::logger;
 use heapless::String;
 use log::{debug, error, warn};
 use ssh_stamp::config::{SSHStampConfig, UartPins};
@@ -53,10 +52,6 @@ use sunset_async::SunsetMutex;
 
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
-    esp_bootloader_esp_idf::esp_app_desc!();
-    logger::init_logger_from_env();
-
-    debug!("HSM: initialising peripherals");
     ssh_stamp_esp32::boot!(peripherals, rng, entropy_source, sw_int1);
 
     #[cfg(feature = "sftp-ota")]

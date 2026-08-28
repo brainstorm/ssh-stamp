@@ -42,7 +42,6 @@ embassy-executor = { workspace = true }
 
 esp-hal = { workspace = true }
 esp-rtos = { version = "0.3", features = ["embassy"] }
-esp-bootloader-esp-idf = { version = "0.5" }
 
 embassy-futures = { workspace = true }
 embassy-sync = { workspace = true }
