@@ -7,8 +7,8 @@
 //! Board definitions live in `boards/*.toml` (one file per board, containing
 //! pin mappings and an optional documentation URL). The `build.rs` reads
 //! those TOML files and generates all Rust code — board structs, the
-//! [`UART_RX`] and [`UART_TX`] constants, and the [`select_board!`] macro —
-//! into `OUT_DIR/boards_gen.rs`, which is included here.
+//! [`board_uart_pins!`] macro and the [`select_board!`] macro — into
+//! `OUT_DIR/boards_gen.rs`, which is included here.
 //!
 //! The TOML files are the single source of truth for pin numbers. No human
 //! writes or edits the generated Rust code.

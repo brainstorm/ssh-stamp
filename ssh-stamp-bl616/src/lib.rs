@@ -55,10 +55,11 @@ pub use uart::{Bl616Serial, UART_BUF, UART_SIGNAL, uart_config, uart_task};
 /// From that board's TOML in `ssh-stamp-bl616-boards`, which is where every
 /// pin number on this platform is written down. Recorded in the stored
 /// configuration as the default, and routed to UART0 by [`uart_config`].
-pub const DEFAULT_UART_PINS: ssh_stamp::config::UartPins = ssh_stamp::config::UartPins {
-    rx: ssh_stamp_bl616_boards::UART_RX,
-    tx: ssh_stamp_bl616_boards::UART_TX,
-};
+#[must_use]
+pub fn default_uart_pins() -> ssh_stamp::config::UartPins {
+    let (rx, tx) = ssh_stamp_bl616_boards::board_uart_pins!();
+    ssh_stamp::config::UartPins { rx, tx }
+}
 
 /// The station MAC, which ssh-stamp uses to name the default network.
 ///

@@ -159,6 +159,7 @@ impl BufferedSerial for Bl616Serial {
 /// stored config still leaves a usable serial console.
 #[must_use]
 pub fn uart_config(params: UartParams) -> Config {
+    let (rx, tx) = ssh_stamp_bl616_boards::board_uart_pins!();
     Config {
         baudrate: params.baud.clamp(MIN_BAUD, MAX_BAUD),
         data_bits: match params.data_bits {
@@ -177,8 +178,8 @@ pub fn uart_config(params: UartParams) -> Config {
         } else {
             StopBits::One
         },
-        rx_pin: Some(ssh_stamp_bl616_boards::UART_RX),
-        tx_pin: Some(ssh_stamp_bl616_boards::UART_TX),
+        rx_pin: Some(rx),
+        tx_pin: Some(tx),
     }
 }
 

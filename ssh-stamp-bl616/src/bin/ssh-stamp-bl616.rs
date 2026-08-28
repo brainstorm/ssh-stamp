@@ -22,7 +22,7 @@ use embassy_futures::block_on;
 use ssh_stamp::app;
 use ssh_stamp::config::SSHStampConfig;
 use ssh_stamp_bl616::{
-    Bl616Platform, Bl616Serial, Bl616Wifi, DEFAULT_UART_PINS, UART_BUF, load_config,
+    Bl616Platform, Bl616Serial, Bl616Wifi, UART_BUF, default_uart_pins, load_config,
     rng_fill_bytes, uart_config, uart_task,
 };
 use ssh_stamp_hal::NetworkProviderHal;
@@ -52,7 +52,7 @@ fn app() -> ! {
     let mac = radio.sta_mac();
     println!("[ssh-stamp] radio ready, mac {mac:02x?}");
 
-    let stored = match block_on(load_config(mac, DEFAULT_UART_PINS)) {
+    let stored = match block_on(load_config(mac, default_uart_pins())) {
         Ok(c) => c,
         Err(e) => {
             // Refusing beats recreating: a new config would regenerate the
