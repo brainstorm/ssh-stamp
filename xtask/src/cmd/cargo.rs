@@ -46,6 +46,6 @@ pub fn run(argv: &[String]) -> Result<()> {
     }
 
     command
-    .run()
-    .with_context(|| format!("cargo {action} for {} failed", target.name()))
+        .run()
+        .with_context(|| format!("cargo {action} for {} failed", target.name()))
 }
