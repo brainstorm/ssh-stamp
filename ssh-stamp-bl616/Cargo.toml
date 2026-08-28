@@ -20,7 +20,7 @@ sunset-async = { workspace = true }
 # The radio, its embassy-net Driver, the time driver, the critical section and
 # the global allocator all come from here. Nothing else in this binary may
 # provide any of them.
-bl616-wifi = { path = "../../bl616-radio-reveng/bl616-wifi", default-features = false, features = [
+bl616-wifi = { workspace = true, features = [
     "alloc",
     "panic-handler",
     "embassy-net",
@@ -31,11 +31,11 @@ bl616-wifi = { path = "../../bl616-radio-reveng/bl616-wifi", default-features = 
     # archive and every one of them collides at link time.
     "rust-crypto",
 ] }
-bl616-crypto = { path = "../../bl616-radio-reveng/bl616-crypto" }
-bl616-dhcp = { path = "../../bl616-radio-reveng/bl616-dhcp" }
+bl616-crypto = { workspace = true }
+bl616-dhcp = { workspace = true }
 # A direct dependency only so this crate's build script can see the
 # DEP_BL616_WIFI_CSDK_* metadata; nothing here calls into it.
-bl616-wifi-sys = { path = "../../bl616-radio-reveng/bl616-wifi-sys" }
+bl616-wifi-sys = { workspace = true }
 
 embassy-net = { workspace = true }
 embassy-executor = { workspace = true }
@@ -49,7 +49,7 @@ embedded-storage = { workspace = true }
 getrandom = "0.4"
 
 [build-dependencies]
-bl616-link = { path = "../../bl616-radio-reveng/bl616-link" }
+bl616-link = { workspace = true }
 
 [features]
 default = []

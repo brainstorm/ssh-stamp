@@ -51,6 +51,19 @@ embassy-futures = "0.1.2"
 # Collections
 heapless = "0.9"
 
+# Bouffalo BL616
+#
+# A git source rather than a path: these live in their own repository, and a
+# path out of the workspace would break every cargo command here for anyone
+# without that checkout beside this one. Pinned to a revision so a build is
+# reproducible; bump it deliberately. To develop both at once, override them
+# locally -- see docs/BUILDING.md.
+bl616-wifi = { git = "https://github.com/brainstorm/bl616-radio-reveng", rev = "b389ad94d65ae3a1ec14ac55b62363d187c2264b", default-features = false }
+bl616-wifi-sys = { git = "https://github.com/brainstorm/bl616-radio-reveng", rev = "b389ad94d65ae3a1ec14ac55b62363d187c2264b" }
+bl616-crypto = { git = "https://github.com/brainstorm/bl616-radio-reveng", rev = "b389ad94d65ae3a1ec14ac55b62363d187c2264b" }
+bl616-dhcp = { git = "https://github.com/brainstorm/bl616-radio-reveng", rev = "b389ad94d65ae3a1ec14ac55b62363d187c2264b" }
+bl616-link = { git = "https://github.com/brainstorm/bl616-radio-reveng", rev = "b389ad94d65ae3a1ec14ac55b62363d187c2264b" }
+
 # ESP32
 esp-hal = { version = "1.1", features = ["unstable", "log-04"] }
 # Build-time configuration.

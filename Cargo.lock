@@ -277,6 +277,7 @@ dependencies = [
 [[package]]
 name = "bl616-crypto"
 version = "0.1.0"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=b389ad94d65ae3a1ec14ac55b62363d187c2264b#b389ad94d65ae3a1ec14ac55b62363d187c2264b"
 dependencies = [
  "aes",
  "cbc",
@@ -293,14 +294,17 @@ dependencies = [
 [[package]]
 name = "bl616-dhcp"
 version = "0.1.0"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=b389ad94d65ae3a1ec14ac55b62363d187c2264b#b389ad94d65ae3a1ec14ac55b62363d187c2264b"
 
 [[package]]
 name = "bl616-link"
 version = "0.1.0"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=b389ad94d65ae3a1ec14ac55b62363d187c2264b#b389ad94d65ae3a1ec14ac55b62363d187c2264b"
 
 [[package]]
 name = "bl616-wifi"
 version = "0.1.0"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=b389ad94d65ae3a1ec14ac55b62363d187c2264b#b389ad94d65ae3a1ec14ac55b62363d187c2264b"
 dependencies = [
  "bl616-crypto",
  "bl616-dhcp",
@@ -317,6 +321,7 @@ dependencies = [
 [[package]]
 name = "bl616-wifi-sys"
 version = "0.1.0"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=b389ad94d65ae3a1ec14ac55b62363d187c2264b#b389ad94d65ae3a1ec14ac55b62363d187c2264b"
 
 [[package]]
 name = "block-buffer"

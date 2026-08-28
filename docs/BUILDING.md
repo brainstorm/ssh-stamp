@@ -64,6 +64,36 @@ configured per target triple in `.cargo/config.toml`):
 cargo xtask esp32c6-devkitc run --release
 ```
 
+## The BL616 port
+
+`sipeed-m0s-dock` is the odd one out. Its radio comes from
+[bl616-radio-reveng](https://github.com/brainstorm/bl616-radio-reveng), which
+links Bouffalo's closed 802.11 blobs, so building it needs a BouffaloSDK
+checkout and the vendor's RISC-V GCC:
+
+```
+BL_SDK_BASE=/path/to/bouffalo_sdk cargo xtask sipeed-m0s-dock build
+```
+
+The `bl616-*` crates come from that repository as a git dependency pinned to a
+revision in the root `Cargo.toml`. Bump the revision there to take a newer
+one. Nothing in CI builds this board — no runner has the SDK — so the
+documentation job excludes `ssh-stamp-bl616` as well.
+
+To work on both repositories at once, override the git source with your local
+checkout. Put it in a `.cargo/config.toml` **above** both, or in
+`~/.cargo/config.toml`, so it stays out of this repository:
+
+```toml
+paths = [
+    "/path/to/bl616-radio-reveng/bl616-wifi",
+    "/path/to/bl616-radio-reveng/bl616-wifi-sys",
+    "/path/to/bl616-radio-reveng/bl616-crypto",
+    "/path/to/bl616-radio-reveng/bl616-dhcp",
+    "/path/to/bl616-radio-reveng/bl616-link",
+]
+```
+
 ## Everything CI checks
 
 ```
@@ -71,7 +101,7 @@ cargo xtask esp32c6-devkitc build --release    # one CI job per board and chip
 cargo xtask esp32c6-devkitc clippy --release -- -D warnings
 cargo clippy -p xtask --all-targets -- -D warnings
 cargo fmt --all -- --check
-cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask
+cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask --exclude ssh-stamp-bl616
 cargo test              # host-side crates, scoped by workspace default-members
 ```
 
