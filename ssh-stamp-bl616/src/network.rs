@@ -79,9 +79,17 @@ impl Bl616Wifi {
 
 impl WifiHal for Bl616Wifi {
     fn configure_ap(&mut self, config: WifiApConfigStatic) -> Result<(), HalError> {
-        // 2.4 GHz only. Accepting a 5 GHz request and quietly running at 2.4
-        // would leave a user wondering why their band setting does nothing.
+        // The BL616 has a 2.4 GHz radio and no 5 GHz one: this is the part,
+        // not the port, so there is nothing here to implement later.
+        // Accepting the request and quietly running at 2.4 would leave a
+        // user wondering why their band setting does nothing, so it is
+        // refused — with a reason, since `HalError::Config` on its own does
+        // not tell anyone which setting was wrong.
         if matches!(config.band, BandMode::Band5G) {
+            bl616_wifi::println!(
+                "[ssh-stamp] 5 GHz was requested, but the BL616 radio is 2.4 GHz only; \
+                 set SSH_STAMP_WIFI_BAND to 2.4"
+            );
             return Err(HalError::Config);
         }
         self.config = Some(config);
