@@ -52,6 +52,19 @@ fn app() -> ! {
     let mac = radio.sta_mac();
     println!("[ssh-stamp] radio ready, mac {mac:02x?}");
 
+    // Getting this far is the definition of a working image: the radio came
+    // up. Tell Boot2 so, or an image installed over the air is rolled back
+    // once its retry count runs out.
+    #[cfg(feature = "sftp-ota")]
+    {
+        use ssh_stamp_hal::OtaActions;
+        if let Err(e) =
+            block_on(ssh_stamp_bl616::Bl616OtaWriter::try_validating_current_ota_partition())
+        {
+            println!("[ssh-stamp] could not confirm the boot: {e:?}");
+        }
+    }
+
     let stored = match block_on(load_config(mac, default_uart_pins())) {
         Ok(c) => c,
         Err(e) => {

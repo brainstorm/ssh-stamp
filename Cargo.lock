@@ -277,7 +277,7 @@ dependencies = [
 [[package]]
 name = "bl616-crypto"
 version = "0.1.0"
-source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=b389ad94d65ae3a1ec14ac55b62363d187c2264b#b389ad94d65ae3a1ec14ac55b62363d187c2264b"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=a4f24f8948d8add7b3139f0bdb57d63e2245cd29#a4f24f8948d8add7b3139f0bdb57d63e2245cd29"
 dependencies = [
  "aes",
  "cbc",
@@ -294,21 +294,27 @@ dependencies = [
 [[package]]
 name = "bl616-dhcp"
 version = "0.1.0"
-source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=b389ad94d65ae3a1ec14ac55b62363d187c2264b#b389ad94d65ae3a1ec14ac55b62363d187c2264b"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=a4f24f8948d8add7b3139f0bdb57d63e2245cd29#a4f24f8948d8add7b3139f0bdb57d63e2245cd29"
 
 [[package]]
 name = "bl616-link"
 version = "0.1.0"
-source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=b389ad94d65ae3a1ec14ac55b62363d187c2264b#b389ad94d65ae3a1ec14ac55b62363d187c2264b"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=a4f24f8948d8add7b3139f0bdb57d63e2245cd29#a4f24f8948d8add7b3139f0bdb57d63e2245cd29"
+
+[[package]]
+name = "bl616-pt"
+version = "0.1.0"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=a4f24f8948d8add7b3139f0bdb57d63e2245cd29#a4f24f8948d8add7b3139f0bdb57d63e2245cd29"
 
 [[package]]
 name = "bl616-wifi"
 version = "0.1.0"
-source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=b389ad94d65ae3a1ec14ac55b62363d187c2264b#b389ad94d65ae3a1ec14ac55b62363d187c2264b"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=a4f24f8948d8add7b3139f0bdb57d63e2245cd29#a4f24f8948d8add7b3139f0bdb57d63e2245cd29"
 dependencies = [
  "bl616-crypto",
  "bl616-dhcp",
  "bl616-link",
+ "bl616-pt",
  "bl616-wifi-sys",
  "critical-section",
  "embassy-executor",
@@ -321,7 +327,7 @@ dependencies = [
 [[package]]
 name = "bl616-wifi-sys"
 version = "0.1.0"
-source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=b389ad94d65ae3a1ec14ac55b62363d187c2264b#b389ad94d65ae3a1ec14ac55b62363d187c2264b"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=a4f24f8948d8add7b3139f0bdb57d63e2245cd29#a4f24f8948d8add7b3139f0bdb57d63e2245cd29"
 
 [[package]]
 name = "block-buffer"
@@ -1363,7 +1369,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3231,7 +3237,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3977,7 +3983,7 @@ dependencies = [
  "getrandom",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4383,7 +4389,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

@@ -11,6 +11,8 @@ use ssh_stamp::platform::PlatformServices;
 use ssh_stamp::store;
 use ssh_stamp_hal::{FlashError, HalError, OtaActions};
 
+use bl616_wifi::ota::Ota;
+
 use crate::flash::Bl616Flash;
 
 /// Scratch for `store`, which needs somewhere to build a record before
@@ -80,30 +82,75 @@ impl PlatformServices for Bl616Platform {
     }
 }
 
-/// OTA is not implemented on this port.
+/// The OTA session, which the trait's `&self` writes have to reach.
 ///
-/// The ESP path is built on `esp-bootloader-esp-idf`'s A/B partition scheme,
-/// which has no counterpart here: the BL616 boot ROM reads a header this
-/// project does not yet write a second copy of. Refusing is the honest
-/// answer; a partial implementation that accepted an image and then bricked
-/// the board on reset would be worse.
+/// One update at a time, and only from the SFTP handler: a second session
+/// starting while one is in flight would be two writers on the same slot.
+static OTA: Mutex<CriticalSectionRawMutex, Option<Ota>> = Mutex::new(None);
+
+/// Writes an update into the firmware slot that is not running.
+///
+/// The board's partition table names two slots and says which is live;
+/// `bl616-wifi` writes the image into the other one and, at the end, swaps
+/// them by publishing a new table. Nothing touches the running image, so an
+/// upload that fails or a session that drops leaves the board exactly as it
+/// was — the spare slot holds a partial image that nothing will boot.
 pub struct Bl616OtaWriter;
 
+/// Anything the flash or the partition table reports, as the HAL spells it.
+///
+/// The distinction the HAL draws is between "could not write" and "the
+/// layout is wrong", and that is the one worth keeping: the first is worth
+/// retrying, the second means this board cannot take an update at all.
+fn ota_error(e: bl616_wifi::error::Error) -> HalError {
+    match e {
+        bl616_wifi::error::Error::Partition(_) => HalError::Flash(FlashError::PartitionNotFound),
+        bl616_wifi::error::Error::InvalidArgument => HalError::Flash(FlashError::InternalError),
+        _ => HalError::Flash(FlashError::Write),
+    }
+}
+
 impl OtaActions for Bl616OtaWriter {
+    /// Tell Boot2 the running image came up.
+    ///
+    /// Only does anything when the image is on probation — after an update,
+    /// on the first boot from the new slot. Every other boot this is a read
+    /// of the partition table and nothing more.
     async fn try_validating_current_ota_partition() -> Result<(), HalError> {
-        Err(HalError::Flash(FlashError::InternalError))
+        bl616_wifi::ota::confirm_boot().map_err(ota_error)
     }
 
+    /// How large an image the spare slot takes.
     async fn get_ota_partition_size() -> Result<u32, HalError> {
-        Err(HalError::Flash(FlashError::InternalError))
+        Ota::begin().map(|ota| ota.capacity()).map_err(ota_error)
     }
 
-    async fn write_ota_data(&self, _offset: u32, _data: &[u8]) -> Result<(), HalError> {
-        Err(HalError::Flash(FlashError::InternalError))
+    /// Append to the spare slot, starting a session at offset zero.
+    ///
+    /// Beginning lazily rather than in `get_ota_partition_size` keeps the
+    /// session tied to the data actually arriving: a client that asks the
+    /// size and then disconnects has claimed nothing.
+    async fn write_ota_data(&self, offset: u32, data: &[u8]) -> Result<(), HalError> {
+        let mut guard = OTA.lock().await;
+        if offset == 0 {
+            *guard = Some(Ota::begin().map_err(ota_error)?);
+        }
+        let ota = guard
+            .as_mut()
+            .ok_or(HalError::Flash(FlashError::InternalError))?;
+        ota.write(offset, data).map_err(ota_error)
     }
 
+    /// Publish a partition table that boots what was just written.
+    ///
+    /// The single point of no return in an update, and it is one sector
+    /// write: before it the board boots the old image, after it the new one.
     async fn finalize_ota_update(&mut self) -> Result<(), HalError> {
-        Err(HalError::Flash(FlashError::InternalError))
+        let mut guard = OTA.lock().await;
+        let ota = guard
+            .take()
+            .ok_or(HalError::Flash(FlashError::InternalError))?;
+        ota.commit().map_err(ota_error)
     }
 
     fn reset_device(&self) -> ! {

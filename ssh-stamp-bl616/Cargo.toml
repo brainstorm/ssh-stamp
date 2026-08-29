@@ -53,6 +53,9 @@ bl616-link = { workspace = true }
 
 [features]
 default = []
+# The SFTP OTA subsystem: `packer` wraps a firmware image and an SFTP PUT
+# writes it into the slot the board is not running from.
+sftp-ota = ["ssh-stamp/sftp-ota"]
 # One board so far. Selecting it here selects the matching pin map in the BSP
 # crate, which is where the pin numbers live.
 board-sipeed-m0s-dock = ["ssh-stamp-bl616-boards/board-sipeed-m0s-dock"]
