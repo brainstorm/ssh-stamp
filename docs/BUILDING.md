@@ -64,6 +64,38 @@ configured per target triple in `.cargo/config.toml`):
 cargo xtask esp32c6-devkitc run --release
 ```
 
+## The BL616 port
+
+`sipeed-m0s-dock` is the odd one out. Its radio comes from
+[bl616-radio-reveng](https://github.com/brainstorm/bl616-radio-reveng), which
+links Bouffalo's closed 802.11 blobs, so building it needs a BouffaloSDK
+checkout and the vendor's RISC-V GCC:
+
+```
+BL_SDK_BASE=/path/to/bouffalo_sdk cargo xtask sipeed-m0s-dock build
+```
+
+The `bl616-*` crates come from that repository as a git dependency pinned to a
+revision in the root `Cargo.toml`. Bump the revision there to take a newer
+one. Nothing in CI builds this board — no runner has the SDK — so the
+documentation job excludes `ssh-stamp-bl616` as well.
+
+To work on both repositories at once, point the five entries at your checkout
+and leave that change uncommitted:
+
+```toml
+bl616-wifi = { path = "../bl616-radio-reveng/bl616-wifi", default-features = false }
+bl616-wifi-sys = { path = "../bl616-radio-reveng/bl616-wifi-sys" }
+bl616-crypto = { path = "../bl616-radio-reveng/bl616-crypto" }
+bl616-dhcp = { path = "../bl616-radio-reveng/bl616-dhcp" }
+bl616-link = { path = "../bl616-radio-reveng/bl616-link" }
+```
+
+Editing the manifest rather than a `paths` override in `.cargo/config.toml`:
+a path override may not change the dependency graph, so it stops applying —
+silently, falling back to the pinned revision — the moment a local crate
+gains a dependency that revision does not have.
+
 ## Everything CI checks
 
 ```
@@ -71,7 +103,7 @@ cargo xtask esp32c6-devkitc build --release    # one CI job per board and chip
 cargo xtask esp32c6-devkitc clippy --release -- -D warnings
 cargo clippy -p xtask --all-targets -- -D warnings
 cargo fmt --all -- --check
-cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask
+cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask --exclude ssh-stamp-bl616
 cargo test              # host-side crates, scoped by workspace default-members
 ```
 

@@ -156,6 +156,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
+name = "base16ct"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd307490d624467aa6f74b0eabb77633d1f758a7b25f12bceb0b22e08d9726f6"
+
+[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -269,6 +275,61 @@ dependencies = [
 ]
 
 [[package]]
+name = "bl616-crypto"
+version = "0.1.0"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=a4f24f8948d8add7b3139f0bdb57d63e2245cd29#a4f24f8948d8add7b3139f0bdb57d63e2245cd29"
+dependencies = [
+ "aes",
+ "cbc",
+ "cipher 0.5.2",
+ "crypto-bigint",
+ "ctr",
+ "digest 0.11.3",
+ "hmac 0.13.0",
+ "md-5 0.11.0",
+ "sha1 0.11.0",
+ "sha2 0.11.0",
+]
+
+[[package]]
+name = "bl616-dhcp"
+version = "0.1.0"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=a4f24f8948d8add7b3139f0bdb57d63e2245cd29#a4f24f8948d8add7b3139f0bdb57d63e2245cd29"
+
+[[package]]
+name = "bl616-link"
+version = "0.1.0"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=a4f24f8948d8add7b3139f0bdb57d63e2245cd29#a4f24f8948d8add7b3139f0bdb57d63e2245cd29"
+
+[[package]]
+name = "bl616-pt"
+version = "0.1.0"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=a4f24f8948d8add7b3139f0bdb57d63e2245cd29#a4f24f8948d8add7b3139f0bdb57d63e2245cd29"
+
+[[package]]
+name = "bl616-wifi"
+version = "0.1.0"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=a4f24f8948d8add7b3139f0bdb57d63e2245cd29#a4f24f8948d8add7b3139f0bdb57d63e2245cd29"
+dependencies = [
+ "bl616-crypto",
+ "bl616-dhcp",
+ "bl616-link",
+ "bl616-pt",
+ "bl616-wifi-sys",
+ "critical-section",
+ "embassy-executor",
+ "embassy-net-driver",
+ "embassy-sync 0.8.0",
+ "embassy-time-driver",
+ "embassy-time-queue-utils",
+]
+
+[[package]]
+name = "bl616-wifi-sys"
+version = "0.1.0"
+source = "git+https://github.com/brainstorm/bl616-radio-reveng?rev=a4f24f8948d8add7b3139f0bdb57d63e2245cd29#a4f24f8948d8add7b3139f0bdb57d63e2245cd29"
+
+[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -285,6 +346,15 @@ checksum = "cdd35008169921d80bc60d3d0ab416eecb028c4cd653352907921d95084790be"
 dependencies = [
  "hybrid-array",
  "zeroize",
+]
+
+[[package]]
+name = "block-padding"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "710f1dd022ef4e93f8a438b4ba958de7f64308434fa6a87104481645cc30068b"
+dependencies = [
+ "hybrid-array",
 ]
 
 [[package]]
@@ -337,6 +407,15 @@ name = "byteorder"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
+
+[[package]]
+name = "cbc"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce2dc9ee5f88d11e0beb842c88b33c8a5cf0d1329c4b19494af42b07dbfe8896"
+dependencies = [
+ "cipher 0.5.2",
+]
 
 [[package]]
 name = "cc"
@@ -575,6 +654,18 @@ name = "crossbeam-utils"
 version = "0.8.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61803da095bee82a81bb1a452ecc25d3b2f1416d1897eb86430c6159ef717c17"
+
+[[package]]
+name = "crypto-bigint"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a52aa3fcda4e6302a9f48734f234d35d4721b96f8fe07d073f07ce9df4f0271"
+dependencies = [
+ "cpubits",
+ "ctutils",
+ "num-traits",
+ "serdect",
+]
 
 [[package]]
 name = "crypto-common"
@@ -1278,7 +1369,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1397,7 +1488,7 @@ dependencies = [
  "rand_core 0.6.4",
  "rand_core 0.9.5",
  "riscv",
- "sha1",
+ "sha1 0.10.6",
  "sha2 0.10.9",
  "strum 0.27.2",
  "ufmt-write",
@@ -2151,6 +2242,7 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4250ce6452e92010fdf7268ccc5d14faa80bb12fc741938534c58f16804e03c7"
 dependencies = [
+ "block-padding",
  "hybrid-array",
 ]
 
@@ -3145,7 +3237,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3291,6 +3383,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serdect"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66cf8fedced2fcf12406bcb34223dffb92eaf34908ede12fed414c82b7f00b3e"
+dependencies = [
+ "base16ct",
+ "serde",
+]
+
+[[package]]
 name = "serial2"
 version = "0.2.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3328,6 +3430,17 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.2.17",
  "digest 0.10.7",
+]
+
+[[package]]
+name = "sha1"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aacc4cc499359472b4abe1bf11d0b12e688af9a805fa5e3016f9a386dc2d0214"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.3.0",
+ "digest 0.11.3",
 ]
 
 [[package]]
@@ -3538,7 +3651,6 @@ dependencies = [
  "embedded-storage",
  "embedded-storage-async",
  "embedded-storage-inmemory",
- "esp-config",
  "getrandom",
  "heapless 0.9.3",
  "hex",
@@ -3561,6 +3673,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "ssh-stamp-bl616"
+version = "0.1.0"
+dependencies = [
+ "bl616-crypto",
+ "bl616-dhcp",
+ "bl616-link",
+ "bl616-wifi",
+ "bl616-wifi-sys",
+ "embassy-executor",
+ "embassy-futures",
+ "embassy-net",
+ "embassy-sync 0.8.0",
+ "embassy-time",
+ "embedded-storage",
+ "getrandom",
+ "heapless 0.9.3",
+ "log",
+ "ssh-stamp",
+ "ssh-stamp-bl616-boards",
+ "ssh-stamp-hal",
+ "static_cell",
+ "sunset",
+ "sunset-async",
+]
+
+[[package]]
+name = "ssh-stamp-bl616-boards"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "ssh-stamp-esp32"
 version = "0.2.0"
 dependencies = [
@@ -3578,6 +3724,7 @@ dependencies = [
  "esp-alloc",
  "esp-backtrace",
  "esp-bootloader-esp-idf",
+ "esp-config",
  "esp-hal",
  "esp-println",
  "esp-radio",
@@ -3836,7 +3983,7 @@ dependencies = [
  "getrandom",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4242,7 +4389,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

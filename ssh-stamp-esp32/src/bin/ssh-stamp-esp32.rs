@@ -41,13 +41,13 @@ use ssh_stamp::store;
 use ssh_stamp::{
     app,
     mem_probe::{self, Checkpoint},
-    settings::{DEFAULT_IP, HEAP_SIZE},
+    settings::DEFAULT_IP,
 };
 #[cfg(feature = "can")]
 use ssh_stamp_esp32::{BufferedCan, CAN_BUF, EspCanPins, can_task};
 use ssh_stamp_esp32::{
-    BufferedUart, EspPlatform, EspUartPins, EspWifi, UART_BUF, bench, flash, mac_address,
-    register_custom_rng, uart_task,
+    BufferedUart, EspPlatform, EspUartPins, EspWifi, HEAP_SIZE, UART_BUF, bench, flash,
+    mac_address, register_custom_rng, uart_task,
 };
 use ssh_stamp_esp32_boards::Board;
 use ssh_stamp_hal::{HalError, WifiError};

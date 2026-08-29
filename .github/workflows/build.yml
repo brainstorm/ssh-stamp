@@ -118,7 +118,10 @@ jobs:
         with:
           target: riscv32imac-unknown-none-elf
           toolchain: stable
+      # ssh-stamp-bl616 is excluded: documenting it compiles the Bouffalo
+      # vendor SDK, which needs BL_SDK_BASE and a RISC-V GCC that no runner
+      # here has. Its board support crate is pure Rust and stays in.
       - name: Build all docs
-        run: cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask
+        run: cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask --exclude ssh-stamp-bl616
       - name: Check doc warnings
-        run: cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask 2>&1 | grep -iE "broken|warning.*link" || true
+        run: cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask --exclude ssh-stamp-bl616 2>&1 | grep -iE "broken|warning.*link" || true

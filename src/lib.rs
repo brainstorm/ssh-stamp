@@ -94,10 +94,9 @@
 //!
 //! ## Build-time configuration
 //!
-//! The heap and buffer sizes below are declared in `build.rs` via `esp-config`
-//! and overridable at build time with the matching environment variable. Note that
-//! these are build time config variables, they are not used at runtime.
-#![doc = include_str!(concat!(env!("OUT_DIR"), "/ssh_stamp_config_table.md"))]
+//! `SSH_STAMP_CONFIG_OFFSET` sets where the configuration area lives in flash,
+//! which is a property of the port's flash layout. Ports that own an allocator
+//! declare their own heap size; see the port crate for its options.
 // `no_std` on device; under `cargo test` the std test harness needs std, same
 // pattern as the `ota` crate. `src/` stays platform-agnostic either way.
 #![cfg_attr(not(test), no_std)]

@@ -22,7 +22,29 @@ use sunset_sshwire_derive::{SSHDecode, SSHEncode};
 pub const CONFIG_VERSION_SIZE: usize = 4;
 pub const CONFIG_HASH_SIZE: usize = 32;
 pub const CONFIG_AREA_SIZE: usize = 4096;
-pub const CONFIG_OFFSET: usize = 0x9000;
+/// Where the configuration area lives in flash.
+///
+/// A property of the port's flash layout, not of ssh-stamp: the 0x9000
+/// default is where an ESP-IDF partition table puts NVS, and it means nothing
+/// on a part that does not use one. Set `SSH_STAMP_CONFIG_OFFSET` to move it.
+///
+/// It stays a `const` because the tests below use it to size arrays.
+pub const CONFIG_OFFSET: usize = parse_usize(env!("SSH_STAMP_CONFIG_OFFSET"));
+
+const fn parse_usize(s: &str) -> usize {
+    let bytes = s.as_bytes();
+    let mut value = 0usize;
+    let mut i = 0;
+    while i < bytes.len() {
+        assert!(
+            bytes[i].is_ascii_digit(),
+            "SSH_STAMP_CONFIG_OFFSET must be a number"
+        );
+        value = value * 10 + (bytes[i] - b'0') as usize;
+        i += 1;
+    }
+    value
+}
 
 // SSHConfig::CURRENT_VERSION must be bumped if any of this struct
 #[derive(SSHEncode, SSHDecode)]

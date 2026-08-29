@@ -9,12 +9,13 @@
 
 //! Compile-time constants: default IP, `WiFi` character set, buffer sizes.
 //!
-//! The heap and buffer sizes are build-time config values declared in this crate's
-//! `build.rs` via `esp-config`. They can be overridden with `SSH_STAMP_CONFIG_*`
-//! environment variables.
+//! Anything whose value depends on the chip belongs to the port, not here.
+//! The heap size used to live in this module and now lives in the port crate
+//! that owns the allocator -- keeping it here forced this crate to depend on
+//! `esp-config`, which meant the platform-agnostic half of ssh-stamp could not
+//! be built for a non-Espressif target at all.
 
 use core::net::Ipv4Addr;
-use esp_config::esp_config_int;
 
 // SSH server settings
 //pub(crate) const MTU: usize = 1536;
@@ -38,6 +39,3 @@ pub const TCP_RX_BUF: usize = 8192;
 
 /// Transmit buffer for the SSH TCP socket.
 pub const TCP_TX_BUF: usize = 4096;
-
-/// Global allocator heap size in bytes.
-pub const HEAP_SIZE: usize = esp_config_int!(usize, "SSH_STAMP_CONFIG_HEAP_SIZE");

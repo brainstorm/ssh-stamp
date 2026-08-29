@@ -1,0 +1,68 @@
+# SPDX-FileCopyrightText: 2026 Roman Valls Guimera <brainstorm@nopcode.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "ssh-stamp-bl616"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+description = "ssh-stamp on the Bouffalo BL616"
+
+[dependencies]
+ssh-stamp = { path = "..", default-features = false }
+ssh-stamp-hal = { path = "../ssh-stamp-hal" }
+# Pin maps, generated from ssh-stamp-bl616-boards/boards/*.toml.
+ssh-stamp-bl616-boards = { path = "../ssh-stamp-bl616-boards" }
+sunset = { workspace = true }
+sunset-async = { workspace = true }
+
+# The radio, its embassy-net Driver, the time driver, the critical section and
+# the global allocator all come from here. Nothing else in this binary may
+# provide any of them.
+bl616-wifi = { workspace = true, features = [
+    "alloc",
+    "panic-handler",
+    "embassy-net",
+    "usb-console",
+    # Required, not optional: this crate uses bl616-crypto for HashHal, which
+    # defines wpa_supplicant's C crypto entry points. Without this feature the
+    # vendor's mbedTLS implementations of the same 34 symbols stay in the
+    # archive and every one of them collides at link time.
+    "rust-crypto",
+] }
+bl616-crypto = { workspace = true }
+bl616-dhcp = { workspace = true }
+# A direct dependency only so this crate's build script can see the
+# DEP_BL616_WIFI_CSDK_* metadata; nothing here calls into it.
+bl616-wifi-sys = { workspace = true }
+
+embassy-net = { workspace = true }
+embassy-executor = { workspace = true }
+embassy-time = { workspace = true }
+embassy-sync = { workspace = true }
+embassy-futures = { workspace = true }
+static_cell = { workspace = true }
+heapless = { workspace = true }
+log = { workspace = true }
+embedded-storage = { workspace = true }
+getrandom = "0.4"
+
+[build-dependencies]
+bl616-link = { workspace = true }
+
+[features]
+default = []
+# The SFTP OTA subsystem: `packer` wraps a firmware image and an SFTP PUT
+# writes it into the slot the board is not running from.
+sftp-ota = ["ssh-stamp/sftp-ota"]
+# One board so far. Selecting it here selects the matching pin map in the BSP
+# crate, which is where the pin numbers live.
+board-sipeed-m0s-dock = ["ssh-stamp-bl616-boards/board-sipeed-m0s-dock"]
+
+[[bin]]
+name = "ssh-stamp-bl616"
+path = "src/bin/ssh-stamp-bl616.rs"
+
+[lints]
+workspace = true

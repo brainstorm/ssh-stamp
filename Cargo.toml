@@ -21,6 +21,8 @@ members = [
     "ssh-stamp-hal",
     "ssh-stamp-esp32",
     "ssh-stamp-esp32-boards",
+    "ssh-stamp-bl616",
+    "ssh-stamp-bl616-boards",
     "ota",
     "xtask",
 ]
@@ -48,6 +50,19 @@ embassy-futures = "0.1.2"
 
 # Collections
 heapless = "0.9"
+
+# Bouffalo BL616
+#
+# A git source rather than a path: these live in their own repository, and a
+# path out of the workspace would break every cargo command here for anyone
+# without that checkout beside this one. Pinned to a revision so a build is
+# reproducible; bump it deliberately. To develop both at once, override them
+# locally -- see docs/BUILDING.md.
+bl616-wifi = { git = "https://github.com/brainstorm/bl616-radio-reveng", rev = "a4f24f8948d8add7b3139f0bdb57d63e2245cd29", default-features = false }
+bl616-wifi-sys = { git = "https://github.com/brainstorm/bl616-radio-reveng", rev = "a4f24f8948d8add7b3139f0bdb57d63e2245cd29" }
+bl616-crypto = { git = "https://github.com/brainstorm/bl616-radio-reveng", rev = "a4f24f8948d8add7b3139f0bdb57d63e2245cd29" }
+bl616-dhcp = { git = "https://github.com/brainstorm/bl616-radio-reveng", rev = "a4f24f8948d8add7b3139f0bdb57d63e2245cd29" }
+bl616-link = { git = "https://github.com/brainstorm/bl616-radio-reveng", rev = "a4f24f8948d8add7b3139f0bdb57d63e2245cd29" }
 
 # ESP32
 esp-hal = { version = "1.1", features = ["unstable", "log-04"] }
@@ -121,7 +136,6 @@ sha2 = { workspace = true }
 rustc-hash = { workspace = true }
 
 cfg-if = "1"
-esp-config = { workspace = true }
 ed25519-dalek = { version = "3", default-features = false }
 embassy-executor = { workspace = true }
 embassy-net = { workspace = true }
@@ -154,7 +168,6 @@ pastey = { workspace = true }
 embedded-storage-inmemory = "0.1"
 
 [build-dependencies]
-esp-config = { version = "0.7", features = ["build"] }
 
 [profile.dev]
 opt-level = 0

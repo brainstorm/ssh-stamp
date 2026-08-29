@@ -16,6 +16,7 @@ repository = "https://github.com/brainstorm/ssh-stamp"
 ssh-stamp = { path = "..", default-features = false }
 ssh-stamp-hal = { path = "../ssh-stamp-hal" }
 ota = { path = "../ota" }
+esp-config = { workspace = true }
 
 embassy-sync = { workspace = true }
 embassy-executor = { workspace = true }
@@ -90,3 +91,6 @@ esp32s3 = ["esp-hal/esp32s3", "esp-radio/esp32s3", "esp-storage/esp32s3", "esp-b
 
 [lints]
 workspace = true
+
+[build-dependencies]
+esp-config = { version = "0.7", features = ["build"] }

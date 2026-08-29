@@ -41,6 +41,45 @@ rustflags = ["-C", "force-frame-pointers", '--cfg', 'getrandom_backend="custom"'
 runner = "espflash flash --baud=921600 --partition-table ssh-stamp-esp32/partitions.csv --monitor"
 rustflags = ["-C", "force-frame-pointers", '--cfg', 'getrandom_backend="custom"']
 
+# Bouffalo BL616. Hard-float: the vendor WiFi archives are ilp32f, so this is
+# riscv32imafc and not the imac used above -- linking ilp32 objects against
+# them fails, and an earlier BL616 attempt in this repo used imac because it
+# had no blobs to link yet.
+#
+[target.riscv32imafc-unknown-none-elf] # Bouffalo BL616
+# espflash cannot write this image. The boot ROM reads a header that the
+# vendor's bflb_fw_post_proc adds after linking, so `cargo run` hands the ELF
+# to the bl616-radio-reveng xtask, which does objcopy -> post-proc -> flash.
+#
+# Assumes the two repos sit side by side, which the path dependency in
+# ssh-stamp-bl616/Cargo.toml already assumes. Needs BL_SDK_BASE set, same as
+# building does.
+runner = [
+    "cargo",
+    "run",
+    "--quiet",
+    "--manifest-path",
+    "../bl616-radio-reveng/xtask/Cargo.toml",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "--release",
+    "--",
+    "flash",
+    "--elf",
+]
+# GCC drives the link, not rust-lld. The vendor archives are GCC-LTO (GIMPLE),
+# which only the GCC driver can consume, and binutils 2.35 cannot parse LLVM's
+# Tag_RISCV_arch — hence bfd and --no-warn-mismatch. rustc passes
+# -fuse-ld=lld first and the last flag wins, which is why ours comes after.
+linker = "riscv64-unknown-elf-gcc"
+rustflags = [
+    "-C", "force-frame-pointers",
+    '--cfg', 'getrandom_backend="custom"',
+    "-C", "linker-flavor=gcc",
+    "-C", "link-arg=-fuse-ld=bfd",
+    "-C", "link-arg=-Wl,--no-warn-mismatch",
+]
+
 [target.xtensa-esp32s2-none-elf] # ESP32-S2
 runner = "espflash flash --baud=921600 --monitor --chip esp32s2"
 rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32s2"', '--cfg', 'getrandom_backend="custom"']

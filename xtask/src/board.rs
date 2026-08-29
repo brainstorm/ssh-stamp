@@ -21,6 +21,20 @@ pub struct Board {
     pub name: &'static str,
     /// The feature that selects the board's pins.
     pub feature: &'static str,
+    /// The cargo package that builds this board's firmware.
+    ///
+    /// Not every board is an Espressif one: the BL616 port is a separate
+    /// crate, with its own dependencies and its own linker arrangement.
+    pub package: &'static str,
+    /// Where the configuration area lives in this board's flash, as
+    /// `SSH_STAMP_CONFIG_OFFSET`.
+    ///
+    /// `None` keeps the 0x9000 default, which is where an ESP-IDF partition
+    /// table puts NVS. On a part with a different layout that address is not
+    /// free — on BL616 it is inside Boot2 — and `store` erases before it
+    /// writes, so leaving this unset corrupts the bootloader rather than
+    /// failing.
+    pub config_offset: Option<&'static str>,
     /// The `SoC` for this board.
     pub soc: &'static str,
     /// The rust target.
@@ -47,6 +61,8 @@ pub struct Board {
 pub struct Chip {
     /// The chip name, which is also the cargo feature that selects it.
     pub name: &'static str,
+    /// The cargo package that builds this chip's firmware.
+    pub package: &'static str,
     /// The rust target.
     pub target: &'static str,
     /// The toolchain that builds this target.
@@ -103,10 +119,20 @@ const ESP32S3_RAM: &[(u64, u64)] = &[
 ];
 
 /// Every board supported by the xtask.
+/// BL616 RAM, as the vendor linker script lays it out. Low and high
+/// addresses, like the entries above -- not a base and a length.
+///
+/// 319 KB of general purpose RAM. A further 160 KB at `0x2301_0000` is reserved
+/// for the `WiFi` blobs and is not counted here, because no ssh-stamp
+/// allocation can go there.
+const BL616_RAM: &[(u64, u64)] = &[(0x62FC_0400, 0x6301_0000)];
+
 pub const BOARDS: &[Board] = &[
     Board {
         name: "esp32c5-devkitc",
         feature: "board-esp32c5-devkitc",
+        package: "ssh-stamp-esp32",
+        config_offset: None,
         soc: "esp32c5",
         target: "riscv32imac-unknown-none-elf",
         toolchain: "stable",
@@ -120,6 +146,8 @@ pub const BOARDS: &[Board] = &[
     Board {
         name: "esp32c6-devkitc",
         feature: "board-esp32c6-devkitc",
+        package: "ssh-stamp-esp32",
+        config_offset: None,
         soc: "esp32c6",
         target: "riscv32imac-unknown-none-elf",
         toolchain: "stable",
@@ -133,6 +161,8 @@ pub const BOARDS: &[Board] = &[
     Board {
         name: "esp32c61-devkitc",
         feature: "board-esp32c61-devkitc",
+        package: "ssh-stamp-esp32",
+        config_offset: None,
         soc: "esp32c61",
         target: "riscv32imac-unknown-none-elf",
         toolchain: "stable",
@@ -146,6 +176,8 @@ pub const BOARDS: &[Board] = &[
     Board {
         name: "esp32-s2-saola",
         feature: "board-esp32-s2-saola",
+        package: "ssh-stamp-esp32",
+        config_offset: None,
         soc: "esp32s2",
         target: "xtensa-esp32s2-none-elf",
         toolchain: "esp",
@@ -157,8 +189,34 @@ pub const BOARDS: &[Board] = &[
         max_ram_kib: None,
     },
     Board {
+        // Sipeed M0S Dock. The WiFi comes from bl616-wifi, which links the
+        // vendor's closed 802.11 blobs, so this target needs BL_SDK_BASE
+        // pointing at a BouffaloSDK checkout at build time.
+        name: "sipeed-m0s-dock",
+        feature: "board-sipeed-m0s-dock",
+        package: "ssh-stamp-bl616",
+        // The DATA partition from the vendor's 4 MB layout: 0x3F3000, 20 KB,
+        // past the firmware, mfg and media regions.
+        config_offset: Some("0x3F3000"),
+        soc: "bl616",
+        // Hard float. The vendor archives are ilp32f, so an ilp32 target
+        // (riscv32imac, as the ESP32-C6 uses) will not link against them.
+        target: "riscv32imafc-unknown-none-elf",
+        toolchain: "stable",
+        build_std: false,
+        riscv: true,
+        ram: BL616_RAM,
+        // No ESP-IDF partition table on this part; the boot ROM reads a
+        // header written into the image by the post-processing step instead.
+        partitions: None,
+        max_flash_kib: None,
+        max_ram_kib: None,
+    },
+    Board {
         name: "waveshare-esp32-s3-touch-lcd-43",
         feature: "board-waveshare-esp32-s3-touch-lcd-43",
+        package: "ssh-stamp-esp32",
+        config_offset: None,
         soc: "esp32s3",
         target: "xtensa-esp32s3-none-elf",
         toolchain: "esp",
@@ -177,48 +235,56 @@ pub const BOARDS: &[Board] = &[
 pub const CHIPS: &[Chip] = &[
     Chip {
         name: "esp32",
+        package: "ssh-stamp-esp32",
         target: "xtensa-esp32-none-elf",
         toolchain: "esp",
         build_std: true,
     },
     Chip {
         name: "esp32c2",
+        package: "ssh-stamp-esp32",
         target: "riscv32imc-unknown-none-elf",
         toolchain: "stable",
         build_std: false,
     },
     Chip {
         name: "esp32c3",
+        package: "ssh-stamp-esp32",
         target: "riscv32imc-unknown-none-elf",
         toolchain: "stable",
         build_std: false,
     },
     Chip {
         name: "esp32c5",
+        package: "ssh-stamp-esp32",
         target: "riscv32imac-unknown-none-elf",
         toolchain: "stable",
         build_std: false,
     },
     Chip {
         name: "esp32c6",
+        package: "ssh-stamp-esp32",
         target: "riscv32imac-unknown-none-elf",
         toolchain: "stable",
         build_std: false,
     },
     Chip {
         name: "esp32c61",
+        package: "ssh-stamp-esp32",
         target: "riscv32imac-unknown-none-elf",
         toolchain: "stable",
         build_std: false,
     },
     Chip {
         name: "esp32s2",
+        package: "ssh-stamp-esp32",
         target: "xtensa-esp32s2-none-elf",
         toolchain: "esp",
         build_std: true,
     },
     Chip {
         name: "esp32s3",
+        package: "ssh-stamp-esp32",
         target: "xtensa-esp32s3-none-elf",
         toolchain: "esp",
         build_std: true,
@@ -301,7 +367,7 @@ impl Target {
             "--target".into(),
             self.triple().into(),
             "-p".into(),
-            "ssh-stamp-esp32".into(),
+            self.package().into(),
         ];
 
         if let Target::Chip(_) = self {
@@ -327,6 +393,22 @@ impl Target {
         match self {
             Target::Board(board) => board.target,
             Target::Chip(chip) => chip.target,
+        }
+    }
+
+    /// Where the configuration area lives, if the board moves it.
+    pub fn config_offset(&self) -> Option<&'static str> {
+        match self {
+            Target::Board(board) => board.config_offset,
+            Target::Chip(_) => None,
+        }
+    }
+
+    /// The cargo package that builds this target's firmware.
+    fn package(&self) -> &'static str {
+        match self {
+            Target::Board(board) => board.package,
+            Target::Chip(chip) => chip.package,
         }
     }
 
@@ -391,7 +473,7 @@ impl Board {
         self.target_dir()
             .join(self.target)
             .join(Self::profile_dir(profile))
-            .join("ssh-stamp-esp32")
+            .join(self.package)
     }
 
     /// The cargo arguments used by `build` and `bloat`.
@@ -404,9 +486,9 @@ impl Board {
             "--target-dir".into(),
             self.target_dir().display().to_string(),
             "-p".into(),
-            "ssh-stamp-esp32".into(),
+            self.package.into(),
             "--bin".into(),
-            "ssh-stamp-esp32".into(),
+            self.package.into(),
             "--no-default-features".into(),
             "--features".into(),
             features.into(),
@@ -486,7 +568,15 @@ impl Board {
 
     /// The UART pins from the board's TOML definition.
     pub fn uart_pins(&self) -> Result<UartPins> {
-        Ok(BoardToml::from_workspace(self.name)?.uarts_pins())
+        Ok(BoardToml::from_workspace(self.boards_crate(), self.name)?.uarts_pins())
+    }
+
+    /// The BSP crate holding this board's definition.
+    ///
+    /// One per platform, named after the port it serves, so a board's
+    /// package is enough to find it.
+    pub fn boards_crate(&self) -> String {
+        format!("{}-boards", self.package)
     }
 }
 
@@ -503,9 +593,9 @@ impl BoardToml {
     }
 
     /// Create the board configuration from the workspace definition.
-    pub fn from_workspace(name: &str) -> Result<BoardToml> {
+    pub fn from_workspace(boards_crate: String, name: &str) -> Result<BoardToml> {
         let path = workspace_root()
-            .join("ssh-stamp-esp32-boards")
+            .join(boards_crate)
             .join("boards")
             .join(format!("{name}.toml"));
         let definition = fs::read_to_string(&path)
@@ -593,6 +683,10 @@ mod tests {
     fn uart_pins_from_the_board_toml() {
         let board = find("esp32c6-devkitc").unwrap();
         assert_eq!(board.uart_pins().unwrap(), UartPins { rx: 10, tx: 11 });
+
+        // A board of another platform reads from that platform's BSP crate.
+        let board = find("sipeed-m0s-dock").unwrap();
+        assert_eq!(board.uart_pins().unwrap(), UartPins { rx: 22, tx: 21 });
     }
 
     #[test]
