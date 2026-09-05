@@ -40,7 +40,7 @@ jobs:
             { name: "esp32c6-devkitc", xtensa: false, extra_features: "sftp-ota,mem-probe,bench-loopback,ipv6" },
             { name: "esp32c61-devkitc", xtensa: false },
             { name: "esp32-s2-saola", xtensa: true },
-            { name: "waveshare-esp32-s3-touch-lcd-43", xtensa: true, extra_features: "can-no-ack" },
+            { name: "waveshare-esp32-s3-touch-lcd-43", xtensa: true, extra_features: "can-no-ack,i2c" },
         ]
     steps:
       - name: Cache
@@ -92,7 +92,7 @@ jobs:
       # lints every host crate instead, the default set already includes
       # xtask and ota.
       - name: Clippy host crates
-        run: cargo clippy --all-targets --features ota/std,can,ipv6,mem-probe -- -D warnings
+        run: cargo clippy --all-targets --features ota/std,can,i2c,ipv6,mem-probe -- -D warnings
       - name: Format
         run: cargo fmt --all -- --check
 

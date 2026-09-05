@@ -24,19 +24,26 @@ use crate::uart::UART_SIGNAL;
 pub struct EspPlatform {
     #[cfg(feature = "can")]
     can: &'static crate::can::BufferedCan,
+    #[cfg(feature = "i2c")]
+    i2c: &'static crate::i2c::BufferedI2c,
 }
 
 impl EspPlatform {
     #[must_use]
-    pub fn new(#[cfg(feature = "can")] can: &'static crate::can::BufferedCan) -> Self {
+    pub fn new(
+        #[cfg(feature = "can")] can: &'static crate::can::BufferedCan,
+        #[cfg(feature = "i2c")] i2c: &'static crate::i2c::BufferedI2c,
+    ) -> Self {
         Self {
             #[cfg(feature = "can")]
             can,
+            #[cfg(feature = "i2c")]
+            i2c,
         }
     }
 }
 
-#[cfg(not(feature = "can"))]
+#[cfg(not(any(feature = "can", feature = "i2c")))]
 impl Default for EspPlatform {
     fn default() -> Self {
         Self::new()
@@ -52,6 +59,14 @@ impl PlatformServices for EspPlatform {
     #[cfg(feature = "can")]
     fn can(&self) -> &'static Self::Can {
         self.can
+    }
+
+    #[cfg(feature = "i2c")]
+    type I2c = crate::i2c::BufferedI2c;
+
+    #[cfg(feature = "i2c")]
+    fn i2c(&self) -> &'static Self::I2c {
+        self.i2c
     }
 
     async fn save_config(&self, config: &SSHStampConfig) -> Result<(), HalError> {
