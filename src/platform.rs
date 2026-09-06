@@ -50,6 +50,16 @@ pub trait PlatformServices {
     #[cfg(feature = "can")]
     fn can(&self) -> &'static Self::Can;
 
+    /// Buffered I2C type this platform provides. The I2C pump task owns
+    /// it for the lifetime of the device, so `'static` is required.
+    #[cfg(feature = "i2c")]
+    type I2c: crate::i2c::BufferedI2c + 'static;
+
+    /// Access the platform's buffered I2C master for the SSH `i2c`
+    /// subsystem bridge.
+    #[cfg(feature = "i2c")]
+    fn i2c(&self) -> &'static Self::I2c;
+
     /// Persist the full config to non-volatile storage.
     ///
     /// # Errors

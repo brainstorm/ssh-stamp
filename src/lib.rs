@@ -114,6 +114,8 @@ pub mod can;
 pub mod config;
 pub mod errors;
 pub mod handle;
+#[cfg(feature = "i2c")]
+pub mod i2c;
 pub mod mem_probe;
 pub mod platform;
 pub mod serial;

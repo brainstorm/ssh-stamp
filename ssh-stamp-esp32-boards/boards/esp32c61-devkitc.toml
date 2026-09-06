@@ -8,6 +8,11 @@ url = "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c61/esp32
 [pins]
 uart_rx = 2
 uart_tx = 3
+# GPIO4-7 carry the SPI flash/PSRAM bus and GPIO7-9 are strapping pins, so
+# the free run starts at GPIO22. That also clears USB Serial/JTAG (12/13),
+# the UART0 console (10/11) and the RGB LED (8).
+i2c_sda = 22
+i2c_scl = 23
 
 # Consumed by `cargo xtask`; the BSP build script ignores this section.
 [build]

@@ -40,6 +40,8 @@ use ssh_stamp::{
 };
 #[cfg(feature = "can")]
 use ssh_stamp_esp32::{BufferedCan, CAN_BUF, EspCanPins, can_task};
+#[cfg(feature = "i2c")]
+use ssh_stamp_esp32::{BufferedI2c, EspI2cPins, I2C_BUF, i2c_task};
 use ssh_stamp_esp32::{
     EspPlatform, EspUartPins, EspWifi, bench, entropy_source_active, flash, mac_address,
     spawn_uart, start_interrupt_executor,
@@ -125,6 +127,8 @@ async fn main(spawner: Spawner) -> ! {
     let can_buf: &'static BufferedCan = {
         // Boards that mux their CAN pins with other functions declare the
         // routing in their TOML; a no-op for boards without a [can_mux].
+        // Must run before the I2C block below: the mux may sit on the same
+        // bus, so it only reborrows the I2C peripheral and pins.
         ssh_stamp_esp32_boards::setup_can_transceiver!(peripherals);
 
         let can_pins = ssh_stamp_esp32_boards::take_can_pins!(peripherals);
@@ -138,9 +142,26 @@ async fn main(spawner: Spawner) -> ! {
         can_buf
     };
 
-    #[cfg(feature = "can")]
+    #[cfg(feature = "i2c")]
+    let i2c_buf: &'static BufferedI2c = {
+        let i2c_pins = ssh_stamp_esp32_boards::take_i2c_pins!(peripherals);
+        let i2c_pins = EspI2cPins {
+            sda: i2c_pins.0,
+            scl: i2c_pins.1,
+        };
+        let i2c_buf = I2C_BUF.init_with(BufferedI2c::new);
+        interrupt_spawner
+            .spawn(i2c_task(i2c_buf, peripherals.I2C0, i2c_pins).expect("i2c_task spawn failed"));
+        i2c_buf
+    };
+
+    #[cfg(all(feature = "can", feature = "i2c"))]
+    let platform = EspPlatform::new(can_buf, i2c_buf);
+    #[cfg(all(feature = "can", not(feature = "i2c")))]
     let platform = EspPlatform::new(can_buf);
-    #[cfg(not(feature = "can"))]
+    #[cfg(all(feature = "i2c", not(feature = "can")))]
+    let platform = EspPlatform::new(i2c_buf);
+    #[cfg(not(any(feature = "can", feature = "i2c")))]
     let platform = EspPlatform::new();
 
     mem_probe::checkpoint(Checkpoint::PeripheralsReady);
