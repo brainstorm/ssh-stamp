@@ -36,10 +36,10 @@ jobs:
             { name: "esp32", xtensa: true },
             { name: "esp32s3", xtensa: true },
             # Boards, i.e. full firmware binaries.
-            { name: "esp32c5-devkitc", xtensa: false },
-            { name: "esp32c6-devkitc", xtensa: false, extra_features: "sftp-ota,mem-probe,bench-loopback,ipv6" },
-            { name: "esp32c61-devkitc", xtensa: false },
-            { name: "esp32-s2-saola", xtensa: true },
+            { name: "esp32c5-devkitc", xtensa: false, extra_features: "i2c" },
+            { name: "esp32c6-devkitc", xtensa: false, extra_features: "sftp-ota,mem-probe,bench-loopback,ipv6,i2c" },
+            { name: "esp32c61-devkitc", xtensa: false, extra_features: "i2c" },
+            { name: "esp32-s2-saola", xtensa: true, extra_features: "i2c" },
             { name: "waveshare-esp32-s3-touch-lcd-43", xtensa: true, extra_features: "can-no-ack,i2c" },
         ]
     steps:

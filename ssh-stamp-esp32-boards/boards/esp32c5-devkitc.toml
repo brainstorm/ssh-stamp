@@ -8,6 +8,11 @@ url = "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c5/esp32-
 [pins]
 uart_rx = 8
 uart_tx = 9
+# GPIO23/24 are the lowest pair on the headers that esp-hal flags with no
+# limitation: clear of the strapping pins (2, 3, 7, 25-28), of the UART0
+# console (11/12), of USB Serial/JTAG (13/14) and of the RGB LED (27).
+i2c_sda = 23
+i2c_scl = 24
 
 # Consumed by `cargo xtask`; the BSP build script ignores this section.
 [build]

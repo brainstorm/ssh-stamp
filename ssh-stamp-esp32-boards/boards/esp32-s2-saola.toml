@@ -8,6 +8,12 @@ url = "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s2/esp32-
 [pins]
 uart_rx = 10
 uart_tx = 11
+# GPIO8/9 are the ESP32-S2 ecosystem default for I2C, so breakout wiring
+# guides match. Both are on J2, next to but clear of the bridge UART, and
+# away from the strapping pins (0, 45, 46), USB (19/20), the UART0 console
+# (43/44), the RGB LED (18) and the flash/PSRAM bus (26-32).
+i2c_sda = 8
+i2c_scl = 9
 
 # Consumed by `cargo xtask`; the BSP build script ignores this section.
 [build]
