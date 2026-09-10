@@ -27,9 +27,9 @@ test = false
 bench = false
 
 [dependencies]
-ssh-stamp = { path = "..", default-features = false }
-ssh-stamp-hal = { path = "../ssh-stamp-hal" }
-ota = { path = "../ota" }
+ssh-stamp = { path = "../../..", default-features = false }
+ssh-stamp-hal = { path = "../../../ssh-stamp-hal" }
+ota = { path = "../../../ota" }
 
 embassy-sync = { workspace = true }
 embassy-executor = { workspace = true }

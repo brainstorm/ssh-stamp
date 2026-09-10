@@ -56,7 +56,7 @@ pub struct Chip {
 }
 
 /// The partition table to flash the firmware with.
-const PARTITIONS: &str = "ssh-stamp-esp32/partitions.csv";
+const PARTITIONS: &str = "boards/ssh-stamp-esp/ssh-stamp-esp32/partitions.csv";
 
 /// The cargo profile to build the firmware with.
 pub const PROFILE: &str = "release";
@@ -551,6 +551,8 @@ impl BoardToml {
     /// Create the board configuration from the workspace definition.
     pub fn from_workspace(name: &str) -> Result<BoardToml> {
         let path = workspace_root()
+            .join("boards")
+            .join("ssh-stamp-esp")
             .join("ssh-stamp-esp32-boards")
             .join("boards")
             .join(format!("{name}.toml"));
