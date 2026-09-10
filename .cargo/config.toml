@@ -38,7 +38,7 @@ rustflags = ["-C", "link-arg=-nostartfiles", '--cfg=feature="esp32"', '--cfg', '
 runner = "espflash flash --baud=921600 --monitor"
 rustflags = ["-C", "force-frame-pointers", '--cfg', 'getrandom_backend="custom"']
 [target.riscv32imac-unknown-none-elf] # ESP32-C5 / C6 / C61
-runner = "espflash flash --baud=921600 --partition-table ssh-stamp-esp32/partitions.csv --monitor"
+runner = "espflash flash --baud=921600 --partition-table boards/ssh-stamp-esp/ssh-stamp-esp32/partitions.csv --monitor"
 rustflags = ["-C", "force-frame-pointers", '--cfg', 'getrandom_backend="custom"']
 
 [target.xtensa-esp32s2-none-elf] # ESP32-S2

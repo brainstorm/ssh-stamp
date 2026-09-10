@@ -20,9 +20,9 @@ license = "GPL-3.0-or-later"
 [workspace]
 members = [
     "ssh-stamp-hal",
-    "ssh-stamp-esp32",
-    "ssh-stamp-esp32-boards",
-    "ssh-stamp-esp32-hil",
+    "boards/ssh-stamp-esp/ssh-stamp-esp32",
+    "boards/ssh-stamp-esp/ssh-stamp-esp32-boards",
+    "boards/ssh-stamp-esp/ssh-stamp-esp32-hil",
     "ota",
     "xtask",
 ]
