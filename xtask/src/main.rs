@@ -250,15 +250,7 @@ mod tests {
             ])
             .is_err()
         );
-        assert!(
-            e2e_cmd(&[
-                "--board",
-                "esp32c6-devkitc",
-                "--retries",
-                "45"
-            ])
-            .is_err()
-        );
+        assert!(e2e_cmd(&["--board", "esp32c6-devkitc", "--retries", "45"]).is_err());
         assert!(
             e2e_cmd(&[
                 "--board",

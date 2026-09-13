@@ -65,14 +65,8 @@ pub fn run(args: &Args) -> Result<()> {
     let auth = provision.ssh_auth();
     let opts = vec![format!("KexAlgorithms={REFERENCE_KEX}")];
     for i in 1..=args.sessions {
-        let report = SessionReport::ssh_session(
-            &args.host,
-            &args.user,
-            &auth,
-            &opts,
-            &[],
-            args.rtt_iters,
-        )?;
+        let report =
+            SessionReport::ssh_session(&args.host, &args.user, &auth, &opts, &[], args.rtt_iters)?;
         if !report.established {
             bail!("SSH session {i} failed");
         }
