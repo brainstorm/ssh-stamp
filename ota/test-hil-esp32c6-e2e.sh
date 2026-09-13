@@ -198,14 +198,14 @@ check_ota_partition_md5(){
 
 check_app_offset(){
 # "I (344) boot: Loaded app from partition at offset 0x1f0000"
-    ESPFLASH_MONITOR_PORT_ARGS=""
-    if [ -n "$SERIAL_PORT" ]; then
-        ESPFLASH_MONITOR_PORT_ARGS="--port $SERIAL_PORT"
-    fi
-    export OTA_1_OFFSET OTA_UPLOAD_TIMEOUT EXIT_BAD_PARTITION CHIP ESPFLASH_MONITOR_PORT_ARGS
+    export OTA_1_OFFSET OTA_UPLOAD_TIMEOUT EXIT_BAD_PARTITION CHIP SERIAL_PORT
     expect <<'EOF'
     set timeout $env(OTA_UPLOAD_TIMEOUT)
-    spawn sh -c "espflash monitor --chip $env(CHIP) $env(ESPFLASH_MONITOR_PORT_ARGS)"
+    if { [info exists env(SERIAL_PORT)] && $env(SERIAL_PORT) ne "" } {
+        spawn espflash monitor --chip $env(CHIP) --port $env(SERIAL_PORT)
+    } else {
+        spawn espflash monitor --chip $env(CHIP)
+    }
     
     # Wait for the command prompt or EOF
     expect {

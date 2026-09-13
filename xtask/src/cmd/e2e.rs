@@ -42,10 +42,11 @@ pub struct Args {
 }
 
 pub fn run(args: &Args) -> Result<()> {
-    let script = args
-        .script
-        .clone()
-        .unwrap_or_else(|| workspace_root().join("ota").join("test-hil-esp32c6-e2e.sh"));
+    let script = args.script.clone().unwrap_or_else(|| {
+        workspace_root()
+            .join("ota")
+            .join(format!("test-hil-{}-e2e.sh", args.board.soc))
+    });
     if !script.exists() {
         bail!("missing e2e script at {}", script.display());
     }

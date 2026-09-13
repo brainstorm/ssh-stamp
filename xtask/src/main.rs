@@ -233,6 +233,27 @@ mod tests {
     #[test]
     fn e2e() {
         assert!(e2e_cmd(&["--board", "esp32c6-devkitc"]).is_ok());
+        assert!(
+            e2e_cmd(&[
+                "--board",
+                "esp32c6-devkitc",
+                "--host",
+                "192.168.4.1",
+                "--port",
+                "/dev/ttyUSB0",
+                "--retry-delay",
+                "2",
+                "--retries",
+                "45",
+                "--ota-offset",
+                "0x1f0000",
+                "--ota-upload-timeout",
+                "300s",
+                "--script",
+                "ota/test-hil-esp32c6-e2e.sh"
+            ])
+            .is_ok()
+        );
         assert!(e2e_cmd(&["--board", "esp32-fake-name"]).is_err());
         assert!(e2e_cmd(&[]).is_err());
         assert!(e2e_cmd(&["--board", "esp32c6-devkitc", "--retries", "0"]).is_err());
