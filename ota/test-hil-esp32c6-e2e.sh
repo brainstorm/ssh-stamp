@@ -25,14 +25,22 @@ if ! grep -sq '^name = "ssh-stamp"' Cargo.toml; then
 fi
 
 
-SSH_STAMP_ELF="target/riscv32imac-unknown-none-elf/release/ssh-stamp"
+E2E_BOARD="${E2E_BOARD:-esp32c6-devkitc}"
+CHIP="${E2E_CHIP:-esp32c6}"
+SSH_STAMP_ELF="${E2E_SSH_STAMP_ELF:-target/boards/esp32c6-devkitc/riscv32imac-unknown-none-elf/release/ssh-stamp-esp32}"
 
-RETRIES=30
-RETRY_DELAY=2
-DEVICE_IP="192.168.4.1"
-OTA_1_OFFSET=0x1f0000 # Offset of ota_1 partition in partitions.csv. Reading this could be automated. Automating everything is a rabbit hole
-OTA_UPLOAD_TIMEOUT=300s
-OUTPUT_DIR="./target/ci"
+RETRIES="${E2E_RETRIES:-30}"
+RETRY_DELAY="${E2E_RETRY_DELAY:-2}"
+DEVICE_IP="${E2E_DEVICE_IP:-192.168.4.1}"
+OTA_1_OFFSET="${E2E_OTA_1_OFFSET:-0x1f0000}" # Offset of ota_1 partition in partitions.csv. Reading this could be automated. Automating everything is a rabbit hole
+OTA_UPLOAD_TIMEOUT="${E2E_OTA_UPLOAD_TIMEOUT:-300s}"
+OUTPUT_DIR="${E2E_OUTPUT_DIR:-./target/ci}"
+SERIAL_PORT="${E2E_SERIAL_PORT:-}"
+
+ESPFLASH_PORT_ARGS=()
+if [ -n "$SERIAL_PORT" ]; then
+    ESPFLASH_PORT_ARGS=(--port "$SERIAL_PORT")
+fi
 
 
 check_tools() {
@@ -58,31 +66,31 @@ check_tools() {
 
 show_board_info(){
     echo "Trying to contact board via espflash"
-    espflash board-info
+    espflash board-info --chip "$CHIP" "${ESPFLASH_PORT_ARGS[@]}"
     echo "Board is responding"
 }
 
 build_app(){
-    echo "Building esp32c6 binary"
-    cargo build-esp32c6 --features sftp-ota
+    echo "Building ${E2E_BOARD} binary"
+    cargo xtask "$E2E_BOARD" build --release --features sftp-ota
 }
 
 pack_ota(){
     mkdir -p $OUTPUT_DIR
     echo "saving app binary to app.bin"
-    espflash save-image --chip esp32c6 $SSH_STAMP_ELF $OUTPUT_DIR/app.bin
+    espflash save-image --chip "$CHIP" "$SSH_STAMP_ELF" "$OUTPUT_DIR/app.bin"
     echo "saving app binary to app.ota"
-    cargo packer -- $OUTPUT_DIR/app.bin
+    cargo packer -- "$OUTPUT_DIR/app.bin"
 }
 
 clean_flash(){
     echo "Erasing the target device flash"
-    espflash erase-flash
+    espflash erase-flash --chip "$CHIP" "${ESPFLASH_PORT_ARGS[@]}"
 }
 
 flash_app(){
     echo "Flashing the board with the application"
-    espflash flash --baud=921600 --partition-table ssh-stamp-esp32/partitions.csv $SSH_STAMP_ELF
+    espflash flash "${ESPFLASH_PORT_ARGS[@]}" --chip "$CHIP" --baud=921600 --partition-table ssh-stamp-esp32/partitions.csv "$SSH_STAMP_ELF"
 }
 
 reach_app(){
@@ -177,7 +185,7 @@ check_ota_partition_md5(){
     LOCAL_LENGTH=$(stat -c%s "$OUTPUT_DIR/app.bin"| sed -e 's/ *$//')
     echo "Local BIN file length: $LOCAL_LENGTH"
 
-    FLASHED_MD5=$(espflash checksum-md5 $OTA_1_OFFSET $LOCAL_LENGTH | tail -n 1 | sed -e 's/0x0//' -e 's/^0x//')
+    FLASHED_MD5=$(espflash checksum-md5 "${ESPFLASH_PORT_ARGS[@]}" --chip "$CHIP" "$OTA_1_OFFSET" "$LOCAL_LENGTH" | tail -n 1 | sed -e 's/0x0//' -e 's/^0x//')
     echo "Flashed OTA partition MD5: $FLASHED_MD5"
 
     if [ "$LOCAL_MD5" == "$FLASHED_MD5" ]; then
@@ -190,10 +198,14 @@ check_ota_partition_md5(){
 
 check_app_offset(){
 # "I (344) boot: Loaded app from partition at offset 0x1f0000"
-    export OTA_1_OFFSET OTA_UPLOAD_TIMEOUT EXIT_BAD_PARTITION
+    ESPFLASH_MONITOR_PORT_ARGS=""
+    if [ -n "$SERIAL_PORT" ]; then
+        ESPFLASH_MONITOR_PORT_ARGS="--port $SERIAL_PORT"
+    fi
+    export OTA_1_OFFSET OTA_UPLOAD_TIMEOUT EXIT_BAD_PARTITION CHIP ESPFLASH_MONITOR_PORT_ARGS
     expect <<'EOF'
     set timeout $env(OTA_UPLOAD_TIMEOUT)
-    spawn espflash monitor
+    spawn sh -c "espflash monitor --chip $env(CHIP) $env(ESPFLASH_MONITOR_PORT_ARGS)"
     
     # Wait for the command prompt or EOF
     expect {

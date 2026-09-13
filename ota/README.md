@@ -94,3 +94,15 @@ We have put together an end to end test to be run into a MCU development board. 
 Some of you will prefer to read this file rather than follow a step by step tutorial.
 
 Mind that the script has some prerequisites (see `check_tools()` in the file) and requires your computer to automatically connect to the device's WiFi AP (check the serial console for the randomly generated SSID).
+
+You can run the same flow through xtask:
+
+```sh
+cargo xtask e2e --board esp32c6-devkitc
+```
+
+For custom setups you can pass host, serial port and retries:
+
+```sh
+cargo xtask e2e --board esp32c6-devkitc --host 192.168.4.1 --port /dev/ttyUSB0 --retries 45 --retry-delay 2
+```

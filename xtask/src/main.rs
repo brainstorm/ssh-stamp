@@ -49,6 +49,8 @@ enum Command {
     Bench(cmd::bench::Args),
     /// Convert benchmark results.json into Bencher Metric Format.
     Bmf(cmd::bmf::Args),
+    /// Run end-to-end OTA integration testing on hardware.
+    E2e(cmd::e2e::Args),
     /// Determine the size of a firmware build.
     Size(cmd::size::Args),
     /// Resets the storage on board, while keeping the firmware intact.
@@ -63,6 +65,7 @@ fn main() -> Result<()> {
         Command::List(args) => cmd::list::run(&args),
         Command::Bench(mut args) => cmd::bench::run(&mut args),
         Command::Bmf(args) => cmd::bmf::run(&args),
+        Command::E2e(args) => cmd::e2e::run(&args),
         Command::Size(args) => cmd::size::run(&args),
         Command::Reset(args) => cmd::reset::run(&args),
         Command::Cargo(argv) => cmd::cargo::run(&argv),
@@ -96,6 +99,15 @@ mod tests {
         Cli::try_parse_from(["xtask", "reset"].into_iter().chain(argv.iter().copied()))
             .map(|cli| match cli.command {
                 Command::Reset(parsed) => parsed,
+                _ => unreachable!(),
+            })
+            .map_err(Box::new)
+    }
+
+    fn e2e_cmd(argv: &[&str]) -> Result<cmd::e2e::Args, Box<clap::Error>> {
+        Cli::try_parse_from(["xtask", "e2e"].into_iter().chain(argv.iter().copied()))
+            .map(|cli| match cli.command {
+                Command::E2e(parsed) => parsed,
                 _ => unreachable!(),
             })
             .map_err(Box::new)
@@ -216,5 +228,13 @@ mod tests {
             ])
             .is_err()
         );
+    }
+
+    #[test]
+    fn e2e() {
+        assert!(e2e_cmd(&["--board", "esp32c6-devkitc"]).is_ok());
+        assert!(e2e_cmd(&["--board", "esp32-fake-name"]).is_err());
+        assert!(e2e_cmd(&[]).is_err());
+        assert!(e2e_cmd(&["--board", "esp32c6-devkitc", "--retries", "0"]).is_err());
     }
 }
