@@ -4,14 +4,18 @@
 
 //! `xtask e2e`
 //!
-//! Runs the OTA end-to-end hardware integration test script with board-aware defaults.
+//! Runs a basic end-to-end hardware integration flow: build, flash, join AP and
+//! verify SSH sessions.
 
 use crate::board::{self, Board};
-use crate::util::{shell, workspace_root};
-use anyhow::{Context, Result, bail};
+use crate::cmd::REFERENCE_KEX;
+use crate::device::{self, Mac, Serial, SessionReport};
+use crate::provision::Provision;
+use anyhow::{Result, bail};
 use clap::Args as ClapArgs;
-use std::path::PathBuf;
-use xshell::cmd;
+use std::thread::sleep;
+use std::time::Duration;
+use xshell::Shell;
 
 #[derive(ClapArgs)]
 pub struct Args {
@@ -21,62 +25,68 @@ pub struct Args {
     /// Device IP address to reach over Wi-Fi.
     #[arg(long, default_value = "192.168.4.1")]
     host: String,
-    /// Expected OTA partition offset seen after update.
-    #[arg(long, default_value = "0x1f0000")]
-    ota_offset: String,
+    /// SSH username.
+    #[arg(long, default_value = "root")]
+    user: String,
     /// The serial port for espflash commands.
     #[arg(long)]
     port: Option<String>,
-    /// Reachability retries.
-    #[arg(long, default_value_t = 30, value_parser = clap::value_parser!(u32).range(1..))]
-    retries: u32,
-    /// Delay between retries in seconds.
-    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u32).range(1..))]
-    retry_delay: u32,
-    /// Timeout used for OTA upload and monitor checks.
-    #[arg(long, default_value = "300s")]
-    ota_upload_timeout: String,
-    /// Override the script path if needed.
+    /// The wireless interface that joins the device's AP, needed on multi-NIC hosts.
     #[arg(long)]
-    script: Option<PathBuf>,
+    interface: Option<String>,
+    /// Number of SSH sessions to validate.
+    #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..))]
+    sessions: u32,
+    /// Round trips per SSH session.
+    #[arg(long, default_value_t = 10, value_parser = clap::value_parser!(u32).range(1..))]
+    rtt_iters: u32,
+    /// Echo serial output while running.
+    #[arg(long)]
+    verbose: bool,
 }
 
 pub fn run(args: &Args) -> Result<()> {
-    let script = args.script.clone().unwrap_or_else(|| {
-        workspace_root()
-            .join("ota")
-            .join(format!("test-hil-{}-e2e.sh", args.board.soc))
-    });
-    if !script.exists() {
-        bail!("missing e2e script at {}", script.display());
+    let port = Serial::resolve_port(args.port.as_deref())?;
+    let features = args.board.features(&[]);
+    args.board
+        .build(&Shell::new()?, board::PROFILE, &features, &[])?;
+
+    let mac = Mac::read(args.board, &port)?;
+    let provision = Provision::generate(&args.host, mac.into_inner(), args.board.uart_pins()?)?;
+    device::flash(args.board, board::PROFILE, &port, provision.image())?;
+
+    let serial = Serial::open(&port, args.verbose)?;
+    let access_point = provision.access_point();
+    if !access_point.wait_for_reachable(&args.host, args.interface.as_deref()) {
+        serial.report_health();
+        bail!("device is unreachable on {}", args.host);
     }
 
-    let sh = shell()?;
-    let output_dir = workspace_root()
-        .join("target")
-        .join("ci")
-        .join(args.board.name);
-
-    let mut command = cmd!(sh, "bash {script}");
-    command = command
-        .env("E2E_BOARD", args.board.name)
-        .env("E2E_CHIP", args.board.soc)
-        .env(
-            "E2E_SSH_STAMP_ELF",
-            args.board.elf_path(board::PROFILE).display().to_string(),
-        )
-        .env("E2E_DEVICE_IP", &args.host)
-        .env("E2E_OTA_1_OFFSET", &args.ota_offset)
-        .env("E2E_RETRIES", args.retries.to_string())
-        .env("E2E_RETRY_DELAY", args.retry_delay.to_string())
-        .env("E2E_OTA_UPLOAD_TIMEOUT", &args.ota_upload_timeout)
-        .env("E2E_OUTPUT_DIR", output_dir.display().to_string());
-
-    if let Some(port) = &args.port {
-        command = command.env("E2E_SERIAL_PORT", port);
+    let auth = provision.ssh_auth();
+    let opts = vec![format!("KexAlgorithms={REFERENCE_KEX}")];
+    for i in 1..=args.sessions {
+        let report = SessionReport::ssh_session(
+            &args.host,
+            &args.user,
+            &auth,
+            &opts,
+            &[],
+            args.rtt_iters,
+        )?;
+        if !report.established {
+            bail!("SSH session {i} failed");
+        }
+        if report.rtt_us.is_empty() {
+            bail!("SSH session {i} returned no round-trip samples");
+        }
+        eprintln!(
+            "session {i}: {} samples, {} timeouts",
+            report.rtt_us.len(),
+            report.timeouts
+        );
+        sleep(Duration::from_secs(1));
     }
+    serial.report_health();
 
-    command
-        .run()
-        .with_context(|| format!("e2e script failed for {}", args.board.name))
+    Ok(())
 }

@@ -49,7 +49,7 @@ enum Command {
     Bench(cmd::bench::Args),
     /// Convert benchmark results.json into Bencher Metric Format.
     Bmf(cmd::bmf::Args),
-    /// Run end-to-end OTA integration testing on hardware.
+    /// Run basic end-to-end integration testing on hardware.
     E2e(cmd::e2e::Args),
     /// Determine the size of a firmware build.
     Size(cmd::size::Args),
@@ -239,23 +239,41 @@ mod tests {
                 "esp32c6-devkitc",
                 "--host",
                 "192.168.4.1",
+                "--user",
+                "root",
                 "--port",
                 "/dev/ttyUSB0",
+                "--interface",
+                "wlan0",
                 "--retry-delay",
-                "2",
+                "2"
+            ])
+            .is_err()
+        );
+        assert!(
+            e2e_cmd(&[
+                "--board",
+                "esp32c6-devkitc",
                 "--retries",
-                "45",
-                "--ota-offset",
-                "0x1f0000",
-                "--ota-upload-timeout",
-                "300s",
-                "--script",
-                "ota/test-hil-esp32c6-e2e.sh"
+                "45"
+            ])
+            .is_err()
+        );
+        assert!(
+            e2e_cmd(&[
+                "--board",
+                "esp32c6-devkitc",
+                "--sessions",
+                "2",
+                "--rtt-iters",
+                "10",
+                "--verbose"
             ])
             .is_ok()
         );
         assert!(e2e_cmd(&["--board", "esp32-fake-name"]).is_err());
         assert!(e2e_cmd(&[]).is_err());
-        assert!(e2e_cmd(&["--board", "esp32c6-devkitc", "--retries", "0"]).is_err());
+        assert!(e2e_cmd(&["--board", "esp32c6-devkitc", "--sessions", "0"]).is_err());
+        assert!(e2e_cmd(&["--board", "esp32c6-devkitc", "--rtt-iters", "0"]).is_err());
     }
 }

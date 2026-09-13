@@ -52,13 +52,3 @@ Any board or chip target that `cargo xtask` accepts works in place of
 
 Each `tests/*.rs` file is a separate flash and run. A new file needs a
 `[[test]]` entry with `harness = false` in `Cargo.toml`.
-
-# OTA e2e integration test
-
-The OTA crate also includes an end-to-end integration flow that can be launched via xtask:
-
-```sh
-cargo xtask e2e --board esp32c6-devkitc
-```
-
-This wraps `ota/test-hil-esp32c6-e2e.sh` and forwards host/serial/retry options.
