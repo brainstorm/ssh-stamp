@@ -54,36 +54,40 @@ impl AccessPoint {
             .context("networksetup -setairportnetwork");
         }
 
-        let ifname = interface
-            .map(|interface| vec!["ifname".to_string(), interface.to_string()])
-            .unwrap_or_default();
+        if cfg!(target_os = "linux") {
+            let ifname = interface
+                .map(|interface| vec!["ifname".to_string(), interface.to_string()])
+                .unwrap_or_default();
 
-        let nmcli = cmd!(
-            shell,
-            "nmcli device wifi connect {ssid} password {psk} {ifname...}"
-        )
-        .secret()
-        .quiet()
-        .run();
-
-        if let Err(err) = nmcli {
-            let Some(station) = interface else {
-                bail!(
-                    "nmcli failed with `{err}`, it's possible to use iwctl but `--interface` must be specified"
-                );
-            };
-
-            return cmd!(
+            let nmcli = cmd!(
                 shell,
-                "iwctl --passphrase {psk} station {station} connect {ssid}"
+                "nmcli device wifi connect {ssid} password {psk} {ifname...}"
             )
             .secret()
             .quiet()
-            .run()
-            .with_context(|| format!("iwctl fallback after nmcli failed with `{err}`"));
+            .run();
+
+            if let Err(err) = nmcli {
+                let Some(station) = interface else {
+                    bail!(
+                        "nmcli failed with `{err}`, it's possible to use iwctl but `--interface` must be specified"
+                    );
+                };
+
+                return cmd!(
+                    shell,
+                    "iwctl --passphrase {psk} station {station} connect {ssid}"
+                )
+                .secret()
+                .quiet()
+                .run()
+                .with_context(|| format!("iwctl fallback after nmcli failed with `{err}`"));
+            }
+
+            return Ok(());
         }
 
-        Ok(())
+        bail!("joining Wi-Fi access points is unsupported on this OS")
     }
 
     /// Imports a profile for `ssid` into the Windows WLAN storage.
