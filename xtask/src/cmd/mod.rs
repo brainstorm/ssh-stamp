@@ -7,6 +7,7 @@
 pub mod bench;
 pub mod bmf;
 pub mod cargo;
+pub mod e2e;
 pub mod list;
 pub mod reset;
 pub mod size;
