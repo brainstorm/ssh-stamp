@@ -1,0 +1,6 @@
+steps:
+  - action: reset_target_device
+  - action: parse_ssh_stamp_network_from_serial
+  - action: connect_to_ssid_using_psk
+  - action: verify_ip_obtained
+  - action: ping_ssh_stamp

@@ -237,35 +237,18 @@ mod tests {
             e2e_cmd(&[
                 "--board",
                 "esp32c6-devkitc",
-                "--host",
-                "192.168.4.1",
-                "--user",
-                "root",
-                "--port",
+                "--prg-serial",
                 "/dev/ttyUSB0",
                 "--interface",
                 "wlan0",
-                "--retry-delay",
-                "2"
-            ])
-            .is_err()
-        );
-        assert!(e2e_cmd(&["--board", "esp32c6-devkitc", "--retries", "45"]).is_err());
-        assert!(
-            e2e_cmd(&[
-                "--board",
-                "esp32c6-devkitc",
-                "--sessions",
-                "2",
-                "--rtt-iters",
-                "10",
+                "--scenario",
+                "xtask/e2e/wifi_ap_mode.yml",
                 "--verbose"
             ])
             .is_ok()
         );
         assert!(e2e_cmd(&["--board", "esp32-fake-name"]).is_err());
         assert!(e2e_cmd(&[]).is_err());
-        assert!(e2e_cmd(&["--board", "esp32c6-devkitc", "--sessions", "0"]).is_err());
-        assert!(e2e_cmd(&["--board", "esp32c6-devkitc", "--rtt-iters", "0"]).is_err());
+        assert!(e2e_cmd(&["--board", "esp32c6-devkitc", "--host", "1.2.3.4"]).is_err());
     }
 }
