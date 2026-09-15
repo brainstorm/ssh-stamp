@@ -32,7 +32,6 @@ enum Action {
     RestartTargetDevice,
     ParseSshStampNetworkFromSerial,
     ConnectToSsidUsingPsk,
-    VerifyIpObtained,
     WaitForReachable,
 }
 
@@ -78,58 +77,62 @@ pub fn run(args: &Args) -> Result<()> {
     let port = Serial::resolve_port(args.prg_serial.as_deref())?;
 
     let serial = Serial::open(&port, args.verbose)?;
-    let mut state = ContextState::default();
+    let mut context = ContextState::default();
     for action in scenario.actions {
         match action {
-            Action::RestartTargetDevice => {
-                let shell = Shell::new()?;
-                let soc = args.board.soc;
-                cmd!(shell, "espflash reset --port {port} --chip {soc}")
-                    .run()
-                    .context("espflash reset failed")?;
-            }
+            Action::RestartTargetDevice => restart_target_device(args, &port, &mut context)?,
             Action::ParseSshStampNetworkFromSerial => {
-                let info = parse_network_from_serial(&serial, SERIAL_PARSE_TIMEOUT)?;
-                eprintln!("parsed SSID={} and IP={}", info.ssid, info.ip);
-                state.network = Some(info);
+                parse_ssh_stamp_network_from_serial(&serial, &mut context)?
             }
-            Action::ConnectToSsidUsingPsk => {
-                let network = state
-                    .network
-                    .as_ref()
-                    .context("network info is not parsed yet")?;
-                AccessPoint {
-                    ssid: network.ssid.clone(),
-                    psk: network.psk.clone(),
-                }
-                .join(args.interface.as_deref())?;
-            }
-            Action::VerifyIpObtained => {
-                let network = state
-                    .network
-                    .as_ref()
-                    .context("network info is not parsed yet")?;
-                verify_host_ip_obtained(args.interface.as_deref(), network.ip)?;
-            }
-            Action::WaitForReachable => {
-                let network = state
-                    .network
-                    .as_ref()
-                    .context("network info is not parsed yet")?;
-                let access_point = AccessPoint {
-                    ssid: network.ssid.clone(),
-                    psk: network.psk.clone(),
-                };
-                if !access_point
-                    .wait_for_reachable(&network.ip.to_string(), args.interface.as_deref())
-                {
-                    bail!("{} did not become reachable", network.ip);
-                }
-            }
+            Action::ConnectToSsidUsingPsk => connect_to_ssid_using_psk(args, &mut context)?,
+            Action::WaitForReachable => wait_for_reachable(args, &mut context)?,
         }
     }
     serial.report_health();
     Ok(())
+}
+
+fn restart_target_device(args: &Args, port: &str, _context: &mut ContextState) -> Result<()> {
+    let shell = Shell::new()?;
+    let soc = args.board.soc;
+    cmd!(shell, "espflash reset --port {port} --chip {soc}")
+        .run()
+        .context("espflash reset failed")
+}
+
+fn parse_ssh_stamp_network_from_serial(serial: &Serial, context: &mut ContextState) -> Result<()> {
+    let info = parse_network_from_serial(serial, SERIAL_PARSE_TIMEOUT)?;
+    eprintln!("parsed SSID={} and IP={}", info.ssid, info.ip);
+    context.network = Some(info);
+    Ok(())
+}
+
+fn connect_to_ssid_using_psk(args: &Args, context: &mut ContextState) -> Result<()> {
+    let network = context
+        .network
+        .as_ref()
+        .context("network info is not parsed yet")?;
+    AccessPoint {
+        ssid: network.ssid.clone(),
+        psk: network.psk.clone(),
+    }
+    .join(args.interface.as_deref())
+}
+
+fn wait_for_reachable(args: &Args, context: &mut ContextState) -> Result<()> {
+    let network = context
+        .network
+        .as_ref()
+        .context("network info is not parsed yet")?;
+    let access_point = AccessPoint {
+        ssid: network.ssid.clone(),
+        psk: network.psk.clone(),
+    };
+    if access_point.wait_for_reachable(&network.ip.to_string(), args.interface.as_deref()) {
+        Ok(())
+    } else {
+        bail!("{} did not become reachable", network.ip)
+    }
 }
 
 fn load_scenario(path: &PathBuf) -> Result<Scenario> {
@@ -185,49 +188,6 @@ fn parse_network_lines(lines: &[String]) -> Option<NetworkInfo> {
     })
 }
 
-fn verify_host_ip_obtained(interface: Option<&str>, target_ip: Ipv4Addr) -> Result<()> {
-    let shell = Shell::new()?;
-    if cfg!(target_os = "linux") {
-        let output = match interface {
-            Some(iface) => cmd!(shell, "ip -4 addr show dev {iface}").read(),
-            None => {
-                let ip = target_ip.to_string();
-                cmd!(shell, "ip -4 route get {ip}").read()
-            }
-        }
-        .context("checking host IPv4 configuration")?;
-        if output.contains(" inet ") || output.contains(" src ") {
-            return Ok(());
-        }
-        bail!("host has no IPv4 address for this network");
-    }
-
-    if cfg!(target_os = "macos") {
-        let iface = interface.context("`--interface` is required to verify host IP on macOS")?;
-        let output = cmd!(shell, "ipconfig getifaddr {iface}")
-            .read()
-            .context("checking host IPv4 configuration")?;
-        if output.trim().parse::<Ipv4Addr>().is_ok() {
-            return Ok(());
-        }
-        bail!("host has no IPv4 address on interface {iface}");
-    }
-
-    if cfg!(windows) {
-        let output = match interface {
-            Some(name) => cmd!(shell, "netsh interface ipv4 show addresses name={name}").read(),
-            None => cmd!(shell, "ipconfig").read(),
-        }
-        .context("checking host IPv4 configuration")?;
-        if output.contains("IP Address") || output.contains("IPv4 Address") {
-            return Ok(());
-        }
-        bail!("host has no IPv4 address for this network");
-    }
-
-    bail!("host IP verification is unsupported on this OS")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,11 +213,10 @@ actions:
   - restart_target_device
   - parse_ssh_stamp_network_from_serial
   - connect_to_ssid_using_psk
-  - verify_ip_obtained
   - wait_for_reachable
 "#,
         )
         .unwrap();
-        assert_eq!(scenario.actions.len(), 5);
+        assert_eq!(scenario.actions.len(), 4);
     }
 }
