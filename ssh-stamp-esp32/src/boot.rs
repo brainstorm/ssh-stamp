@@ -82,7 +82,11 @@ macro_rules! boot {
 
         // Note that benches do depend on a stable clock speed across comparisons. The default
         // shouldn't change much, but theoretically an upgrade could change it.
-        let $peripherals = $crate::esp_hal::init($crate::esp_hal::Config::default());
+        //
+        // `mut` is only exercised by `setup_can_transceiver!`'s reborrows on
+        // boards whose CAN mux shares the I2C bus with the `i2c` subsystem.
+        #[allow(unused_mut)]
+        let mut $peripherals = $crate::esp_hal::init($crate::esp_hal::Config::default());
 
         // Enable true random number generation before the config is created, so
         // the WiFi password and SSH host key have cryptographically secure values.

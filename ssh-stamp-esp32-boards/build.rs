@@ -272,6 +272,7 @@ fn generate_code(boards: &[Board]) -> Result<String> {
     gen_structs(&mut out, boards)?;
     gen_take_uart_pins(&mut out, boards);
     gen_take_can_pins(&mut out, boards);
+    gen_take_i2c_pins(&mut out, boards);
     gen_setup_can_transceiver(&mut out, boards);
     gen_select_board(&mut out, boards);
 
@@ -497,6 +498,73 @@ fn gen_take_can_pins(out: &mut String, boards: &[Board]) {
     out.push('\n');
 }
 
+/// Doc-comment + signature for `take_i2c_pins!`. Per-board branches are
+/// inserted at `{branches}` and the fallback `not(any(...))` feature list
+/// at `{features}`.
+const TAKE_I2C_PINS_TMPL: &str = r#"/// Extract I2C GPIO pins from `peripherals`.
+///
+/// Returns `(sda_pin, scl_pin)`. The pin numbers come from `boards/*.toml`.
+/// Only call this macro when the `i2c` feature is enabled.
+///
+/// # Panics
+///
+/// Compile-time error if no board feature is selected, or if the selected
+/// board does not have I2C pins defined.
+#[macro_export]
+macro_rules! take_i2c_pins {
+    ($peripherals:expr) => {{
+{branches}        #[cfg(not(any({features})))]
+        {{
+            compile_error!("No board feature selected. Pass --features board-<name>. See ssh-stamp-esp32-boards crate for available boards.");
+        }}
+    }};
+}
+"#;
+
+/// Per-board `#[cfg]` branch inside `take_i2c_pins!`.
+const I2C_PIN_BRANCH_SOME: &str = r#"        #[cfg(feature = "{feature}")]
+        {{
+            (
+                $peripherals.GPIO{sda}.into(),
+                $peripherals.GPIO{scl}.into(),
+            )
+        }}
+"#;
+
+const I2C_PIN_BRANCH_NONE: &str = r#"        #[cfg(feature = "{feature}")]
+        {{
+            compile_error!("Board `{feature}` does not have I2C pins defined. Enable the `i2c` feature only for boards with I2C support.");
+        }}
+"#;
+
+fn gen_take_i2c_pins(out: &mut String, boards: &[Board]) {
+    let mut branches = String::new();
+    for b in boards {
+        if let (Some(sda), Some(scl)) = (b.i2c_sda, b.i2c_scl) {
+            branches.push_str(
+                &I2C_PIN_BRANCH_SOME
+                    .replace("{feature}", &b.feature)
+                    .replace("{sda}", &sda.to_string())
+                    .replace("{scl}", &scl.to_string()),
+            );
+        } else {
+            branches.push_str(&I2C_PIN_BRANCH_NONE.replace("{feature}", &b.feature));
+        }
+    }
+
+    let features: Vec<String> = boards
+        .iter()
+        .map(|b| format!("feature = \"{}\"", b.feature))
+        .collect();
+
+    let rendered = TAKE_I2C_PINS_TMPL
+        .replace("{branches}", &branches)
+        .replace("{features}", &features.join(", "));
+
+    out.push_str(&rendered);
+    out.push('\n');
+}
+
 /// Doc-comment + signature for `setup_can_transceiver!`. Per-board branches
 /// are inserted at `{branches}` and the fallback `not(any(...))` feature
 /// list at `{features}`.
@@ -527,15 +595,20 @@ macro_rules! setup_can_transceiver {
 /// `#[cfg]` branch inside `setup_can_transceiver!` for a board with a
 /// `[can_mux]` TOML section. The `{writes}` placeholder receives one
 /// `CAN_MUX_WRITE` line per `[address, value]` pair.
+///
+/// The I2C peripheral and pins are `reborrow()`ed, not consumed: the mux
+/// may sit on the same bus the board exposes for the `i2c` subsystem
+/// (e.g. Waveshare's ESP32-S3-Touch-LCD-4.3), so the singletons must stay
+/// available for a later `take_i2c_pins!`.
 const CAN_MUX_BRANCH: &str = r#"        #[cfg(feature = "{feature}")]
         {
             let mut i2c = ::esp_hal::i2c::master::I2c::new(
-                $peripherals.I2C0,
+                $peripherals.I2C0.reborrow(),
                 ::esp_hal::i2c::master::Config::default(),
             )
             .expect("I2C init error")
-            .with_sda($peripherals.GPIO{sda})
-            .with_scl($peripherals.GPIO{scl});
+            .with_sda($peripherals.GPIO{sda}.reborrow())
+            .with_scl($peripherals.GPIO{scl}.reborrow());
 {writes}        }
 "#;
 

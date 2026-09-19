@@ -10,6 +10,11 @@ uart_rx = 44
 uart_tx = 43
 can_tx = 20
 can_rx = 19
+# The external I2C connector shares the bus with the onboard CH422G IO
+# expander and GT911 touch controller (both visible in a bus scan). Note
+# that writes to the CH422G (0x24/0x38) can un-route the CAN transceiver.
+i2c_sda = 8
+i2c_scl = 9
 
 # The CAN pins (GPIO19/20) are shared with USB through an FSUSB42UMX analog
 # switch, steered by the USB_SEL line (EXIO5) of a CH422G I2C IO expander
@@ -25,7 +30,9 @@ writes = [[0x24, 0x01], [0x38, 0x20]]
 # Consumed by `cargo xtask`; the BSP build script ignores this section.
 # `can` is on by default because the onboard TJA1051 transceiver is the
 # reason to pick this board; add `--features can-no-ack` for bench work
-# without an acknowledging CAN node attached.
+# without an acknowledging CAN node attached. `i2c` follows because the
+# board breaks the bus out on a connector, and the CAN mux already needs
+# it wired up.
 [build]
 chip = "esp32s3"
-features = ["can"]
+features = ["can", "i2c"]

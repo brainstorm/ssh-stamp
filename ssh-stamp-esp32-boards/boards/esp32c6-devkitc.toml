@@ -8,6 +8,12 @@ url = "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c6/esp32-
 [pins]
 uart_rx = 10
 uart_tx = 11
+# GPIO22/23 sit at the top of the header, away from the strapping pins
+# (4, 5, 8, 9, 15), USB Serial/JTAG (12/13), the UART0 console (16/17)
+# and the RGB LED (8). GPIO6/7 would also be free but esp-hal flags them
+# as the external JTAG pins, so they stay clear for debugging.
+i2c_sda = 22
+i2c_scl = 23
 
 # Consumed by `cargo xtask`; the BSP build script ignores this section.
 [build]

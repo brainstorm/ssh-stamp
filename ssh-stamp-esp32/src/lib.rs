@@ -23,6 +23,8 @@ mod boot;
 mod can;
 pub mod flash;
 mod hash;
+#[cfg(feature = "i2c")]
+mod i2c;
 mod network;
 mod platform;
 mod rng;
@@ -34,6 +36,8 @@ pub use boot::start_interrupt_executor;
 pub use can::{BufferedCan, CAN_BUF, EspCanPins, can_task};
 pub use flash::{EspOtaWriter, FlashBuffer, get_flash_n_buffer, init as flash_init};
 pub use hash::EspHmac;
+#[cfg(feature = "i2c")]
+pub use i2c::{BufferedI2c, EspI2cPins, I2C_BUF, i2c_task};
 pub use network::{EspWifi, accept_requests, dhcp_server, net_up, wifi_up};
 pub use platform::EspPlatform;
 pub use rng::{

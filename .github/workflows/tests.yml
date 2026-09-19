@@ -30,5 +30,8 @@ jobs:
         uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: stable
+      # `can` and `i2c` gate their own modules, so their unit tests only
+      # compile when the features are on -- a bare `cargo test` silently
+      # skips them.
       - name: Package test
-        run: cargo test
+        run: cargo test --features can,i2c
