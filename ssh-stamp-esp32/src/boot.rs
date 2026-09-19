@@ -16,7 +16,8 @@
 //! library crate.
 
 use embassy_executor::SendSpawner;
-use esp_hal::interrupt::{Priority, software::SoftwareInterrupt};
+use esp_hal::interrupt::Priority;
+use esp_hal::peripherals::FROM_CPU_INTR1;
 use esp_rtos::embassy::InterruptExecutor;
 use static_cell::StaticCell;
 
@@ -39,25 +40,23 @@ macro_rules! init_heap {
 /// else. This  registers the embassy time driver, so it must run before anything that
 /// uses `embassy-time`.
 ///
-/// The scheduler uses the software interrupt 0 for context switching, so the
-/// macro consumes `SW_INTERRUPT`: [`SoftwareInterrupt<1>`](SoftwareInterrupt).
+/// The scheduler uses `FROM_CPU_INTR0` for context switching, so the macro
+/// consumes that singleton and hands back [`FROM_CPU_INTR1`] for the
+/// interrupt executor.
 #[macro_export]
 macro_rules! start_rtos {
     ($peripherals:ident) => {{
-        let sw_int = $crate::esp_hal::interrupt::software::SoftwareInterruptControl::new(
-            $peripherals.SW_INTERRUPT,
-        );
         #[cfg(feature = "esp32")]
         $crate::esp_rtos::start(
             $crate::esp_hal::timer::timg::TimerGroup::new($peripherals.TIMG1).timer0,
-            sw_int.software_interrupt0,
+            $peripherals.FROM_CPU_INTR0,
         );
         #[cfg(not(feature = "esp32"))]
         $crate::esp_rtos::start(
             $crate::esp_hal::timer::systimer::SystemTimer::new($peripherals.SYSTIMER).alarm0,
-            sw_int.software_interrupt0,
+            $peripherals.FROM_CPU_INTR0,
         );
-        sw_int.software_interrupt1
+        $peripherals.FROM_CPU_INTR1
     }};
 }
 
@@ -93,9 +92,9 @@ macro_rules! boot {
     };
 }
 
-/// Starts the `InterruptExecutor` on the [`SoftwareInterrupt<1>`](SoftwareInterrupt) left over
-/// from  [`start_rtos!`](macro@crate::start_rtos), and returns its spawner.
-pub fn start_interrupt_executor(sw_int1: SoftwareInterrupt<'static, 1>) -> SendSpawner {
+/// Starts the `InterruptExecutor` on the [`FROM_CPU_INTR1`] left over from
+/// [`start_rtos!`](macro@crate::start_rtos), and returns its spawner.
+pub fn start_interrupt_executor(sw_int1: FROM_CPU_INTR1<'static>) -> SendSpawner {
     static INT_EXECUTOR: StaticCell<InterruptExecutor<1>> = StaticCell::new(); // 0 is used for esp_rtos
 
     let interrupt_executor = INT_EXECUTOR.init_with(|| InterruptExecutor::new(sw_int1));

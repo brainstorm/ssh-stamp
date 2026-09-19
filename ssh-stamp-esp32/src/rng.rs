@@ -72,9 +72,12 @@ pub struct EntropySource {
     _source: TrngSource<'static>,
 }
 
-// TODO: The ESP32-C5/C61 TRNG is not yet available in esp-hal 1.1.1. Once
-// https://github.com/esp-rs/esp-hal/pull/4978 lands in a release, remove
-// this cfg_if! and use Trng/TrngSource unconditionally for all targets.
+// TODO: esp-hal reports `rng.trng_supported = false` for the ESP32-C5 and
+// C61, so `Trng`/`TrngSource` are not compiled for those chips and this
+// cfg_if! stands in for them. That flag is what to re-check on an esp-hal
+// bump, and what to drop this cfg_if! over once it flips. Note that
+// esp-rs/esp-hal#4978 ("C5: Enable RNG") is already merged and only enabled
+// the plain RNG register, so a merged RNG pull request is not the signal.
 cfg_if::cfg_if! {
     if #[cfg(any(feature = "esp32c5", feature = "esp32c61"))] {
         /// Registers the hardware RNG with `getrandom`.

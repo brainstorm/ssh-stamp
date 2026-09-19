@@ -115,6 +115,11 @@ impl EspOtaWriter {
             data.len()
         );
 
+        // `as_nor_flash` refuses a region whose partition is encrypted,
+        // rather than silently writing plaintext through it.
+        let mut target_partition = target_partition
+            .as_nor_flash()
+            .map_err(|_| HalError::Flash(FlashError::Write))?;
         NorFlash::write(&mut target_partition, offset, data)
             .map_err(|_| HalError::Flash(FlashError::Write))?;
 
