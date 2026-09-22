@@ -17,8 +17,6 @@
 use core::net::Ipv4Addr;
 use core::net::SocketAddrV4;
 
-use alloc::string::String as AllocString;
-
 use edge_dhcp::io::{self, DEFAULT_SERVER_PORT};
 use edge_dhcp::server::{Server, ServerOptions};
 use edge_nal::UdpBind;
@@ -31,8 +29,9 @@ use embassy_time::{Duration, Timer};
 use esp_hal::peripherals::WIFI;
 use esp_hal::rng::Rng;
 use esp_radio::wifi::{
-    AuthenticationMethod, BandMode as RadioBandMode, Config as RadioConfig, ControllerConfig,
-    Interface, WifiController, ap::AccessPointConfig, ap::EventInfo, sta::StationConfig,
+    AuthenticationMethodConfig, BandMode as RadioBandMode, Config as RadioConfig, ControllerConfig,
+    Interface, Password, Ssid, WifiController, ap::AccessPointConfig, ap::EventInfo,
+    sta::StationConfig,
 };
 use log::info;
 use log::{debug, error, warn};
@@ -182,6 +181,23 @@ impl NetworkProviderHal for EspWifi {
     }
 }
 
+/// Convert a stored SSID into esp-radio's [`Ssid`].
+///
+/// The config holds it in a `heapless::String<32>` and `Ssid` accepts up to
+/// 32 bytes, so the conversion cannot fail — the capacities are the proof,
+/// not the length of any particular SSID.
+fn ssid(stored: &heapless::String<32>) -> Ssid {
+    Ssid::try_from(stored.as_str()).expect("SSID capacity is 32 bytes, the Ssid limit")
+}
+
+/// Convert a stored `WiFi` password into esp-radio's [`Password`].
+///
+/// As with [`ssid`], the config's `heapless::String<63>` cannot exceed the
+/// 64-byte `Password` limit.
+fn password(stored: &heapless::String<63>) -> Password {
+    Password::try_from(stored.as_str()).expect("password capacity is 63 bytes, under the 64 limit")
+}
+
 /// Build the esp-radio config, embassy-net config, and interface for AP or
 /// Station mode based on whether a Station SSID is configured.
 fn build_radio_config(
@@ -191,12 +207,12 @@ fn build_radio_config(
 ) -> (RadioConfig, embassy_net::Config, Interface) {
     if sta_ssid.is_empty() {
         info!("Wifi configuring Access Point Mode");
-        let password = AllocString::from(ap_config.ap_password.as_str());
         let radio = RadioConfig::AccessPoint(
             AccessPointConfig::default()
-                .with_ssid(AllocString::from(ap_config.ap_ssid.as_str()))
-                .with_auth_method(AuthenticationMethod::Wpa2Wpa3Personal)
-                .with_password(password)
+                .with_ssid(ssid(&ap_config.ap_ssid))
+                .with_authentication(AuthenticationMethodConfig::Wpa2Personal(password(
+                    &ap_config.ap_password,
+                )))
                 .with_channel(ap_config.channel),
         );
         let net = embassy_net::Config::ipv4_static(StaticConfigV4 {
@@ -207,11 +223,12 @@ fn build_radio_config(
         (radio, net, Interface::access_point())
     } else {
         info!("Wifi configuring Station Mode");
-        let password = AllocString::from(ap_config.sta_password.as_str());
         let radio = RadioConfig::Station(
             StationConfig::default()
-                .with_ssid(AllocString::from(ap_config.sta_ssid.as_str()))
-                .with_password(password),
+                .with_ssid(ssid(&ap_config.sta_ssid))
+                .with_authentication(AuthenticationMethodConfig::Wpa2Personal(password(
+                    &ap_config.sta_password,
+                ))),
         );
         let net = embassy_net::Config::dhcpv4(DhcpConfig::default());
         (radio, net, Interface::station())

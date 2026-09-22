@@ -41,7 +41,7 @@ embedded-test = { version = "0.7", features = ["embassy-010", "external-executor
 embassy-executor = { workspace = true }
 
 esp-hal = { workspace = true }
-esp-rtos = { version = "0.3", features = ["embassy"] }
+esp-rtos = { version = "0.4", features = ["embassy"] }
 
 embassy-futures = { workspace = true }
 embassy-sync = { workspace = true }
