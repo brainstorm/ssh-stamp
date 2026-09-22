@@ -4639,6 +4639,7 @@ dependencies = [
  "quick-xml",
  "serde",
  "serde_json",
+ "serde_yaml",
  "serial2",
  "ssh-key",
  "ssh-stamp",
