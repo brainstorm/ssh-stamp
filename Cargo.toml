@@ -52,9 +52,9 @@ embassy-futures = "0.1.2"
 heapless = "0.9"
 
 # ESP32
-esp-hal = { version = "1.1", features = ["unstable", "log-04"] }
+esp-hal = { version = "1.2", features = ["unstable", "log-04"] }
 # Build-time configuration.
-esp-config = { version = "0.7", default-features = false }
+esp-config = { version = "0.8", default-features = false }
 
 # SSH protocol
 sunset = { version = "0.6.0", default-features = false, features = [
@@ -156,7 +156,7 @@ pastey = { workspace = true }
 embedded-storage-inmemory = "0.1"
 
 [build-dependencies]
-esp-config = { version = "0.7", features = ["build"] }
+esp-config = { version = "0.8", features = ["build"] }
 
 [profile.dev]
 opt-level = 0
