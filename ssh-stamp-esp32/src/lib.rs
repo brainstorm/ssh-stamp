@@ -28,6 +28,14 @@ mod platform;
 mod rng;
 mod timer;
 mod uart;
+#[cfg(feature = "usb-host")]
+mod usb_host;
+
+#[cfg(all(
+    feature = "usb-host",
+    not(any(feature = "esp32s2", feature = "esp32s3"))
+))]
+compile_error!("`usb-host` needs the USB OTG peripheral of the ESP32-S2 or ESP32-S3");
 
 pub use boot::start_interrupt_executor;
 #[cfg(feature = "can")]
@@ -42,6 +50,8 @@ pub use rng::{
 };
 pub use timer::EspTimer;
 pub use uart::{BufferedUart, EspUartPins, UART_BUF, UART_SIGNAL, spawn_uart, uart_task};
+#[cfg(feature = "usb-host")]
+pub use usb_host::{spawn_usb_host, usb_host_task};
 
 // These re-exports are nice to have for macro expansions, including `getrandom_backend!`,
 // `init_heap!`, `start_rtos!` and `boot!, as they mean the calling crate doesn't have to

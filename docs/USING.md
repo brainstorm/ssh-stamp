@@ -99,3 +99,15 @@ Its catalog table is regenerated from the TOML files on every run.
 
 (`cargo xtask list` gives the board list as a quick terminal summary, without
 the pins.)
+
+# USB serial devices (ESP32-S2/S3)
+
+Build with `--features usb-host` and the bridge talks to a USB CDC-ACM device
+(e.g. a board's `ttyACM` console) plugged into the USB OTG port (GPIO19/20)
+instead of the UART pins. The `SSH_STAMP_UART_*` settings are sent to the
+device as its line coding.
+
+The OTG port has to supply 5V to the device. Many dev kits only do so after
+a solder jumper is bridged, and are then powered through their other USB
+port. Vendor-class USB-UART adapters (CP210x, CH34x, FTDI, PL2303) are not
+supported yet.

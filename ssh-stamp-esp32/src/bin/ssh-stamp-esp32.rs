@@ -38,11 +38,15 @@ use ssh_stamp::{
     mem_probe::{self, Checkpoint},
     settings::DEFAULT_IP,
 };
+#[cfg(not(feature = "usb-host"))]
+use ssh_stamp_esp32::spawn_uart;
+#[cfg(feature = "usb-host")]
+use ssh_stamp_esp32::spawn_usb_host;
 #[cfg(feature = "can")]
 use ssh_stamp_esp32::{BufferedCan, CAN_BUF, EspCanPins, can_task};
 use ssh_stamp_esp32::{
     EspPlatform, EspUartPins, EspWifi, bench, entropy_source_active, flash, mac_address,
-    spawn_uart, start_interrupt_executor,
+    start_interrupt_executor,
 };
 use ssh_stamp_esp32_boards::Board;
 use ssh_stamp_hal::{HalError, WifiError};
@@ -119,7 +123,20 @@ async fn main(spawner: Spawner) -> ! {
 
     mem_probe::checkpoint(Checkpoint::Boot);
     let interrupt_spawner = start_interrupt_executor(sw_int1);
+    #[cfg(not(feature = "usb-host"))]
     let uart_buf = spawn_uart(interrupt_spawner, peripherals.UART1, pins, uart_params);
+    // The bridge talks to the USB OTG port (D- GPIO19, D+ GPIO20) instead,
+    // so it needs neither the UART pins nor the interrupt executor.
+    #[cfg(feature = "usb-host")]
+    let uart_buf = {
+        let _ = (pins, interrupt_spawner);
+        let usb = esp_hal::usb::otg::Usb::new_fs(
+            peripherals.USB_FS,
+            peripherals.GPIO20,
+            peripherals.GPIO19,
+        );
+        spawn_usb_host(spawner, usb, uart_params)
+    };
 
     #[cfg(feature = "can")]
     let can_buf: &'static BufferedCan = {

@@ -39,7 +39,7 @@ jobs:
             { name: "esp32c5-devkitc", xtensa: false },
             { name: "esp32c6-devkitc", xtensa: false, extra_features: "sftp-ota,mem-probe,bench-loopback,ipv6" },
             { name: "esp32c61-devkitc", xtensa: false },
-            { name: "esp32-s2-saola", xtensa: true },
+            { name: "esp32-s2-saola", xtensa: true, extra_features: "usb-host" },
             { name: "waveshare-esp32-s3-touch-lcd-43", xtensa: true, extra_features: "can-no-ack" },
         ]
     steps:

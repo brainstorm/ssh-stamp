@@ -75,32 +75,13 @@ impl BufferedUart {
                         continue;
                     };
 
-                    let mut rx_slice = &rx_buf[..n];
-
-                    while !rx_slice.is_empty() {
-                        rx_slice = match self.inward.try_write(rx_slice) {
-                            Ok(w) => &rx_slice[w..],
-                            Err(TryWriteError::Full) => {
-                                let mut drop_buf = [0u8; UART_BUF_SZ];
-                                let dropped = self
-                                    .inward
-                                    .try_read(&mut drop_buf[..rx_slice.len()])
-                                    .unwrap_or(0);
-                                let _ = self.dropped_rx_bytes.fetch_update(
-                                    Ordering::Relaxed,
-                                    Ordering::Relaxed,
-                                    |d| Some(d.saturating_add(dropped)),
-                                );
-                                rx_slice
-                            }
-                        };
-                    }
+                    self.push_inward(&rx_buf[..n]);
                 }
             };
 
             let rd_to = async {
                 loop {
-                    let n = self.outward.read(&mut tx_buf).await;
+                    let n = self.pull_outward(&mut tx_buf).await;
 
                     // This must take into consideration the length returned by `write_async`,
                     // as it may be less than the full buffer. Follow-up loop iterations
@@ -118,6 +99,32 @@ impl BufferedUart {
 
             select(rd_from, rd_to).await;
         }
+    }
+
+    /// Queue bytes received from the serial device for SSH, dropping the
+    /// oldest queued bytes when the buffer is full.
+    pub(crate) fn push_inward(&self, mut data: &[u8]) {
+        while !data.is_empty() {
+            data = match self.inward.try_write(data) {
+                Ok(w) => &data[w..],
+                Err(TryWriteError::Full) => {
+                    let mut drop_buf = [0u8; UART_BUF_SZ];
+                    let len = data.len().min(UART_BUF_SZ);
+                    let dropped = self.inward.try_read(&mut drop_buf[..len]).unwrap_or(0);
+                    let _ = self.dropped_rx_bytes.fetch_update(
+                        Ordering::Relaxed,
+                        Ordering::Relaxed,
+                        |d| Some(d.saturating_add(dropped)),
+                    );
+                    data
+                }
+            };
+        }
+    }
+
+    /// Wait for bytes queued by SSH for the serial device.
+    pub(crate) async fn pull_outward(&self, buf: &mut [u8]) -> usize {
+        self.outward.read(buf).await
     }
 
     pub async fn read(&self, buf: &mut [u8]) -> usize {

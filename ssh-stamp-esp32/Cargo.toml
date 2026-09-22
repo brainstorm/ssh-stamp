@@ -57,6 +57,9 @@ embedded-storage-async = { workspace = true }
 
 ssh-stamp-esp32-boards = { path = "../ssh-stamp-esp32-boards", optional = true }
 
+embassy-usb-host = { version = "0.1", features = ["log"], optional = true }
+embassy-usb-driver = { version = "0.2", optional = true }
+
 once_cell = { workspace = true }
 sunset-async = { workspace = true }
 sha2 = { workspace = true }
@@ -78,6 +81,9 @@ can = ["ssh-stamp/can"]
 # reliability expects.
 can-no-ack = ["can"]
 ipv6 = ["ssh-stamp/ipv6"]
+# Bridge SSH to a USB CDC-ACM device plugged into the USB OTG port (host
+# mode) instead of the UART. ESP32-S2/S3 only.
+usb-host = ["dep:embassy-usb-host", "dep:embassy-usb-driver"]
 
 mem-probe = ["ssh-stamp/mem-probe", "esp-alloc/internal-heap-stats"]
 bench-loopback = []
