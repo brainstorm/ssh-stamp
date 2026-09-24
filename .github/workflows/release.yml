@@ -13,11 +13,15 @@
 #
 # Triggered by pushing a version tag (e.g. v0.3.0).
 #
-# NOTE on release-plz: release-plz is designed for publishing Rust *crates* to
-# crates.io (version bumping, changelogs, cargo publish). Since ssh-stamp is a
-# no_std firmware project whose artifacts are flashable .bin/.elf images rather
-# than library crates, release-plz is not a good fit. Instead this workflow uses
-# a tag-driven approach with softprops/action-gh-release.
+# The same tag also publishes the workspace crates to crates.io, which is what
+# puts their API docs on docs.rs. All crates share `workspace.package.version`,
+# so bump that before tagging. Publishing uses crates.io trusted publishing
+# (OIDC), so no API token is stored in the repository.
+#
+# NOTE on release-plz: release-plz automates version bumps and changelogs
+# driven by commits. Releases here are cut by hand with a tag, and the main
+# artifacts are flashable .bin/.elf images, so a plain `cargo publish` step is
+# enough and release-plz is not used.
 #
 # SBOM tooling: anchore/sbom-action runs Syft on the source tree (Cargo.lock
 # + Cargo.toml) to produce an SPDX JSON SBOM covering all Rust dependencies.
@@ -194,6 +198,42 @@ jobs:
       # advisory failed the release.
       - name: Check for advisories
         run: cargo audit
+
+  # Publishes every crate not marked `publish = false`, in dependency order.
+  # crates.io rejects re-publishing an existing version, so a re-run for a tag
+  # that already went out fails here and leaves the GitHub Release alone.
+  # One-time setup per crate: publish it once by hand, then add this repo and
+  # workflow as a trusted publisher in the crate's crates.io settings.
+  publish-crates:
+    name: Publish crates
+    needs: [build-firmware, cve-check]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          target: riscv32imac-unknown-none-elf
+          toolchain: stable
+
+      - name: Authenticate with crates.io
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+
+      # The crates are verified from their tarballs outside the workspace, so
+      # .cargo/config.toml doesn't apply; its bare-metal rustflags are passed
+      # here. Keep in sync with the publish-check job in build.yml.
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          RUSTFLAGS: '-C force-frame-pointers --cfg getrandom_backend="custom"'
+        run: cargo publish --workspace --target riscv32imac-unknown-none-elf
 
   publish-release:
     name: Publish GitHub Release
