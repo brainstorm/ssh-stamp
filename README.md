@@ -8,6 +8,8 @@ SPDX-License-Identifier: GPL-3.0-or-later
 -->
 
 [![REUSE status](https://api.reuse.software/badge/github.com/brainstorm/ssh-stamp)](https://api.reuse.software/info/github.com/brainstorm/ssh-stamp)
+[![crates.io](https://img.shields.io/crates/v/ssh-stamp.svg)](https://crates.io/crates/ssh-stamp)
+[![docs.rs](https://img.shields.io/docsrs/ssh-stamp)](https://docs.rs/ssh-stamp)
 
 # SSH Stamp
 
@@ -22,6 +24,16 @@ The SSH connection can be established via WiFi, enabling untethered (and secure)
 ## Using
 
 Refer to [building](./docs/BUILDING.md) if you are not using our binary releases and [using](./docs/USING.md) documentation.
+
+## API documentation
+
+The API docs for each crate are published on docs.rs:
+
+- [ssh-stamp](https://docs.rs/ssh-stamp): platform-agnostic core (SSH server, configuration, serial bridging)
+- [ssh-stamp-hal](https://docs.rs/ssh-stamp-hal): hardware abstraction traits a port implements
+- [ssh-stamp-esp32](https://docs.rs/ssh-stamp-esp32): ESP32 port
+- [ssh-stamp-esp32-boards](https://docs.rs/ssh-stamp-esp32-boards): supported boards and their pin assignments
+- [ssh-stamp-ota](https://docs.rs/ssh-stamp-ota): SFTP-based OTA updates
 
 ## Targets
 

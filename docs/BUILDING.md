@@ -83,7 +83,9 @@ for the crate front pages.
 ## Adding a board
 
 1. Drop a `boards/<name>.toml` into the relevant BSP crate, with the pin map
-   and a `[build]` section naming its chip:
+   and a `[build]` section naming its chip. BSP crates live under
+   `boards/ssh-stamp-<manufacturer>/`; for Espressif boards the file goes in
+   `boards/ssh-stamp-esp/ssh-stamp-esp32-boards/boards/`:
    ```toml
    [pins]
    uart_rx = 10

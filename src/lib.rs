@@ -38,6 +38,29 @@
 //! `ssh-stamp-ota` depends on `ssh-stamp-hal` for [`OtaActions`](ssh_stamp_hal::OtaActions)
 //! and is in turn depended on by `ssh-stamp` for SFTP-based updates.
 //!
+//! ## Repository layout
+//!
+//! Platform-agnostic crates live at the repository root. Everything
+//! specific to one chip manufacturer lives under
+//! `boards/ssh-stamp-<manufacturer>/`, one directory per manufacturer:
+//!
+//! ```text
+//! ssh-stamp/
+//! ├── src/                          ssh-stamp (this crate)
+//! ├── ssh-stamp-hal/                hardware abstraction traits
+//! ├── ssh-stamp-ota/                SFTP OTA server and `packer` tool
+//! ├── xtask/                        build, flash and test runner
+//! └── boards/
+//!     └── ssh-stamp-esp/            Espressif
+//!         ├── ssh-stamp-esp32/          port crate: HAL impls and firmware binary
+//!         ├── ssh-stamp-esp32-boards/   board support: `boards/*.toml` pin maps
+//!         └── ssh-stamp-esp32-hil/      hardware-in-the-loop tests
+//! ```
+//!
+//! A new manufacturer gets its own `boards/ssh-stamp-<manufacturer>/`
+//! directory with the same three crates; see "Adding a new port" in
+//! [`ssh_stamp_hal`].
+//!
 //! ## Key modules
 //!
 //! - [`app`] — entry points [`prepare_ap_config`] and [`run_app`]
