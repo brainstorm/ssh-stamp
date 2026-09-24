@@ -32,10 +32,10 @@ It takes one binary file and adds the following Type Length Value fields (TLV):
 
 ## Usage
 
-For updated information on how to use this tool build and run the binary from the `ssh-stamp/ota` directory
+For updated information on how to use this tool build and run the binary from the `ssh-stamp/ssh-stamp-ota` directory
 
 ```sh
-ssh-stamp/ota$ cargo run --bin packer -- --help
+ssh-stamp/ssh-stamp-ota$ cargo run --bin packer -- --help
 ```
 
 At the moment of redaction, this command outputs:

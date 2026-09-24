@@ -27,7 +27,9 @@ fn main() {
 fn emit_ssh_ident() {
     println!("cargo:rerun-if-changed=Cargo.lock");
     let lock_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.lock");
-    let lock = std::fs::read_to_string(&lock_path).unwrap();
+    // A missing lockfile (e.g. an unusual packaged build) only costs the
+    // version in the ident string, so don't fail the build over it.
+    let lock = std::fs::read_to_string(&lock_path).unwrap_or_default();
     let sunset_ver = lock
         .split("[[package]]")
         .find(|s| s.contains("name = \"sunset\""))

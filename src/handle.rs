@@ -913,7 +913,7 @@ where
                 debug!("Handling SFTP session");
                 let stdio = ssh_server.stdio(ch).await?;
                 let ota_writer = platform.ota_writer();
-                ota::run_ota_server::<P::OtaWriter>(stdio, ota_writer).await?;
+                ssh_stamp_ota::run_ota_server::<P::OtaWriter>(stdio, ota_writer).await?;
             }
         }
         Ok(())

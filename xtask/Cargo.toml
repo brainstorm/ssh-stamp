@@ -38,7 +38,7 @@ probe-rs = "0.32"
 probe-rs-espressif = "0.32"
 
 # We need to depend on the main crate as a library for Wi-Fi provisioning.
-ssh-stamp = { path = ".." }
+ssh-stamp = { workspace = true }
 sunset = { workspace = true }
 
 # Sunset forces this version of ssh-key.

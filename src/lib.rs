@@ -27,13 +27,15 @@
 //!
 //! - [`ssh_stamp_hal`] — hardware abstraction traits (`WifiHal`,
 //!   `NetworkProviderHal`, `OtaActions`, etc.)
-//! - `ssh_stamp_esp32` — ESP32 port: trait implementations, bootable
-//!   binary, per-target UART pin assignments
-//! - [`ota`] — SFTP-based OTA update server (TLV header parsing,
+//! - [`ssh_stamp_esp32`](https://docs.rs/ssh-stamp-esp32) — ESP32 port:
+//!   trait implementations, bootable binary, per-target UART pin assignments
+//! - [`ssh_stamp_esp32_boards`](https://docs.rs/ssh-stamp-esp32-boards) —
+//!   per-board pin mappings and the board catalog
+//! - [`ssh_stamp_ota`] — SFTP-based OTA update server (TLV header parsing,
 //!   chunked flash writes, device reset; includes the `packer` host
 //!   utility)
 //!
-//! `ota` depends on `ssh-stamp-hal` for [`OtaActions`](ssh_stamp_hal::OtaActions)
+//! `ssh-stamp-ota` depends on `ssh-stamp-hal` for [`OtaActions`](ssh_stamp_hal::OtaActions)
 //! and is in turn depended on by `ssh-stamp` for SFTP-based updates.
 //!
 //! ## Key modules
@@ -83,7 +85,7 @@
 //!
 //! Host-side OTA TLV tests:
 //! ```bash
-//! cargo +stable test --package ota --target x86_64-unknown-linux-gnu
+//! cargo +stable test --package ssh-stamp-ota --target x86_64-unknown-linux-gnu
 //! ```
 //!
 //! Manual testing requires a hardware target, a `WiFi` client, an SSH client,
@@ -99,7 +101,7 @@
 //! these are build time config variables, they are not used at runtime.
 #![doc = include_str!(concat!(env!("OUT_DIR"), "/ssh_stamp_config_table.md"))]
 // `no_std` on device; under `cargo test` the std test harness needs std, same
-// pattern as the `ota` crate. `src/` stays platform-agnostic either way.
+// pattern as the `ssh-stamp-ota` crate. `src/` stays platform-agnostic either way.
 #![cfg_attr(not(test), no_std)]
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]

@@ -8,7 +8,7 @@ Testing for ssh-stamp comes in two forms, unit tests and HIL tests.
 
 # Unit tests
 
-The [`ota`](../ota), [`xtask`](../xtask) and parts of the [`ssh-stamp`](../src) core
+The [`ssh-stamp-ota`](../ssh-stamp-ota), [`xtask`](../xtask) and parts of the [`ssh-stamp`](../src) core
 library have unit tests. These can be run directly on the host:
 
 ```sh

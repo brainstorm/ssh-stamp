@@ -30,12 +30,12 @@ harness = false
 required-features = ["board-any"]
 
 [dependencies]
-ssh-stamp = { path = "../../..", default-features = false }
-ssh-stamp-esp32 = { path = "../ssh-stamp-esp32", default-features = false, features = [
+ssh-stamp = { workspace = true }
+ssh-stamp-esp32 = { workspace = true, features = [
     "bench-loopback",
 ] }
-ssh-stamp-esp32-boards = { path = "../ssh-stamp-esp32-boards", optional = true }
-ssh-stamp-hal = { path = "../../../ssh-stamp-hal" }
+ssh-stamp-esp32-boards = { workspace = true, optional = true }
+ssh-stamp-hal = { workspace = true }
 
 embedded-test = { version = "0.7", features = ["embassy-010", "external-executor"] }
 embassy-executor = { workspace = true }

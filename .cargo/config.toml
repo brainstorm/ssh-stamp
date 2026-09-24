@@ -16,7 +16,7 @@ xtask = "run --package xtask --release --"
 
 # The OTA image packer is a host tool, not a build target. `std` satisfies
 # the binary's `required-features`.
-packer = "run --package ota --bin packer --features std"
+packer = "run --package ssh-stamp-ota --bin packer --features std"
 
 # NOTE: there is deliberately no `[build] target` or `[unstable] build-std`
 # here. Both used to be global, which forced *every* cargo invocation —

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use ota::{OtaHeader, tlv};
+use ssh_stamp_ota::{OtaHeader, tlv};
 
 use clap::{ArgAction, Command};
 use sha2::{Digest, Sha256};
