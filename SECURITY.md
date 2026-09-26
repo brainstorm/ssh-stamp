@@ -134,7 +134,7 @@ The key risk categories and mitigations are:
 |---------------|--------|------------|
 | Authentication | Brute-force or credential compromise | SSH key-only auth via `sunset`; no password auth |
 | Network exposure | Unauthorized remote access | WiFi AP / Ethernet port is the only attack surface; no open inbound ports beyond SSH (port 22) |
-| Firmware integrity | Malicious OTA update | OTA images are validated before flashing (see `ota/README.md`) |
+| Firmware integrity | Malicious OTA update | OTA images are validated before flashing (see `ssh-stamp-ota/README.md`) |
 | Supply chain | Vulnerable upstream dependency | SBOM published per release; `cargo audit` in CI |
 | Data confidentiality | UART traffic interception | SSH encryption protects UART-to-SSH bridge traffic |
 | Availability | DoS via network | No explicit rate-limiting; relies on MCU resource constraints as a natural throttle |

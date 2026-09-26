@@ -60,7 +60,7 @@ cargo xtask "$BOARD" build --release
 # which espflash can produce directly from the Rust ELF — no ESP-IDF needed.
 echo ">> merging flash image"
 espflash save-image --chip "$CHIP" --merge \
-    --partition-table ssh-stamp-esp32/partitions.csv "$elf" "$image"
+    --partition-table boards/ssh-stamp-esp/ssh-stamp-esp32/partitions.csv "$elf" "$image"
 
 net="user"
 if [ -n "$SSH_PORT" ]; then

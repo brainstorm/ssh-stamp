@@ -4,12 +4,24 @@
 
 [package]
 name = "ssh-stamp-esp32-boards"
-version = "0.1.0"
-edition = "2024"
 authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
 description = "Board Support Package — per-PCB pin mappings for ssh-stamp-esp32"
-license = "GPL-3.0-or-later"
-repository = "https://github.com/brainstorm/ssh-stamp"
+documentation = "https://docs.rs/ssh-stamp-esp32-boards"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+# All boards at once, so the generated pin catalog on the front page lists
+# every board rather than just one.
+[package.metadata.docs.rs]
+all-features = true
+default-target = "riscv32imac-unknown-none-elf"
+targets = []
+rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 board-esp32c5-devkitc = []

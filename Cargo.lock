@@ -2871,19 +2871,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
-name = "ota"
-version = "0.1.0"
-dependencies = [
- "clap",
- "log",
- "sha2 0.10.9",
- "ssh-stamp-hal",
- "sunset",
- "sunset-async",
- "sunset-sftp",
-]
-
-[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3763,7 +3750,7 @@ dependencies = [
 
 [[package]]
 name = "ssh-stamp"
-version = "0.3.0"
+version = "1.0.4"
 dependencies = [
  "bcrypt",
  "cfg-if",
@@ -3785,7 +3772,6 @@ dependencies = [
  "hex",
  "hmac 0.12.1",
  "log",
- "ota",
  "pastey",
  "portable-atomic",
  "rustc-hash",
@@ -3794,6 +3780,7 @@ dependencies = [
  "snafu 0.8.9",
  "ssh-key",
  "ssh-stamp-hal",
+ "ssh-stamp-ota",
  "subtle",
  "sunset",
  "sunset-async",
@@ -3803,7 +3790,7 @@ dependencies = [
 
 [[package]]
 name = "ssh-stamp-esp32"
-version = "0.2.0"
+version = "1.0.4"
 dependencies = [
  "cfg-if",
  "edge-dhcp",
@@ -3829,19 +3816,19 @@ dependencies = [
  "hmac 0.12.1",
  "log",
  "once_cell",
- "ota",
  "portable-atomic",
  "sha2 0.10.9",
  "ssh-stamp",
  "ssh-stamp-esp32-boards",
  "ssh-stamp-hal",
+ "ssh-stamp-ota",
  "static_cell",
  "sunset-async",
 ]
 
 [[package]]
 name = "ssh-stamp-esp32-boards"
-version = "0.1.0"
+version = "1.0.4"
 dependencies = [
  "serde",
  "toml",
@@ -3867,11 +3854,24 @@ dependencies = [
 
 [[package]]
 name = "ssh-stamp-hal"
-version = "0.2.0"
+version = "1.0.4"
 dependencies = [
  "embassy-net",
  "embassy-sync 0.8.0",
  "heapless 0.9.3",
+]
+
+[[package]]
+name = "ssh-stamp-ota"
+version = "1.0.4"
+dependencies = [
+ "clap",
+ "log",
+ "sha2 0.10.9",
+ "ssh-stamp-hal",
+ "sunset",
+ "sunset-async",
+ "sunset-sftp",
 ]
 
 [[package]]

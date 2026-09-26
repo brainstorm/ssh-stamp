@@ -10,7 +10,7 @@
 //!
 //! The [`tlv`] module defines the TLV record format used by the `packer`
 //! host utility and the on-device parser. The `packer` binary
-//! (`ota/src/bin/packer.rs`) wraps a raw app binary into an `.otap` blob
+//! (`ssh-stamp-ota/src/bin/packer.rs`) wraps a raw app binary into an `.otap` blob
 //! with the required TLV header (OTA type, SHA-256 checksum, firmware size).
 //!
 //! This crate is `no_std` on embedded targets. The `std` feature gate and

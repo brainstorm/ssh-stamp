@@ -5,12 +5,26 @@
 
 [package]
 name = "ssh-stamp-esp32"
-version = "0.2.0"
-edition = "2024"
 authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
 description = "ESP32 implementation of the ssh-stamp-hal traits and bootable binary for ssh-stamp"
-license = "GPL-3.0-or-later"
-repository = "https://github.com/brainstorm/ssh-stamp"
+documentation = "https://docs.rs/ssh-stamp-esp32"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+# docs.rs builds for a single board, the same one CI documents. It does not read
+# .cargo/config.toml, so the getrandom backend cfg set there is repeated here.
+[package.metadata.docs.rs]
+no-default-features = true
+features = ["board-esp32c6-devkitc", "sftp-ota", "can", "ipv6"]
+default-target = "riscv32imac-unknown-none-elf"
+targets = []
+rustc-args = ["--cfg", 'getrandom_backend="custom"']
+rustdoc-args = ["--cfg", "docsrs"]
 
 # This crate is no_std, and because libtest pulls in std, it will never be valid to
 # compile them. Disabling here means `--tests` will work correctly in the current
@@ -27,9 +41,9 @@ test = false
 bench = false
 
 [dependencies]
-ssh-stamp = { path = "..", default-features = false }
-ssh-stamp-hal = { path = "../ssh-stamp-hal" }
-ota = { path = "../ota" }
+ssh-stamp = { workspace = true }
+ssh-stamp-hal = { workspace = true }
+ssh-stamp-ota = { workspace = true }
 
 embassy-sync = { workspace = true }
 embassy-executor = { workspace = true }
@@ -55,7 +69,7 @@ esp-println = { version = "0.18", features = ["log-04"] }
 embedded-storage = { workspace = true }
 embedded-storage-async = { workspace = true }
 
-ssh-stamp-esp32-boards = { path = "../ssh-stamp-esp32-boards", optional = true }
+ssh-stamp-esp32-boards = { workspace = true, optional = true }
 
 once_cell = { workspace = true }
 sunset-async = { workspace = true }

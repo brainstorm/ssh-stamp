@@ -8,7 +8,7 @@ Testing for ssh-stamp comes in two forms, unit tests and HIL tests.
 
 # Unit tests
 
-The [`ota`](../ota), [`xtask`](../xtask) and parts of the [`ssh-stamp`](../src) core
+The [`ssh-stamp-ota`](../ssh-stamp-ota), [`xtask`](../xtask) and parts of the [`ssh-stamp`](../src) core
 library have unit tests. These can be run directly on the host:
 
 ```sh
@@ -19,7 +19,7 @@ cargo test
 
 There is also a set of HIL tests that require an ESP32 board to run. These
 are built on the [embedded-test] framework as part of the
-[ssh-stamp-esp32-hil](../ssh-stamp-esp32-hil) crate. Each file under the 
+[ssh-stamp-esp32-hil](../boards/ssh-stamp-esp/ssh-stamp-esp32-hil) crate. Each file under the 
 `tests/`directory there compiles it's own test binary, which is flashed by
 probe-rs and run.
 

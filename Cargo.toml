@@ -5,31 +5,54 @@
 
 [package]
 name = "ssh-stamp"
-version = "0.3.0"
+description = "SSH to UART bridge firmware core for microcontrollers"
+documentation = "https://docs.rs/ssh-stamp"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+# Keep the published crate to the library sources; everything else in the repo
+# root (docs/, test/, .cargo/, editor config) is not needed to build it.
+include = ["/src/**", "/build.rs", "/Cargo.toml", "/README.md", "/LICENSE", "/LICENSES/*"]
 authors = [
     "Julio Beltran Ortega <jubeormk1@gmail.com>",
     "Anthony Tambasco <anthony.tambasco@fastmail.com>",
     "Roman Valls Guimera <brainstorm@nopcode.org>",
     "Marko Malenic <mmalenic1@gmail.com>",
 ]
-edition = "2024"
-license = "GPL-3.0-or-later"
+
+[package.metadata.docs.rs]
+features = ["sftp-ota", "can", "ipv6"]
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lib]
 
 [workspace]
 members = [
     "ssh-stamp-hal",
-    "ssh-stamp-esp32",
-    "ssh-stamp-esp32-boards",
-    "ssh-stamp-esp32-hil",
-    "ota",
+    "boards/ssh-stamp-esp/ssh-stamp-esp32",
+    "boards/ssh-stamp-esp/ssh-stamp-esp32-boards",
+    "boards/ssh-stamp-esp/ssh-stamp-esp32-hil",
+    "ssh-stamp-ota",
     "xtask",
 ]
 # What a `cargo test` / `build` / `check` at the root operates on. Any crates
 # that are buildable on the host are here. The firmware crates are left out
 # and must be run using the `cargo xtask <target> <cargo command>` syntax.
-default-members = [".", "ota", "xtask"]
+default-members = [".", "ssh-stamp-ota", "xtask"]
+
+[workspace.package]
+version = "1.0.4"
+edition = "2024"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/brainstorm/ssh-stamp"
+homepage = "https://github.com/brainstorm/ssh-stamp"
+keywords = ["ssh", "embedded", "esp32", "uart", "no-std"]
+categories = ["embedded", "no-std", "network-programming"]
 
 [workspace.lints.clippy]
 mem_forget = "warn"
@@ -42,6 +65,14 @@ default_trait_access = { level = "allow", priority = 1 }
 workspace = true
 
 [workspace.dependencies]
+# Workspace crates. Path dependencies need a version to be publishable; keep
+# these in step with `workspace.package.version`.
+ssh-stamp = { path = ".", version = "1.0.4", default-features = false }
+ssh-stamp-hal = { path = "ssh-stamp-hal", version = "1.0.4" }
+ssh-stamp-esp32 = { path = "boards/ssh-stamp-esp/ssh-stamp-esp32", version = "1.0.4", default-features = false }
+ssh-stamp-esp32-boards = { path = "boards/ssh-stamp-esp/ssh-stamp-esp32-boards", version = "1.0.4" }
+ssh-stamp-ota = { path = "ssh-stamp-ota", version = "1.0.4" }
+
 # Async runtime
 embassy-sync = "0.8"
 embassy-executor = { version = "0.10" }
@@ -116,8 +147,8 @@ embassy-embedded-hal = "0.6"
 embedded-can = "0.4"
 
 [dependencies]
-ota = { path = "ota" }
-ssh-stamp-hal = { path = "ssh-stamp-hal" }
+ssh-stamp-ota = { workspace = true }
+ssh-stamp-hal = { workspace = true }
 
 sha2 = { workspace = true }
 rustc-hash = { workspace = true }
@@ -186,7 +217,7 @@ default = []
 ipv6 = ["embassy-net/proto-ipv6"]
 
 # Enables the SFTP OTA Subsystem. Use packer to pack a binary and PUT it over sftp
-sftp-ota = ["ota/sftp"]
+sftp-ota = ["ssh-stamp-ota/sftp"]
 
 # Enables CAN bus tunnelling over SSH via the "can" subsystem
 can = ["dep:embedded-can"]

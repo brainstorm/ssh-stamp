@@ -81,13 +81,15 @@ If your SSH client doesn't forward environment variables by default, use the `-o
 # Pin assignments
 
 UART, CAN and I2C pins are defined per-board in `boards/*.toml` files inside
-the board support crate of each platform (`ssh-stamp-esp32-boards` for the
-Espressif one). Each board feature (e.g. `board-esp32c6-devkitc`) selects a
+the board support crate of each platform. For Espressif boards that is
+[`boards/ssh-stamp-esp/ssh-stamp-esp32-boards/boards/`](../boards/ssh-stamp-esp/ssh-stamp-esp32-boards/boards). Each board feature (e.g. `board-esp32c6-devkitc`) selects a
 specific PCB and its pin assignments. The TOML files are the single source of
 truth — no other file in the repository hard-codes pin numbers.
 
 To see which GPIO each bus uses on each board, and which buses a board does
-not support yet, build the documentation:
+not support yet, read the board catalog on
+[docs.rs](https://docs.rs/ssh-stamp-esp32-boards) or build the documentation
+locally:
 
 ```
 cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask

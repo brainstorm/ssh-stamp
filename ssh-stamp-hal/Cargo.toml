@@ -4,12 +4,20 @@
 
 [package]
 name = "ssh-stamp-hal"
-version = "0.2.0"
-edition = "2024"
 authors = ["Roman Valls Guimera <brainstorm@nopcode.org>"]
 description = "Hardware Abstraction Layer traits for ssh-stamp"
-license = "GPL-3.0-or-later"
-repository = "https://github.com/brainstorm/ssh-stamp"
+documentation = "https://docs.rs/ssh-stamp-hal"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 embassy-sync = { workspace = true }

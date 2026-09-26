@@ -90,9 +90,9 @@ jobs:
           components: clippy, rustfmt
       # Firmware clippy runs per target in the build matrix above. This
       # lints every host crate instead, the default set already includes
-      # xtask and ota.
+      # xtask and ssh-stamp-ota.
       - name: Clippy host crates
-        run: cargo clippy --all-targets --features ota/std,can,ipv6,mem-probe -- -D warnings
+        run: cargo clippy --all-targets --features ssh-stamp-ota/std,can,ipv6,mem-probe -- -D warnings
       - name: Format
         run: cargo fmt --all -- --check
 
@@ -109,7 +109,7 @@ jobs:
         with:
           toolchain: stable
       - name: Build utility
-        run: cargo build --package ota --bin packer --features std
+        run: cargo build --package ssh-stamp-ota --bin packer --features std
 
   docs:
     name: Documentation
@@ -126,3 +126,24 @@ jobs:
         run: cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask
       - name: Check doc warnings
         run: cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask 2>&1 | grep -iE "broken|warning.*link" || true
+
+  # Packages every publishable crate and builds each one from its .crate
+  # tarball, as `cargo publish` will on release. The tarballs are built outside
+  # the workspace, so .cargo/config.toml doesn't apply and its bare-metal
+  # rustflags are passed here instead. Must stay in sync with the publish-crates
+  # job in release.yml.
+  publish-check:
+    name: Crates.io packaging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Setup Stable Rust Toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          target: riscv32imac-unknown-none-elf
+          toolchain: stable
+      - name: Dry-run publish
+        env:
+          RUSTFLAGS: '-C force-frame-pointers --cfg getrandom_backend="custom"'
+        run: cargo publish --workspace --dry-run --target riscv32imac-unknown-none-elf

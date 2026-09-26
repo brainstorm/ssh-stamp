@@ -42,7 +42,13 @@
 //!
 //! To port ssh-stamp to a new microcontroller family:
 //!
-//! 1. Create lib and bin for your platform: `ssh-stamp/ssh-stamp-yourplatform/src/lib.rs` and `ssh-stamp/ssh-stamp-yourplatform/src/bin/ssh-stamp-yourplatform.rs`.
+//! 1. Create the port crate under the manufacturer's directory,
+//!    `boards/ssh-stamp-<manufacturer>/ssh-stamp-<platform>/`, with a lib
+//!    (`src/lib.rs`) and a bin (`src/bin/ssh-stamp-<platform>.rs`), and add
+//!    it to `members` in the workspace `Cargo.toml`. Its board support crate
+//!    (`ssh-stamp-<platform>-boards`) and HIL tests
+//!    (`ssh-stamp-<platform>-hil`) sit next to it. The Espressif port in
+//!    `boards/ssh-stamp-esp/` is the reference.
 //! 2. Implement the needed traits from `ssh-stamp-hal/src/traits/`. At a
 //!    minimum: a [`NetworkProviderHal`] (or [`WifiHal`]), [`OtaActions`], and
 //!    a UART type implementing the `BufferedSerial` trait from the `ssh-stamp`
@@ -52,7 +58,8 @@
 //! 4. In the binary, mirror the ESP32 boot flow: bring up peripherals, load
 //!    config via `ssh-stamp::store::load_or_create`, spawn the UART task,
 //!    bring up the network, call `ssh-stamp::app::run_app`.
-//! 5. Add a `cargo build-yourplatform` alias in `.cargo/config.toml`.
+//! 5. Register the chips and boards in `xtask/src/board.rs` so that
+//!    `cargo xtask <board> build` works for them.
 //!
 //! No changes are needed in `ssh-stamp` or `ssh-stamp-hal`.
 

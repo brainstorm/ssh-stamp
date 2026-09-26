@@ -73,6 +73,8 @@ cargo clippy -p xtask --all-targets -- -D warnings
 cargo fmt --all -- --check
 cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask
 cargo test              # host-side crates, scoped by workspace default-members
+RUSTFLAGS='-C force-frame-pointers --cfg getrandom_backend="custom"' \
+  cargo publish --workspace --dry-run --target riscv32imac-unknown-none-elf
 ```
 
 Docs build against a board so the build script generates a real pin layout
@@ -81,7 +83,9 @@ for the crate front pages.
 ## Adding a board
 
 1. Drop a `boards/<name>.toml` into the relevant BSP crate, with the pin map
-   and a `[build]` section naming its chip:
+   and a `[build]` section naming its chip. BSP crates live under
+   `boards/ssh-stamp-<manufacturer>/`; for Espressif boards the file goes in
+   `boards/ssh-stamp-esp/ssh-stamp-esp32-boards/boards/`:
    ```toml
    [pins]
    uart_rx = 10
@@ -107,3 +111,35 @@ them on the next doc build.
 
 Add a `Chip` entry to `CHIPS` in [`xtask/src/board.rs`](../xtask/src/board.rs) with its target triple and
 toolchain.
+
+## Releasing
+
+A `vX.Y.Z` tag builds firmware images for every board and attaches them to a
+GitHub Release. The same tag publishes the crates to crates.io, and docs.rs
+then builds their API documentation.
+
+1. Bump `version` under `[workspace.package]` in the root `Cargo.toml`, and
+   the matching `version` of the workspace crates under
+   `[workspace.dependencies]`. Every crate shares that one version.
+2. Merge, then tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+`ssh-stamp-esp32-hil` and `xtask` have `publish = false` and are never
+published.
+
+How docs.rs builds each crate (target, features, cfgs) is set in its
+`[package.metadata.docs.rs]` table. It does not read `.cargo/config.toml`, so
+settings from there that the docs need are repeated in that table.
+
+The CI job publishes through crates.io trusted publishing, which needs the
+crate to already exist on crates.io. The first release of a new crate is
+therefore published by hand:
+
+```
+cargo login
+RUSTFLAGS='-C force-frame-pointers --cfg getrandom_backend="custom"' \
+  cargo publish --workspace --target riscv32imac-unknown-none-elf
+```
+
+Then, in each crate's settings on crates.io, add `brainstorm/ssh-stamp` with
+workflow `release.yml` as a trusted publisher, and invite the other
+maintainers as owners.
