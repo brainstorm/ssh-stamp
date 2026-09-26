@@ -3750,7 +3750,7 @@ dependencies = [
 
 [[package]]
 name = "ssh-stamp"
-version = "0.3.0"
+version = "1.0.4"
 dependencies = [
  "bcrypt",
  "cfg-if",
@@ -3790,7 +3790,7 @@ dependencies = [
 
 [[package]]
 name = "ssh-stamp-esp32"
-version = "0.3.0"
+version = "1.0.4"
 dependencies = [
  "cfg-if",
  "edge-dhcp",
@@ -3828,7 +3828,7 @@ dependencies = [
 
 [[package]]
 name = "ssh-stamp-esp32-boards"
-version = "0.3.0"
+version = "1.0.4"
 dependencies = [
  "serde",
  "toml",
@@ -3854,7 +3854,7 @@ dependencies = [
 
 [[package]]
 name = "ssh-stamp-hal"
-version = "0.3.0"
+version = "1.0.4"
 dependencies = [
  "embassy-net",
  "embassy-sync 0.8.0",
@@ -3863,7 +3863,7 @@ dependencies = [
 
 [[package]]
 name = "ssh-stamp-ota"
-version = "0.3.0"
+version = "1.0.4"
 dependencies = [
  "clap",
  "log",
