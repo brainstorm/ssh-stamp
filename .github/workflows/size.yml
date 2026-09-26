@@ -51,6 +51,10 @@ jobs:
       - name: Setup Rust toolchain for Xtensa
         if: ${{ matrix.board.xtensa }}
         uses: esp-rs/xtensa-toolchain@v1.7.0
+        # espup queries the GitHub API for toolchain releases; unauthenticated
+        # requests from shared runners hit the rate limit (403 Forbidden).
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           ldproxy: false
           version: 1.96.0
