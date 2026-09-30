@@ -134,28 +134,15 @@ printed nowhere else. This is a local serial cable rather than a network peer
 
 ## Over SSH
 
-Set `SSH_STAMP_NOTICES=json` and the session messages become JSON on stderr
-instead of prose:
+Session messages are JSON on stderr by default, so no setup is needed to
+script against them:
 
 ```
-export SSH_STAMP_NOTICES=json
-ssh -o SendEnv=SSH_STAMP_NOTICES root@192.168.4.1 2>&1 >/dev/null | jq -c .
+ssh root@192.168.4.1 2>&1 >/dev/null | jq -c .
 ```
 
 Note the `2>&1 >/dev/null` ordering: it sends stderr to the pipe and discards
 stdout, so `jq` sees the messages and not the target's UART traffic.
-
-**Send `SSH_STAMP_NOTICES` before any other `SSH_STAMP_*` variable.** The
-switch discards anything already queued — otherwise prose from before the
-switch would be interleaved into the JSON stream and break the parse — so a
-change made by a variable sent earlier goes unreported:
-
-```
-# Right: the SSID change is reported as JSON
-ssh -o SendEnv=SSH_STAMP_NOTICES -o SendEnv=SSH_STAMP_WIFI_AP_SSID root@192.168.4.1
-# Wrong: the SSID change is applied, but silently
-ssh -o SendEnv=SSH_STAMP_WIFI_AP_SSID -o SendEnv=SSH_STAMP_NOTICES root@192.168.4.1
-```
 
 ```json
 {"ssh_stamp":1,"event":"config_changed","key":"wifi_ap_ssid","from":"ssh-stamp-a1b2","to":"SshStampSSID"}
@@ -187,15 +174,15 @@ $ ... | jq -r 'select(.event=="rejected") | "\(.what): \(.reason)"'
 SSH_STAMP_WIFI_BAND: must be 2.4g, 5g or auto
 ```
 
-Two things are deliberately not in the JSON:
+Two things are deliberately not in the JSON over SSH:
 
 - **Secrets.** Over SSH a changed password reports only
   `config_secret_changed` with its length, and the summary reports
   `"psk_set":true`. The console `boot` object is the sole exception, for the
   reason above.
 - **The pre-authentication banner.** `SSH_STAMP_NOTICES` is an environment
-  variable, and those arrive after authentication, so the device cannot know
-  you wanted JSON at the point it sends the banner. It is always prose.
+  variable, and those arrive after authentication, so the banner is sent
+  before the device knows which format you want. It is always prose.
 
 # Device messages
 
@@ -228,10 +215,22 @@ Note this needs a sunset with the banner and disconnect send paths; see the
 
 A shell session is a transparent pipe to the target UART, so the device
 cannot explain itself on stdout without corrupting that stream. It uses SSH
-stderr instead, and every line is prefixed `ssh-stamp:`.
+stderr instead, as the JSON objects [above](#over-ssh). Because the two
+streams are separate, redirection picks what you want:
 
 ```
-$ ssh root@192.168.4.1
+ssh root@192.168.4.1 > capture.bin    # UART bytes only, byte-for-byte
+ssh root@192.168.4.1 2>/dev/null      # UART bytes only, messages discarded
+ssh root@192.168.4.1 2>notes.txt      # both, kept apart
+```
+
+`SSH_STAMP_NOTICES` changes how the messages are rendered: `prose` for
+plain-text lines prefixed `ssh-stamp:`, or `off` if your client merges the
+streams and you cannot separate them afterwards (`ssh -t` does this):
+
+```
+$ export SSH_STAMP_NOTICES=prose
+$ ssh -o SendEnv=SSH_STAMP_NOTICES root@192.168.4.1
 ssh-stamp: config: wifi ap ssid "ssh-stamp-a1b2" -> "SshStampSSID"
 ssh-stamp: config: saved to flash
 ssh-stamp: --- configuration ---
@@ -246,20 +245,16 @@ ssh-stamp: bridge connected
 <target UART output from here on>
 ```
 
-Because the two streams are separate, redirection picks what you want:
+**Send `SSH_STAMP_NOTICES` before any other `SSH_STAMP_*` variable.** The
+switch discards anything already queued — otherwise JSON from before the
+switch would be interleaved with prose — so a change made by a variable sent
+earlier goes unreported:
 
 ```
-ssh root@192.168.4.1 > capture.bin    # UART bytes only, byte-for-byte
-ssh root@192.168.4.1 2>/dev/null      # UART bytes only, messages discarded
-ssh root@192.168.4.1 2>notes.txt      # both, kept apart
-```
-
-If your client merges the streams and you cannot separate them afterwards
-(`ssh -t` does this), turn the messages off at the device:
-
-```
-export SSH_STAMP_NOTICES=off
-ssh -o SendEnv=SSH_STAMP_NOTICES root@192.168.4.1
+# Right: the SSID change is reported as prose
+ssh -o SendEnv=SSH_STAMP_NOTICES -o SendEnv=SSH_STAMP_WIFI_AP_SSID root@192.168.4.1
+# Wrong: the SSID change is applied, but silently
+ssh -o SendEnv=SSH_STAMP_WIFI_AP_SSID -o SendEnv=SSH_STAMP_NOTICES root@192.168.4.1
 ```
 
 Messages reported this way include: which UART pins are in use, a summary of
@@ -268,15 +263,9 @@ the running configuration, every configuration change as `old -> new`, why a
 was refused, bridge connect/disconnect, and UART RX overruns — the last of
 which tells you a capture has a hole in it.
 
-Two deliberate limits:
-
-- **Secrets are never printed.** The summary reports whether a PSK is set,
-  not what it is. An authenticated client could be told, but a PSK echoed
-  into a terminal ends up in scroll buffers and pasted bug reports.
-- **A change that triggers a reboot cannot be acknowledged.** WiFi changes
-  reset the device before the shell channel opens, so the client sees the
-  connection drop with no explanation. Reconnect and the summary will show
-  the new values.
+A change that triggers a reboot cannot be acknowledged. WiFi changes reset
+the device before the shell channel opens, so the client sees the connection
+drop with no explanation. Reconnect and the summary will show the new values.
 
 Messages are queued during session setup and delivered when the shell opens,
 so a configuration change made by the same `ssh` invocation that opens the

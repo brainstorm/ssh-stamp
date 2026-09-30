@@ -498,13 +498,15 @@ pub fn open_session(
 
 /// Handles `SSH_STAMP_NOTICES` environment variable requests.
 ///
+/// Selects how notices are rendered: JSON (the default), `prose`, or `off`.
+///
 /// Notices already ride on SSH stderr, so a client that wants them out of
-/// the way can simply redirect. This exists for clients that cannot split
+/// the way can simply redirect. `off` exists for clients that cannot split
 /// the two streams — `ssh -t`, and anything merging them before ssh-stamp
 /// sees the difference.
 ///
-/// Needs no authentication: it only decides whether the device talks, and
-/// silence is always safe to grant.
+/// Needs no authentication: it only decides how the device talks, and that
+/// is always safe to grant.
 ///
 /// # Errors
 /// Returns an error if SSH protocol operations fail.
@@ -514,12 +516,12 @@ pub fn notices_env(
 ) -> Result<(), sunset::Error> {
     let mode = match a.value()? {
         "off" | "0" | "false" | "no" => notices::Mode::Off,
-        // Notices are prose by default; accepting "on" makes the variable
+        // Notices are JSON by default; accepting "on" makes the variable
         // safe to set unconditionally in a wrapper script.
-        "on" | "1" | "true" | "yes" => notices::Mode::Human,
-        "json" => notices::Mode::Json,
+        "on" | "1" | "true" | "yes" | "json" => notices::Mode::Json,
+        "prose" => notices::Mode::Prose,
         other => {
-            warn!("SSH_STAMP_NOTICES must be on, off or json, got {other:?}");
+            warn!("SSH_STAMP_NOTICES must be json, prose or off, got {other:?}");
             return a.fail();
         }
     };

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Human-readable messages from the device to the SSH client.
+//! Messages from the device to the SSH client.
 //!
 //! # Why stderr
 //!
@@ -24,8 +24,9 @@
 //! ```
 //!
 //! The client chooses, with no device-side flag and no in-band signalling.
-//! `SSH_STAMP_NOTICES=off` exists as well for clients that merge the two
-//! streams and cannot separate them after the fact.
+//! Notices are JSON unless the client sends `SSH_STAMP_NOTICES=prose`, and
+//! `SSH_STAMP_NOTICES=off` exists for clients that merge the two streams and
+//! cannot separate them after the fact.
 //!
 //! # Why buffered
 //!
@@ -132,11 +133,13 @@ const PREFIX: &str = "ssh-stamp: ";
 /// How notices are rendered for this session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {
-    /// Prose, prefixed `ssh-stamp:`. The default.
-    #[default]
-    Human,
     /// One JSON object per line, for `jq` and friends. See [`crate::json`].
+    /// The default: short objects read fine for a human too, and a script
+    /// gets something parseable without having to ask first.
+    #[default]
     Json,
+    /// Prose, prefixed `ssh-stamp:`.
+    Prose,
     /// Nothing at all.
     Off,
 }
@@ -169,7 +172,7 @@ impl Notices {
         Self {
             buf: String::new(),
             dropped: 0,
-            mode: Mode::Human,
+            mode: Mode::default(),
         }
     }
 
@@ -217,7 +220,7 @@ impl Notices {
     pub fn push(&mut self, event: &str, args: core::fmt::Arguments<'_>) {
         match self.mode {
             Mode::Off => {}
-            Mode::Human => self.line(format_args!("{PREFIX}{args}")),
+            Mode::Prose => self.line(format_args!("{PREFIX}{args}")),
             Mode::Json => self.line(format_args!(
                 r#"{},"text":"{}"}}"#,
                 json::Head(event),
@@ -230,7 +233,7 @@ impl Notices {
     pub fn config_changed(&mut self, key: &str, from: &str, to: &str) {
         match self.mode {
             Mode::Off => {}
-            Mode::Human => {
+            Mode::Prose => {
                 self.line(format_args!("{PREFIX}config: {key} {from:?} -> {to:?}"));
             }
             Mode::Json => self.line(format_args!(
@@ -247,7 +250,7 @@ impl Notices {
     pub fn config_secret(&mut self, key: &str, len: usize) {
         match self.mode {
             Mode::Off => {}
-            Mode::Human => {
+            Mode::Prose => {
                 self.line(format_args!("{PREFIX}config: {key} updated ({len} chars)"));
             }
             Mode::Json => self.line(format_args!(
@@ -263,7 +266,7 @@ impl Notices {
     pub fn rejected(&mut self, what: &str, reason: &str) {
         match self.mode {
             Mode::Off => {}
-            Mode::Human => {
+            Mode::Prose => {
                 self.line(format_args!("{PREFIX}{what} rejected: {reason}"));
             }
             Mode::Json => self.line(format_args!(
@@ -345,7 +348,7 @@ pub async fn emit<W: Write>(
     let mut line = String::<PREAUTH_LEN>::new();
     match mode {
         Mode::Off => return Ok(()),
-        Mode::Human => {
+        Mode::Prose => {
             if write!(line, "{PREFIX}{args}\r\n").is_err() {
                 // Truncated rather than dropped: a partial warning still
                 // tells the user something happened.
@@ -402,7 +405,7 @@ pub async fn config_summary<W: Write>(
     match mode {
         Mode::Off => Ok(()),
         Mode::Json => config_summary_json(w, config).await,
-        Mode::Human => config_summary_human(w, mode, config).await,
+        Mode::Prose => config_summary_human(w, mode, config).await,
     }
 }
 
@@ -609,6 +612,13 @@ pub fn band_label(band: u8) -> &'static str {
 mod tests {
     use super::*;
 
+    /// A queue rendering prose, which is not the default.
+    fn prose() -> Notices {
+        let mut n = Notices::new();
+        n.set_mode(Mode::Prose);
+        n
+    }
+
     /// Drains `n` and returns the text the client would have received.
     fn drained(n: &mut Notices) -> NoticeDrain {
         let mut out = NoticeDrain::new();
@@ -618,7 +628,7 @@ mod tests {
 
     #[test]
     fn notices_are_prefixed_and_crlf_terminated() {
-        let mut n = Notices::new();
+        let mut n = prose();
         n.push("test", format_args!("bridge connected"));
         // CRLF, not LF: the client may be on a raw PTY where a bare newline
         // leaves the cursor mid-line.
@@ -645,7 +655,7 @@ mod tests {
 
     #[test]
     fn overflow_is_counted_and_leaves_no_partial_line() {
-        let mut n = Notices::new();
+        let mut n = prose();
         // Fill until a push is refused.
         let mut accepted = 0;
         while n.dropped == 0 {
@@ -810,7 +820,7 @@ mod tests {
         // Documented in USING.md: send SSH_STAMP_NOTICES before the other
         // SSH_STAMP_* variables, or the notices they produce are lost.
         // Keeping them would interleave prose into the JSON stream.
-        let mut n = Notices::new();
+        let mut n = prose();
         n.config_changed("wifi_ap_ssid", "old", "new");
         n.set_mode(Mode::Json);
         let mut out = NoticeDrain::new();
@@ -835,7 +845,7 @@ mod tests {
 
     #[test]
     fn human_mode_is_unchanged_by_the_json_work() {
-        let mut n = Notices::new();
+        let mut n = prose();
         n.config_changed("wifi_ap_ssid", "old", "new");
         let mut out = NoticeDrain::new();
         n.flush_into(&mut out);

@@ -32,6 +32,14 @@
 //! quote turns a parseable document into a broken one.
 
 use core::fmt::{Display, Formatter, Result, Write as _};
+use core::net::Ipv4Addr;
+
+use heapless::String;
+use log::info;
+use sunset::SignKey;
+
+use crate::config::SSHStampConfig;
+use crate::notices::band_label;
 
 /// Schema version, and the marker identifying an ssh-stamp JSON line.
 pub const VERSION: u32 = 1;
@@ -73,10 +81,70 @@ impl Display for Esc<'_> {
     }
 }
 
+/// Prints the provisioning details as a single `boot` object.
+///
+/// The same facts as the `info!` lines logged at boot, in a form a script
+/// can read. This is the only place they are available before a client can
+/// connect: the WPA2 PSK is generated on first boot and printed nowhere
+/// else.
+///
+/// Goes through `info!` like everything else, so the line carries the
+/// logger's prefix; consumers strip it with the `grep -o` in `docs/USING.md`.
+///
+/// Secrets: unlike the SSH-side summary, the PSK *is* included. It has to
+/// be — nobody can associate to the AP without it, and this is a local
+/// serial cable, not a network peer.
+///
+/// The AP address is absent: it comes from the network stack, which is not
+/// up yet. The port emits [`net_up`] once it is.
+pub fn boot(config: &SSHStampConfig, mac: [u8; 6]) {
+    let mut fp = String::<64>::new();
+    if let SignKey::Ed25519(_) = config.hostkey
+        && let Ok(f) = config.hostkey.pubkey().fingerprint()
+    {
+        let _ = write!(fp, "{f}");
+    }
+
+    info!(
+        concat!(
+            r#"{},"wifi_ap":{{"ssid":"{}","psk":"{}","band":"{}"}},"#,
+            r#""mac":"{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}","#,
+            r#""hostkey_fingerprint":"{}","first_login":{}}}"#
+        ),
+        Head("boot"),
+        Esc(&config.wifi_ap_ssid),
+        Esc(&config.wifi_ap_pw),
+        band_label(config.wifi_ap_band),
+        mac[0],
+        mac[1],
+        mac[2],
+        mac[3],
+        mac[4],
+        mac[5],
+        Esc(&fp),
+        config.first_login,
+    );
+}
+
+/// Prints the network details as a single `net_up` object, mirroring
+/// [`boot`].
+///
+/// The address is only known once the stack is up, so it cannot be part of
+/// `boot`. `role` distinguishes the device hosting its own AP (`"ap"`) from
+/// it having joined one (`"station"`).
+pub fn net_up(ssid: &str, role: &str, ip: Ipv4Addr) {
+    info!(
+        r#"{},"role":"{}","ssid":"{}","ip":"{}"}}"#,
+        Head("net_up"),
+        Esc(role),
+        Esc(ssid),
+        ip,
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use heapless::String;
 
     fn esc(s: &str) -> String<128> {
         let mut out = String::new();
