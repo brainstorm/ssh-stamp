@@ -16,6 +16,7 @@
 
 use core::net::Ipv4Addr;
 use core::net::SocketAddrV4;
+use ssh_stamp::json;
 
 use edge_dhcp::io::{self, DEFAULT_SERVER_PORT};
 use edge_dhcp::server::{Server, ServerOptions};
@@ -151,6 +152,7 @@ impl NetworkProviderHal for EspWifi {
                             ap_config.ap_ssid.as_str(),
                             config.address,
                         );
+                        json::net_up(ap_config.ap_ssid.as_str(), "ap", config.address.address());
                     }
                     break;
                 }
@@ -166,6 +168,7 @@ impl NetworkProviderHal for EspWifi {
                             "Connect to the AP `{}` with IP {}",
                             sta_ssid_static, config.address,
                         );
+                        json::net_up(sta_ssid_static, "station", config.address.address());
                     }
                     break;
                 }

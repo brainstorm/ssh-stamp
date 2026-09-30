@@ -17,10 +17,12 @@ use log::trace;
 
 use crate::config::SSHStampConfig;
 use crate::handle::{
-    EventContext, SessionType, defunct, first_auth, hostkeys, open_session, password_auth,
-    pubkey_auth, session_env, session_exec, session_pty, session_shell, session_subsystem,
+    EventContext, NoticeQueue, SessionType, defunct, disconnected, first_auth, hostkeys,
+    open_session, password_auth, pubkey_auth, session_env, session_exec, session_pty,
+    session_shell, session_subsystem,
 };
 use crate::mem_probe::{Checkpoint, checkpoint, log_kex_elapsed};
+use crate::notices::PreAuth;
 use crate::platform::PlatformServices;
 use crate::settings::UART_BUFFER_SIZE;
 use sunset::{ChanHandle, ServEvent};
@@ -44,15 +46,35 @@ pub async fn connection_loop<P: PlatformServices>(
     config: &SunsetMutex<SSHStampConfig>,
     platform: &P,
     #[cfg(feature = "can")] can_queue: &Channel<NoopRawMutex, ChanHandle, 1>,
+    notices: &NoticeQueue,
 ) -> Result<(), sunset::Error> {
     let mut session: Option<ChanHandle> = None;
     let mut config_changed = false;
     let mut needs_reset = false;
     let mut auth_checked = false;
+    let mut pre_auth: Option<PreAuth> = None;
     #[cfg(all(feature = "sftp-ota", feature = "can"))]
     let mut can_dispatched = false;
 
     loop {
+        // Before taking the session mutex below: `auth_banner` and
+        // `disconnect` need it themselves, so a handler cannot send these
+        // inline without deadlocking against its own `ProgressHolder`.
+        match pre_auth.take() {
+            Some(PreAuth::Banner(msg)) => serv.auth_banner(&msg).await?,
+            Some(PreAuth::Refuse(reason, msg)) => {
+                serv.auth_banner(&msg).await?;
+                serv.disconnect(reason, msg.trim()).await?;
+                // Deliberately keep looping rather than returning: the
+                // packets are only queued at this point, and returning would
+                // drop the socket before they reach the wire. The client
+                // closes on receipt, which ends the loop. Authentication
+                // cannot succeed in this state anyway, so there is no need
+                // to stop dispatching events in the meantime.
+            }
+            None => {}
+        }
+
         let mut ph = ProgressHolder::new();
         let ev = serv.progress(&mut ph).await?;
 
@@ -60,6 +82,8 @@ pub async fn connection_loop<P: PlatformServices>(
 
         let mut ctx = EventContext {
             session: &mut session,
+            notices,
+            pre_auth: &mut pre_auth,
             auth_checked: &mut auth_checked,
             config_changed: &mut config_changed,
             needs_reset: &mut needs_reset,
@@ -82,7 +106,7 @@ pub async fn connection_loop<P: PlatformServices>(
             ServEvent::FirstAuth(_) => {
                 checkpoint(Checkpoint::KexComplete);
                 log_kex_elapsed("accept->firstauth");
-                first_auth(ev, config).await?;
+                first_auth(ev, config, &mut ctx).await?;
             }
             ServEvent::Hostkeys(_) => {
                 hostkeys(ev, config).await?;
@@ -105,6 +129,9 @@ pub async fn connection_loop<P: PlatformServices>(
             }
             ServEvent::SessionExec(_) => {
                 session_exec(ev)?;
+            }
+            ServEvent::Disconnected(_) => {
+                disconnected(ev)?;
             }
             ServEvent::Defunct => {
                 defunct()?;
