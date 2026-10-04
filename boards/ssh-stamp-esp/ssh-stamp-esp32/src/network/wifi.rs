@@ -309,26 +309,26 @@ pub async fn wifi_up(mut wifi_controller: WifiController<'static>, sta_ssid: &'s
             }
             Timer::after(Duration::from_millis(5000)).await;
         }
-    } else {
-        // Station Mode
-        // If the connection is lost it will attempt to reconnect.
-        loop {
-            debug!("Connecting to access point...");
+    }
 
-            match wifi_controller.connect_async().await {
-                Ok(info) => {
-                    info!("Wifi connected to {info:?}");
+    // Station Mode
+    // If the connection is lost it will attempt to reconnect.
+    loop {
+        debug!("Connecting to access point...");
 
-                    // Wait until we're no longer connected
-                    let info = wifi_controller.wait_for_disconnect_async().await.ok();
-                    info!("Disconnected: {info:?}");
-                }
-                Err(e) => {
-                    info!("Failed to connect to wifi: {e:?}");
-                }
+        match wifi_controller.connect_async().await {
+            Ok(info) => {
+                info!("Wifi connected to {info:?}");
+
+                // Wait until we're no longer connected
+                let info = wifi_controller.wait_for_disconnect_async().await.ok();
+                info!("Disconnected: {info:?}");
             }
-            Timer::after(Duration::from_millis(1000)).await;
+            Err(e) => {
+                info!("Failed to connect to wifi: {e:?}");
+            }
         }
+        Timer::after(Duration::from_millis(1000)).await;
     }
 }
 
