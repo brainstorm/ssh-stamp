@@ -19,7 +19,7 @@ use log::{debug, info, warn};
 
 use crate::config::SSHStampConfig;
 use crate::platform::PlatformServices;
-use crate::serial::{BufferedSerial, serial_bridge};
+use crate::serial::{BufferedSerial, CtrlD, serial_bridge};
 
 #[cfg(feature = "can")]
 use crate::can::can_bridge;
@@ -185,7 +185,7 @@ pub mod env_parser {
 
 #[derive(Debug)]
 pub enum SessionType {
-    Bridge(ChanHandle),
+    Bridge(ChanHandle, CtrlD),
     #[cfg(feature = "sftp-ota")]
     Sftp(ChanHandle),
 }
@@ -195,6 +195,10 @@ pub struct EventContext<'a> {
     pub auth_checked: &'a mut bool,
     pub config_changed: &'a mut bool,
     pub needs_reset: &'a mut bool,
+    /// The client asked for a PTY, i.e. this is an interactive terminal.
+    pub pty: &'a mut bool,
+    /// The client sent `SSH_STAMP_TRANSPARENT=1`: forward Ctrl-D too.
+    pub transparent: &'a mut bool,
     /// Hands accepted `can` subsystem channels to the CAN bridge, which
     /// runs concurrently with the shell (UART) session.
     #[cfg(feature = "can")]
@@ -283,6 +287,10 @@ pub fn session_subsystem(
 
 /// Handles SSH session shell requests.
 ///
+/// Returns `true` when a saved configuration change needs a reboot. The
+/// shell is not opened then: the caller ends the session, closing the TCP
+/// connection so the client sees it end, and reboots afterwards.
+///
 /// # Errors
 ///
 /// Returns an error if SSH protocol operations fail.
@@ -292,7 +300,7 @@ pub async fn session_shell<P: PlatformServices>(
     config: &SunsetMutex<SSHStampConfig>,
     chan_pipe: &Channel<NoopRawMutex, SessionType, 1>,
     platform: &P,
-) -> Result<(), sunset::Error> {
+) -> Result<bool, sunset::Error> {
     if let ServEvent::SessionShell(a) = ev {
         debug!("ServEvent::SessionShell");
 
@@ -309,8 +317,8 @@ pub async fn session_shell<P: PlatformServices>(
                     .map_err(|_| sunset::error::BadUsage.build())?;
                 drop(config_guard);
                 if *ctx.needs_reset {
-                    info!("Configuration saved. Rebooting to apply the changes...");
-                    platform.reset();
+                    info!("Configuration saved, ending the session to reboot");
+                    return Ok(true);
                 }
             }
             debug_assert_eq!(ch.num(), a.channel());
@@ -318,7 +326,14 @@ pub async fn session_shell<P: PlatformServices>(
             debug!("We got shell");
             platform.activate_uart();
             debug!("Connection loop: UART activated");
-            match chan_pipe.try_send(SessionType::Bridge(ch)) {
+            // Ctrl-D ends an interactive session, as at a shell prompt.
+            // Without a PTY the stream may be binary, where 0x04 is data.
+            let ctrl_d = if *ctx.pty && !*ctx.transparent {
+                CtrlD::Exit
+            } else {
+                CtrlD::Forward
+            };
+            match chan_pipe.try_send(SessionType::Bridge(ch, ctrl_d)) {
                 Ok(()) => *ctx.auth_checked = false,
                 Err(e) => log::error!("Could not send the channel: {e:?}"),
             }
@@ -326,7 +341,7 @@ pub async fn session_shell<P: PlatformServices>(
             a.fail()?;
         }
     }
-    Ok(())
+    Ok(false)
 }
 
 /// Handles the first authentication request.
@@ -504,6 +519,9 @@ pub async fn session_env(
             "SSH_STAMP_UART_STOP_BITS" => {
                 uart_env(UartParam::StopBits, a, config, ctx).await?;
             }
+            "SSH_STAMP_TRANSPARENT" => {
+                transparent_env(a, ctx)?;
+            }
             _ => {
                 debug!("Ignoring unknown environment variable: {}", a.name()?);
                 a.succeed()?;
@@ -511,6 +529,29 @@ pub async fn session_env(
         }
     }
     Ok(())
+}
+
+/// Handles `SSH_STAMP_TRANSPARENT`, which makes this session forward
+/// Ctrl-D to the target instead of ending the session on it.
+///
+/// Per session and never stored, so it needs no authentication.
+///
+/// # Errors
+///
+/// Returns an error if SSH protocol operations fail.
+pub fn transparent_env(
+    a: sunset::event::ServEnvironmentRequest<'_, '_>,
+    ctx: &mut EventContext<'_>,
+) -> Result<(), sunset::Error> {
+    *ctx.transparent = match a.value()? {
+        "1" | "true" | "yes" | "on" => true,
+        "0" | "false" | "no" | "off" => false,
+        _ => {
+            warn!("SSH_STAMP_TRANSPARENT must be 1 or 0");
+            return a.fail();
+        }
+    };
+    a.succeed()
 }
 
 /// Handles `SSH_STAMP_PUBKEY` environment variable requests.
@@ -840,6 +881,7 @@ pub async fn session_pty(
         if *ctx.auth_checked || first_login {
             debug!("ServEvent::SessionPty: Session granted");
             a.succeed()?;
+            *ctx.pty = true;
         } else {
             debug!("ServEvent::SessionPty: No auth not session");
             a.fail()?;
@@ -901,12 +943,12 @@ where
         let session_type = chan_pipe.receive().await;
         debug!("Checking bridge session type");
         match session_type {
-            SessionType::Bridge(ch) => {
+            SessionType::Bridge(ch, ctrl_d) => {
                 info!("Handling bridge session");
                 let chan_io: ChanInOut<'_> = ssh_server.stdio(ch).await?;
                 let (stdin, stdout) = chan_io.split();
                 info!("Starting bridge");
-                serial_bridge(stdin, stdout, uart_buff).await?;
+                serial_bridge(stdin, stdout, uart_buff, ctrl_d).await?;
             }
             #[cfg(feature = "sftp-ota")]
             SessionType::Sftp(ch) => {

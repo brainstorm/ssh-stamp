@@ -54,7 +54,7 @@ mod tests {
     use core::array::from_fn;
     use embassy_futures::select::{Either, select};
     use embassy_sync::pipe::Pipe;
-    use ssh_stamp::serial::serial_bridge;
+    use ssh_stamp::serial::{CtrlD, serial_bridge};
     use ssh_stamp_esp32::{
         BufferedUart, EspUartPins, UART_SIGNAL, boot, spawn_uart, start_interrupt_executor,
     };
@@ -109,7 +109,12 @@ mod tests {
 
         let to_uart: Pipe<_, 512> = Pipe::new();
         let from_uart: Pipe<_, 512> = Pipe::new();
-        let bridge = serial_bridge(ChanRead(&to_uart), ChanWrite(&from_uart), uart_buf);
+        let bridge = serial_bridge(
+            ChanRead(&to_uart),
+            ChanWrite(&from_uart),
+            uart_buf,
+            CtrlD::Forward,
+        );
 
         let receive_function = async {
             to_uart.write_all(b"test").await;

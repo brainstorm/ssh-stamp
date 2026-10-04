@@ -19,8 +19,9 @@ use embassy_net::{
     tcp::{AcceptError, TcpSocket},
 };
 use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
+use embassy_time::{Duration, with_timeout};
 use heapless::String;
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use ssh_stamp_hal::{BandMode, WifiApConfigStatic};
 #[cfg(feature = "can")]
 use sunset::ChanHandle;
@@ -40,6 +41,9 @@ use crate::platform::PlatformServices;
 use crate::serial::BufferedSerial;
 use crate::serve;
 use crate::settings::{TCP_RX_BUF, TCP_TX_BUF, UART_BUFFER_SIZE, WIFI_PASSWORD_CHARS};
+
+/// How long to wait for the client to acknowledge each step of closing.
+const TCP_CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Ensures a `WiFi` password exists, persists a freshly-generated one if not,
 /// prints the `boot` JSON line (see [`json::Boot`]), and returns a ready-to-use
@@ -241,13 +245,39 @@ where
         let (mut rsock, mut wsock) = tcp_socket.split();
         let server = ssh_server.run(&mut rsock, &mut wsock);
 
-        match select3(server, connection, bridge).await {
+        let reboot = match select3(server, connection, bridge).await {
+            Either3::Second(Ok(())) => true,
             Either3::First(r) | Either3::Second(r) | Either3::Third(r) => {
                 if let Err(e) = r {
                     warn!("Session ended: {e}");
                 }
+                false
             }
+        };
+
+        close_tcp(&mut tcp_socket).await;
+        if reboot {
+            info!("Rebooting to apply the configuration changes...");
+            platform.reset();
         }
+    }
+}
+
+/// Closes the TCP connection so the client sees the session end.
+///
+/// Dropping a `TcpSocket` only removes it from the stack, sending neither FIN
+/// nor RST, which leaves the client in a session that no longer exists until
+/// its own TCP timeout, unable to leave it with Ctrl-C or Ctrl-D. Closing
+/// sends a FIN after any unsent data; a peer that does not acknowledge it in
+/// time is sent an RST instead.
+async fn close_tcp(socket: &mut TcpSocket<'_>) {
+    socket.close();
+    if with_timeout(TCP_CLOSE_TIMEOUT, socket.flush())
+        .await
+        .is_err()
+    {
+        socket.abort();
+        let _ = with_timeout(TCP_CLOSE_TIMEOUT, socket.flush()).await;
     }
 }
 

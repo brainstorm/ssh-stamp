@@ -36,6 +36,15 @@ Once the flash process finishes successfully, follow the steps below:
 
 2. Connect a laptop/phone to the WiFi AP using the printed SSID and PSK, then SSH into the device at `root@192.168.4.1`.
 
+   The session is a pipe to the target's UART. As with a shell, Ctrl-D ends the session and Ctrl-C is sent to the target, so it can interrupt a program running there. To send Ctrl-D to the target as well, make the session fully transparent:
+
+   ```
+   export SSH_STAMP_TRANSPARENT=1
+   ssh -o SendEnv=SSH_STAMP_TRANSPARENT root@192.168.4.1
+   ```
+
+   and leave it with Enter, then `~.` (OpenSSH's escape sequence). Sessions without a terminal, such as `ssh root@192.168.4.1 < file`, are always transparent, so binary data passes through unchanged.
+
 3. Provisioning via SSH environment variables
 
 You can provision the device by sending these environment variables with your SSH client. Examples below use OpenSSH and `SendEnv` to forward local environment variables to the device.
