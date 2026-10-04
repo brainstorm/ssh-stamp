@@ -8,17 +8,42 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 Once the flash process finishes successfully, follow the steps below:
 
-1. On first boot the device generates a random WPA2 PSK and prints it to the serial console with the following (or similar) info messages:
+1. On first boot the device generates a random WPA2 PSK and prints it to the serial console, together with the SSID, MAC, SSH hostkey fingerprint and, once the network is up, the AP's IP address (see [On the serial console](#on-the-serial-console)):
 
-```
-(...)
-INFO - WIFI PSK: <PSK>
-INFO - WIFI MAC: <MAC>
-INFO - SSH hostkey fingerprint: <FINGERPRINT>
-INFO - Connect to the AP `<RANDOM AP NAME>` as a DHCP client with IP: 192.168.4.1
+```json
+{
+  "schema": 1,
+  "event": "boot",
+  "ident": "SSH-2.0-Sunset-0.6.0-ssh-stamp-1.0.4",
+  "wifi_ap": {
+    "ssid": "<SSID>",
+    "psk": "<PSK>",
+    "band": "2.4GHz",
+    "channel": 1
+  },
+  "mac": "<MAC>",
+  "hostkey_fingerprint": "<FINGERPRINT>",
+  "first_login": true
+}
+{
+  "schema": 1,
+  "event": "net_up",
+  "role": "ap",
+  "ssid": "<SSID>",
+  "ip": "192.168.4.1"
+}
 ```
 
 2. Connect a laptop/phone to the WiFi AP using the printed SSID and PSK, then SSH into the device at `root@192.168.4.1`.
+
+   The session is a pipe to the target's UART. As with a shell, Ctrl-D ends the session and Ctrl-C is sent to the target, so it can interrupt a program running there. To send Ctrl-D to the target as well, make the session fully transparent:
+
+   ```
+   export SSH_STAMP_TRANSPARENT=1
+   ssh -o SendEnv=SSH_STAMP_TRANSPARENT root@192.168.4.1
+   ```
+
+   and leave it with Enter, then `~.` (OpenSSH's escape sequence). Sessions without a terminal, such as `ssh root@192.168.4.1 < file`, are always transparent, so binary data passes through unchanged.
 
 3. Provisioning via SSH environment variables
 
@@ -77,6 +102,72 @@ Notes:
 - If you prefer a single-step provisioning, export all three env vars locally and forward them with `SendEnv` in the same SSH invocation.
 
 If your SSH client doesn't forward environment variables by default, use the `-o SendEnv=VAR` option as shown above or configure `SendEnv` in your SSH client config.
+
+# Machine-readable output
+
+The device reports on its serial console as JSON, pretty-printed so it reads well on a terminal
+and still parses with `jq`. Every object opens with `{` and closes with `}`
+alone on their own lines, and its first two keys are always the same:
+
+```json
+{
+  "schema": 1,
+  "event": "boot",
+  ...
+}
+```
+
+`schema` is the version of this JSON format. It only changes if the meaning of existing
+fields changes — new fields get added without bumping it, so **ignore keys you
+do not recognise** and your parser will keep working across upgrades.
+
+## On the serial console
+
+The console is shared with the ESP32 ROM bootloader and the second-stage
+bootloader, neither of which is JSON. Cut the objects out by their framing and
+hand them to `jq`:
+
+```
+espflash monitor | sed -un '/^{$/,/^}$/p' | jq -c --unbuffered .
+```
+
+Two objects are emitted at startup. `boot` carries the provisioning details,
+shown in [First boot](#first-boot--provisioning) above, and `net_up` follows
+once the network stack has an address, which is not known at boot. After
+that, `station_connected` / `station_disconnected` report clients joining the
+AP (`mac`, `aid`, and a `reason` on disconnect), and in station mode
+`wifi_connected` / `wifi_disconnected` report the upstream AP (`ssid`,
+`bssid`, `channel` or `reason`).
+
+Everything else the firmware logs arrives as a `log` event:
+
+```json
+{
+  "schema": 1,
+  "event": "log",
+  "level": "info",
+  "target": "ssh_stamp_esp32::network::wifi",
+  "msg": "Wifi configuring Access Point Mode"
+}
+```
+
+`ESP_LOG` (set in `.cargo/config.toml`) chooses which levels are printed, as a
+global level plus optional `target=level` overrides, e.g.
+`info,esp_radio=warn`. On the ESP32-C2, C3 and S2, which lack the atomics a
+custom logger needs, `log` events stay plain `INFO - message` lines; every
+other object above is JSON on all chips.
+
+So a first-boot provisioning script can pick up what it needs directly:
+
+```
+PSK=$(espflash monitor | sed -un '/^{$/,/^}$/p' \
+        | jq -r --unbuffered 'select(.event=="boot") | .wifi_ap.psk' | head -1)
+```
+
+Note `boot` **does** contain the WPA2 PSK in the clear. It has to: nothing can
+associate with the AP without it, and it is generated on first boot and
+printed nowhere else. This is a local serial cable rather than a network peer
+— but it does mean a captured console log is a credential.
 
 # Pin assignments
 
