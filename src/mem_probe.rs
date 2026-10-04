@@ -12,11 +12,15 @@ use embassy_time::Instant;
 #[cfg(feature = "mem-probe")]
 use portable_atomic::{AtomicU64, Ordering};
 
+/// Log target of `@BENCH` lines, which loggers must print unchanged: the
+/// benchmark harness parses them as whitespace-separated `key=value` pairs.
+pub const BENCH_TARGET: &str = "bench";
+
 /// Emits a structured benchmark line.
 #[macro_export]
 macro_rules! bench_emit {
     ($($arg:tt)*) => {
-        ::log::info!("@BENCH {}", ::core::format_args!($($arg)*))
+        ::log::info!(target: $crate::mem_probe::BENCH_TARGET, "@BENCH {}", ::core::format_args!($($arg)*))
     };
 }
 
