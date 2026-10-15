@@ -1,0 +1,5 @@
+actions:
+  - restart_target_device
+  - parse_ssh_stamp_network_from_serial
+  - connect_to_ssid_using_psk
+  - wait_for_reachable
