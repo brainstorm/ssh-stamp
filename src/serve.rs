@@ -33,6 +33,9 @@ use embassy_sync::channel::Channel;
 
 /// Handles the SSH connection loop, processing events from clients.
 ///
+/// Returns `Ok(())` only when a saved configuration change needs a reboot;
+/// the caller closes the connection first, then reboots.
+///
 /// # Errors
 /// Returns an error if SSH protocol operations fail.
 ///
@@ -48,6 +51,8 @@ pub async fn connection_loop<P: PlatformServices>(
     let mut session: Option<ChanHandle> = None;
     let mut config_changed = false;
     let mut needs_reset = false;
+    let mut pty = false;
+    let mut transparent = false;
     let mut auth_checked = false;
     #[cfg(all(feature = "sftp-ota", feature = "can"))]
     let mut can_dispatched = false;
@@ -63,6 +68,8 @@ pub async fn connection_loop<P: PlatformServices>(
             auth_checked: &mut auth_checked,
             config_changed: &mut config_changed,
             needs_reset: &mut needs_reset,
+            pty: &mut pty,
+            transparent: &mut transparent,
             #[cfg(feature = "can")]
             can_queue,
             #[cfg(all(feature = "sftp-ota", feature = "can"))]
@@ -77,7 +84,9 @@ pub async fn connection_loop<P: PlatformServices>(
                 session_subsystem(ev, &mut ctx)?;
             }
             ServEvent::SessionShell(_) => {
-                session_shell(ev, &mut ctx, config, chan_pipe, platform).await?;
+                if session_shell(ev, &mut ctx, config, chan_pipe, platform).await? {
+                    return Ok(());
+                }
             }
             ServEvent::FirstAuth(_) => {
                 checkpoint(Checkpoint::KexComplete);

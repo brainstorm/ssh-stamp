@@ -66,4 +66,8 @@ pub trait PlatformServices {
     /// Signal the platform's buffered UART task that SSH is ready and
     /// UART transfer may start. Idempotent.
     fn activate_uart(&self);
+
+    /// Print to the console as-is, without the logger's level prefix, so
+    /// machine-readable output stays parseable.
+    fn console_print(&self, text: core::fmt::Arguments<'_>);
 }

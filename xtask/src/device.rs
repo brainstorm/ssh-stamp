@@ -581,7 +581,7 @@ mod tests {
             RoundTrips::await_echo(&rx, &mut pending, &marker, deadline),
             Echo::Returned
         ));
-        assert!(pending.is_empty());
+        assert_eq!(pending, b"");
     }
 
     #[test]

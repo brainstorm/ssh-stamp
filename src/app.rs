@@ -19,12 +19,12 @@ use embassy_net::{
     tcp::{AcceptError, TcpSocket},
 };
 use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
+use embassy_time::{Duration, with_timeout};
 use heapless::String;
 use log::{debug, error, info, warn};
 use ssh_stamp_hal::{BandMode, WifiApConfigStatic};
 #[cfg(feature = "can")]
 use sunset::ChanHandle;
-use sunset::SignKey;
 use sunset_async::SunsetMutex;
 #[cfg(feature = "mem-probe")]
 use {
@@ -35,16 +35,18 @@ use {
 
 use crate::config::SSHStampConfig;
 use crate::handle::{self, SessionType};
+use crate::json;
 use crate::mem_probe::{Checkpoint, checkpoint, mark_kex_start, replay_checkpoints};
 use crate::platform::PlatformServices;
 use crate::serial::BufferedSerial;
 use crate::serve;
-use crate::settings::{
-    SSH_STAMP_IDENT, TCP_RX_BUF, TCP_TX_BUF, UART_BUFFER_SIZE, WIFI_PASSWORD_CHARS,
-};
+use crate::settings::{TCP_RX_BUF, TCP_TX_BUF, UART_BUFFER_SIZE, WIFI_PASSWORD_CHARS};
+
+/// How long to wait for the client to acknowledge each step of closing.
+const TCP_CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Ensures a `WiFi` password exists, persists a freshly-generated one if not,
-/// prints the SSH hostkey fingerprint, and returns a ready-to-use
+/// prints the `boot` JSON line (see [`json::Boot`]), and returns a ready-to-use
 /// [`WifiApConfigStatic`] for a [`ssh_stamp_hal::WifiHal`] implementation.
 ///
 /// The returned config resolves the `[0xFF; 6]` random-MAC sentinel to a
@@ -65,8 +67,6 @@ pub async fn prepare_ap_config<P: PlatformServices>(
 ) -> Result<WifiApConfigStatic, sunset::Error> {
     let mut guard = config.lock().await;
 
-    info!("SSH server ident: {SSH_STAMP_IDENT}");
-
     if guard.wifi_ap_pw.is_empty() {
         let pw = generate_wifi_password()?;
         warn!("wifi_pw missing from config, generated new password");
@@ -76,17 +76,10 @@ pub async fn prepare_ap_config<P: PlatformServices>(
             .await
             .map_err(|_| sunset::error::BadUsage.build())?;
     }
-    log_ap_credentials(&guard);
 
     let mac = guard
         .resolve_mac()
         .map_err(|_| sunset::error::BadUsage.build())?;
-    info!(
-        "WIFI MAC: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
-    );
-
-    print_hostkey_fingerprint(&guard.hostkey);
 
     // Resolve band mode from the stored u8 (0=2.4G, 1=5G, 2=Auto).
     // 5GHz is only available on the ESP32-C5; other chips silently fall
@@ -95,7 +88,14 @@ pub async fn prepare_ap_config<P: PlatformServices>(
     // Channel 1 for 2.4GHz, channel 36 for 5GHz/Auto (esp-radio default).
     let channel = if guard.wifi_ap_band == 0 { 1 } else { 36 };
 
-    info!("WIFI AP band: {band:?} (channel {channel})");
+    platform.console_print(format_args!(
+        "{}",
+        json::Pretty::new(json::Boot {
+            config: &guard,
+            mac,
+            channel,
+        })
+    ));
 
     Ok(WifiApConfigStatic {
         ap_ssid: guard.wifi_ap_ssid.clone(),
@@ -109,9 +109,10 @@ pub async fn prepare_ap_config<P: PlatformServices>(
 }
 
 /// Logs the access point credentials.
+#[cfg(feature = "mem-probe")]
 fn log_ap_credentials(config: &SSHStampConfig) {
-    info!("WIFI SSID: {}", config.wifi_ap_ssid);
-    info!("WIFI PSK: {}", config.wifi_ap_pw);
+    log::info!("WIFI SSID: {}", config.wifi_ap_ssid);
+    log::info!("WIFI PSK: {}", config.wifi_ap_pw);
 }
 
 /// Accepts TCP connections for the server loop.
@@ -204,6 +205,7 @@ where
 
     checkpoint(Checkpoint::TcpListening);
     replay_checkpoints();
+    #[cfg(feature = "mem-probe")]
     log_ap_credentials(&*config.lock().await);
     let mut acceptor = SessionAcceptor::new();
     loop {
@@ -243,13 +245,39 @@ where
         let (mut rsock, mut wsock) = tcp_socket.split();
         let server = ssh_server.run(&mut rsock, &mut wsock);
 
-        match select3(server, connection, bridge).await {
+        let reboot = match select3(server, connection, bridge).await {
+            Either3::Second(Ok(())) => true,
             Either3::First(r) | Either3::Second(r) | Either3::Third(r) => {
                 if let Err(e) = r {
                     warn!("Session ended: {e}");
                 }
+                false
             }
+        };
+
+        close_tcp(&mut tcp_socket).await;
+        if reboot {
+            info!("Rebooting to apply the configuration changes...");
+            platform.reset();
         }
+    }
+}
+
+/// Closes the TCP connection so the client sees the session end.
+///
+/// Dropping a `TcpSocket` only removes it from the stack, sending neither FIN
+/// nor RST, which leaves the client in a session that no longer exists until
+/// its own TCP timeout, unable to leave it with Ctrl-C or Ctrl-D. Closing
+/// sends a FIN after any unsent data; a peer that does not acknowledge it in
+/// time is sent an RST instead.
+async fn close_tcp(socket: &mut TcpSocket<'_>) {
+    socket.close();
+    if with_timeout(TCP_CLOSE_TIMEOUT, socket.flush())
+        .await
+        .is_err()
+    {
+        socket.abort();
+        let _ = with_timeout(TCP_CLOSE_TIMEOUT, socket.flush()).await;
     }
 }
 
@@ -261,19 +289,4 @@ fn generate_wifi_password() -> Result<String<63>, sunset::Error> {
         let _ = pw.push(WIFI_PASSWORD_CHARS[(byte as usize) % 62] as char);
     }
     Ok(pw)
-}
-
-fn print_hostkey_fingerprint(hostkey: &SignKey) {
-    match hostkey {
-        SignKey::Ed25519(_) => {
-            let pubkey = hostkey.pubkey();
-            match pubkey.fingerprint() {
-                Ok(fp) => info!("SSH hostkey fingerprint: {fp}"),
-                Err(e) => warn!("Failed to compute fingerprint: {e:?}"),
-            }
-        }
-        SignKey::AgentEd25519(_) => {
-            warn!("Unsupported key type for fingerprint");
-        }
-    }
 }

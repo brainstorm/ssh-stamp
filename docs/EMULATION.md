@@ -26,13 +26,30 @@ Verified on `esp-emu` 0.38.0, ESP32-C6, ssh-stamp at sunset 0.6:
   (`authmode: Wpa2Personal`) and takes a DHCP lease on `192.168.4.2`.
 - **SSH.** With `hostfwd`, an `ssh` client on the host completes a full
   handshake, and the server host key it presents matches the fingerprint the
-  firmware logged at boot.
+  firmware printed at boot.
 
-```
-INFO - SSH server ident: SSH-2.0-Sunset-0.6.0-ssh-stamp-0.3.0
-INFO - SSH hostkey fingerprint: SHA256:VO+Yvf+tm7o39TlcybTUPNv5NAxc/iQFlt9fjrekW6g
-INFO - Wifi connected to ConnectedInfo { ssid: "myssid", ..., authmode: Wpa2Personal }
-INFO - Connect to the AP `myssid` with IP 192.168.4.2/24
+```json
+{
+  "schema": 1,
+  "event": "boot",
+  "ident": "SSH-2.0-Sunset-0.6.0-ssh-stamp-0.3.0",
+  ...
+  "hostkey_fingerprint": "SHA256:VO+Yvf+tm7o39TlcybTUPNv5NAxc/iQFlt9fjrekW6g",
+  ...
+}
+{
+  "schema": 1,
+  "event": "wifi_connected",
+  "ssid": "myssid",
+  ...
+}
+{
+  "schema": 1,
+  "event": "net_up",
+  "role": "station",
+  "ssid": "myssid",
+  "ip": "192.168.4.2"
+}
 ```
 
 ```
@@ -93,7 +110,7 @@ despite the upstream docs describing an `idf.py merge-bin` flow), and boots it.
 
 ## Future directions
 
-- Smoke test in CI: boot, assert on `--exit-on "SSH hostkey fingerprint"`,
+- Smoke test in CI: boot, assert on `--exit-on '"event": "net_up"'`,
   fail on timeout. Cheap, and catches boot regressions no unit test would.
 - Config-partition fixture (above), unlocking station mode and therefore full
   SSH integration tests against a real client.

@@ -16,6 +16,7 @@
 
 use core::net::Ipv4Addr;
 use core::net::SocketAddrV4;
+use ssh_stamp::json;
 
 use edge_dhcp::io::{self, DEFAULT_SERVER_PORT};
 use edge_dhcp::server::{Server, ServerOptions};
@@ -146,10 +147,13 @@ impl NetworkProviderHal for EspWifi {
                 debug!("Checking if link is up");
                 if ap_stack.is_link_up() {
                     if let Some(config) = ap_stack.config_v4() {
-                        info!(
-                            "Connect to the AP `{}` with IP {}",
-                            ap_config.ap_ssid.as_str(),
-                            config.address,
+                        esp_println::println!(
+                            "{}",
+                            json::Pretty::new(json::NetUp {
+                                ssid: ap_config.ap_ssid.as_str(),
+                                role: "ap",
+                                ip: config.address.address(),
+                            })
                         );
                     }
                     break;
@@ -162,9 +166,13 @@ impl NetworkProviderHal for EspWifi {
                 debug!("Checking if station has received IP address");
                 if ap_stack.is_config_up() {
                     if let Some(config) = ap_stack.config_v4() {
-                        info!(
-                            "Connect to the AP `{}` with IP {}",
-                            sta_ssid_static, config.address,
+                        esp_println::println!(
+                            "{}",
+                            json::Pretty::new(json::NetUp {
+                                ssid: sta_ssid_static,
+                                role: "station",
+                                ip: config.address.address(),
+                            })
                         );
                     }
                     break;
@@ -300,35 +308,72 @@ pub async fn wifi_up(mut wifi_controller: WifiController<'static>, sta_ssid: &'s
                 .await;
             match ev {
                 Ok(EventInfo::Connected(info)) => {
-                    info!("Station connected: {info:?}");
+                    esp_println::println!(
+                        "{}",
+                        json::Pretty::new(format_args!(
+                            r#"{},"mac":"{}","aid":{}}}"#,
+                            json::Head("station_connected"),
+                            json::Mac(info.mac),
+                            info.aid
+                        ))
+                    );
                 }
                 Ok(EventInfo::Disconnected(info)) => {
-                    info!("Station disconnected: {info:?}");
+                    esp_println::println!(
+                        "{}",
+                        json::Pretty::new(format_args!(
+                            r#"{},"mac":"{}","aid":{},"reason":"{}"}}"#,
+                            json::Head("station_disconnected"),
+                            json::Mac(info.mac),
+                            info.aid,
+                            json::Esc(format_args!("{:?}", info.reason))
+                        ))
+                    );
                 }
                 _ => (),
             }
             Timer::after(Duration::from_millis(5000)).await;
         }
-    } else {
-        // Station Mode
-        // If the connection is lost it will attempt to reconnect.
-        loop {
-            debug!("Connecting to access point...");
+    }
 
-            match wifi_controller.connect_async().await {
-                Ok(info) => {
-                    info!("Wifi connected to {info:?}");
+    // Station Mode
+    // If the connection is lost it will attempt to reconnect.
+    loop {
+        debug!("Connecting to access point...");
 
-                    // Wait until we're no longer connected
-                    let info = wifi_controller.wait_for_disconnect_async().await.ok();
-                    info!("Disconnected: {info:?}");
-                }
-                Err(e) => {
-                    info!("Failed to connect to wifi: {e:?}");
+        match wifi_controller.connect_async().await {
+            Ok(info) => {
+                esp_println::println!(
+                    "{}",
+                    json::Pretty::new(format_args!(
+                        r#"{},"ssid":"{}","bssid":"{}","channel":{}}}"#,
+                        json::Head("wifi_connected"),
+                        json::Esc(info.ssid.as_str()),
+                        json::Mac(info.bssid),
+                        info.channel
+                    ))
+                );
+
+                // Wait until we're no longer connected
+                match wifi_controller.wait_for_disconnect_async().await {
+                    Ok(info) => esp_println::println!(
+                        "{}",
+                        json::Pretty::new(format_args!(
+                            r#"{},"ssid":"{}","bssid":"{}","reason":"{}"}}"#,
+                            json::Head("wifi_disconnected"),
+                            json::Esc(info.ssid.as_str()),
+                            json::Mac(info.bssid),
+                            json::Esc(format_args!("{:?}", info.reason))
+                        ))
+                    ),
+                    Err(e) => info!("Disconnected: {e:?}"),
                 }
             }
-            Timer::after(Duration::from_millis(1000)).await;
+            Err(e) => {
+                info!("Failed to connect to wifi: {e:?}");
+            }
         }
+        Timer::after(Duration::from_millis(1000)).await;
     }
 }
 

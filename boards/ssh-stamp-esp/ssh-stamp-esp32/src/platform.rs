@@ -74,4 +74,8 @@ impl PlatformServices for EspPlatform {
     fn activate_uart(&self) {
         UART_SIGNAL.signal(1);
     }
+
+    fn console_print(&self, text: core::fmt::Arguments<'_>) {
+        esp_println::println!("{text}");
+    }
 }

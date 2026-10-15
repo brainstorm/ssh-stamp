@@ -10,7 +10,20 @@ use core::future::Future;
 
 use embassy_futures::select::select;
 use embedded_io_async::{Read, Write};
-use log::{debug, warn};
+use log::{debug, info, warn};
+
+/// Ctrl-D (EOT) as sent by a terminal.
+const CTRL_D: u8 = 0x04;
+
+/// What the bridge does with a Ctrl-D (0x04) from the client.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CtrlD {
+    /// Ends the session, like Ctrl-D at a shell prompt. Bytes before it are
+    /// still forwarded.
+    Exit,
+    /// Forwards it to the target like any other byte.
+    Forward,
+}
 
 /// Platform-agnostic buffered serial bridge.
 ///
@@ -37,16 +50,21 @@ pub trait BufferedSerial: Sync {
 }
 
 /// Forwards an incoming SSH connection to/from the local UART, until
-/// the connection drops.
+/// the connection drops or, with [`CtrlD::Exit`], the client sends Ctrl-D.
 /// # Errors
 /// Returns an error if the SSH connection fails.
 pub async fn serial_bridge<U: BufferedSerial>(
     chan_read: impl Read<Error = sunset::Error>,
     chan_write: impl Write<Error = sunset::Error>,
     uart: &U,
+    ctrl_d: CtrlD,
 ) -> Result<(), sunset::Error> {
     debug!("Starting serial <--> SSH bridge");
-    select(uart_to_ssh(uart, chan_write), ssh_to_uart(chan_read, uart)).await;
+    select(
+        uart_to_ssh(uart, chan_write),
+        ssh_to_uart(chan_read, uart, ctrl_d),
+    )
+    .await;
     debug!("Stopping serial <--> SSH bridge");
     Ok(())
 }
@@ -69,6 +87,7 @@ async fn uart_to_ssh<U: BufferedSerial>(
 async fn ssh_to_uart<U: BufferedSerial>(
     mut chan_read: impl Read<Error = sunset::Error>,
     uart_buf: &U,
+    ctrl_d: CtrlD,
 ) -> Result<(), sunset::Error> {
     let mut uart_tx_buf = [0u8; 64];
     loop {
@@ -76,6 +95,76 @@ async fn ssh_to_uart<U: BufferedSerial>(
         if n == 0 {
             return Err(sunset::Error::ChannelEOF);
         }
-        uart_buf.write(&uart_tx_buf[..n]).await;
+        let data = &uart_tx_buf[..n];
+        if ctrl_d == CtrlD::Exit
+            && let Some(i) = data.iter().position(|&b| b == CTRL_D)
+        {
+            uart_buf.write(&data[..i]).await;
+            info!("Ctrl-D from the client, ending the session");
+            return Ok(());
+        }
+        uart_buf.write(data).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::future::{pending, ready};
+    use std::sync::Mutex;
+    use std::vec::Vec;
+
+    /// Records what the bridge writes to the target.
+    struct Uart(Mutex<Vec<u8>>);
+
+    impl BufferedSerial for Uart {
+        fn read(&self, _buf: &mut [u8]) -> impl Future<Output = usize> {
+            pending()
+        }
+
+        fn write(&self, buf: &[u8]) -> impl Future<Output = ()> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            ready(())
+        }
+
+        fn check_dropped_bytes(&self) -> usize {
+            0
+        }
+    }
+
+    /// A client that sends `self.0` and then EOF.
+    struct Client(&'static [u8]);
+
+    impl embedded_io_async::ErrorType for Client {
+        type Error = sunset::Error;
+    }
+
+    impl Read for Client {
+        fn read(&mut self, buf: &mut [u8]) -> impl Future<Output = Result<usize, sunset::Error>> {
+            let n = self.0.len().min(buf.len());
+            buf[..n].copy_from_slice(&self.0[..n]);
+            self.0 = &self.0[n..];
+            ready(Ok(n))
+        }
+    }
+
+    fn to_uart(input: &'static [u8], ctrl_d: CtrlD) -> (Result<(), sunset::Error>, Vec<u8>) {
+        let uart = Uart(Mutex::new(Vec::new()));
+        let result = embassy_futures::block_on(ssh_to_uart(Client(input), &uart, ctrl_d));
+        (result, uart.0.into_inner().unwrap())
+    }
+
+    #[test]
+    fn ctrl_d_ends_the_session_after_forwarding_what_came_before() {
+        let (result, sent) = to_uart(b"ls\x04rest", CtrlD::Exit);
+        assert!(result.is_ok());
+        assert_eq!(sent, b"ls");
+    }
+
+    #[test]
+    fn transparent_sessions_forward_ctrl_d() {
+        let (result, sent) = to_uart(b"ls\x04rest", CtrlD::Forward);
+        assert!(matches!(result, Err(sunset::Error::ChannelEOF)));
+        assert_eq!(sent, b"ls\x04rest");
     }
 }

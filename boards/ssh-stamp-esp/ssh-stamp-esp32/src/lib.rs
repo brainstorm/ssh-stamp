@@ -23,6 +23,7 @@ mod boot;
 mod can;
 pub mod flash;
 mod hash;
+pub mod logger;
 mod network;
 mod platform;
 mod rng;

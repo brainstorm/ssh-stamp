@@ -75,7 +75,7 @@ macro_rules! boot {
     ($peripherals:ident, $rng:ident, $entropy_source:ident, $sw_int1:ident) => {
         $crate::init_heap!();
         $crate::esp_bootloader_esp_idf::esp_app_desc!();
-        $crate::esp_println::logger::init_logger_from_env();
+        $crate::logger::init();
         $crate::bench::log_heap("boot");
         $crate::log::debug!("HSM: initialising peripherals");
 
