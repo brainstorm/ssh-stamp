@@ -7,10 +7,10 @@
 pub mod bench;
 pub mod bmf;
 pub mod cargo;
-pub mod e2e;
 pub mod list;
 pub mod reset;
 pub mod size;
+pub mod test;
 
 /// The extra features every build has.
 pub const BENCH_FEATURES: &[&str] = &["mem-probe", "bench-loopback"];

@@ -49,12 +49,12 @@ enum Command {
     Bench(cmd::bench::Args),
     /// Convert benchmark results.json into Bencher Metric Format.
     Bmf(cmd::bmf::Args),
-    /// Run basic end-to-end integration testing on hardware.
-    E2e(cmd::e2e::Args),
     /// Determine the size of a firmware build.
     Size(cmd::size::Args),
     /// Resets the storage on board, while keeping the firmware intact.
     Reset(cmd::reset::Args),
+    /// Run test suites that need more than `cargo test`, e.g. on hardware.
+    Test(cmd::test::Args),
     /// `<target> <cargo command> [args...]` forwarded to cargo.
     #[command(external_subcommand)]
     Cargo(Vec<String>),
@@ -65,9 +65,9 @@ fn main() -> Result<()> {
         Command::List(args) => cmd::list::run(&args),
         Command::Bench(mut args) => cmd::bench::run(&mut args),
         Command::Bmf(args) => cmd::bmf::run(&args),
-        Command::E2e(args) => cmd::e2e::run(&args),
         Command::Size(args) => cmd::size::run(&args),
         Command::Reset(args) => cmd::reset::run(&args),
+        Command::Test(args) => cmd::test::run(&args),
         Command::Cargo(argv) => cmd::cargo::run(&argv),
     }
 }
@@ -104,13 +104,19 @@ mod tests {
             .map_err(Box::new)
     }
 
-    fn e2e_cmd(argv: &[&str]) -> Result<cmd::e2e::Args, Box<clap::Error>> {
-        Cli::try_parse_from(["xtask", "e2e"].into_iter().chain(argv.iter().copied()))
-            .map(|cli| match cli.command {
-                Command::E2e(parsed) => parsed,
-                _ => unreachable!(),
-            })
-            .map_err(Box::new)
+    fn e2e_cmd(argv: &[&str]) -> Result<cmd::test::e2e::Args, Box<clap::Error>> {
+        Cli::try_parse_from(
+            ["xtask", "test", "e2e"]
+                .into_iter()
+                .chain(argv.iter().copied()),
+        )
+        .map(|cli| match cli.command {
+            Command::Test(cmd::test::Args {
+                command: cmd::test::Command::E2e(parsed),
+            }) => parsed,
+            _ => unreachable!(),
+        })
+        .map_err(Box::new)
     }
 
     #[test]
@@ -237,18 +243,23 @@ mod tests {
             e2e_cmd(&[
                 "--board",
                 "esp32c6-devkitc",
-                "--prg-serial",
+                "--port",
                 "/dev/ttyUSB0",
                 "--interface",
                 "wlan0",
                 "--scenario",
-                "xtask/e2e/wifi_ap_mode.yml",
+                "wifi-ap",
                 "--verbose"
             ])
             .is_ok()
         );
         assert!(e2e_cmd(&["--board", "esp32-fake-name"]).is_err());
         assert!(e2e_cmd(&[]).is_err());
+        assert!(e2e_cmd(&["--board", "esp32c6-devkitc", "--scenario", "nope"]).is_err());
         assert!(e2e_cmd(&["--board", "esp32c6-devkitc", "--host", "1.2.3.4"]).is_err());
+        assert!(
+            Cli::try_parse_from(["xtask", "e2e", "--board", "esp32c6-devkitc"])
+                .is_ok_and(|cli| matches!(cli.command, Command::Cargo(_)))
+        );
     }
 }
