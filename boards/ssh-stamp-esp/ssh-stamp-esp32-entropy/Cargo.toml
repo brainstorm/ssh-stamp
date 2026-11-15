@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2026 Marko Malenic <mmalenic1@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "ssh-stamp-esp32-entropy"
+authors = ["Marko Malenic <mmalenic1@gmail.com>"]
+description = "Entropy source for ssh-stamp"
+documentation = "https://docs.rs/ssh-stamp-esp32-entropy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[package.metadata.docs.rs]
+default-target = "riscv32imac-unknown-none-elf"
+targets = []
+rustc-args = ["--cfg", 'getrandom_backend="extern_impl"']
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lib]
+test = false
+doctest = false
+bench = false
+
+[dependencies]
+esp-hal = { workspace = true }
+getrandom = { version = "0.4" }
+log = { workspace = true }
+zeroize = { version = "1", default-features = false }
+
+[features]
+default = ["esp32c6"]
+esp32 = ["esp-hal/esp32"]
+esp32c2 = ["esp-hal/esp32c2"]
+esp32c3 = ["esp-hal/esp32c3"]
+esp32c5 = ["esp-hal/esp32c5"]
+esp32c6 = ["esp-hal/esp32c6"]
+esp32c61 = ["esp-hal/esp32c61"]
+esp32s2 = ["esp-hal/esp32s2"]
+esp32s3 = ["esp-hal/esp32s3"]
+
+[lints]
+workspace = true
