@@ -16,7 +16,7 @@
 //!
 //! ## Overview
 //!
-//! - Peripheral traits: [`WifiHal`], [`NetworkProviderHal`], [`RngHal`],
+//! - Peripheral traits: [`WifiHal`], [`NetworkProviderHal`],
 //!   [`HashHal`], [`TimerHal`], [`OtaActions`]
 //! - Configuration: [`WifiApConfigStatic`]
 //! - Error handling: [`HalError`] with variants per peripheral type
@@ -54,7 +54,8 @@
 //!    a UART type implementing the `BufferedSerial` trait from the `ssh-stamp`
 //!    crate.
 //! 3. Implement the `PlatformServices` trait from `ssh-stamp::platform` for
-//!    the platform.
+//!    the platform, and provide a `getrandom` backend for a true
+//!    random source, see `ssh-stamp-esp32-entropy`.
 //! 4. In the binary, mirror the ESP32 boot flow: bring up peripherals, load
 //!    config via `ssh-stamp::store::load_or_create`, spawn the UART task,
 //!    bring up the network, call `ssh-stamp::app::run_app`.

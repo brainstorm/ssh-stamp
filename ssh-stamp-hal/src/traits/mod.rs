@@ -13,13 +13,11 @@
 mod flash;
 mod hash;
 mod network;
-mod rng;
 mod timer;
 mod uart;
 
 pub use flash::OtaActions;
 pub use hash::HashHal;
 pub use network::{NetworkProviderHal, WifiHal};
-pub use rng::RngHal;
 pub use timer::TimerHal;
 pub use uart::UartHal;

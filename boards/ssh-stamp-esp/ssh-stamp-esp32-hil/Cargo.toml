@@ -22,6 +22,10 @@ bench = false
 name = "flash"
 harness = false
 
+[[test]]
+name = "entropy"
+harness = false
+
 # The uart tests require a real board definition, so it's only enabled
 # if a board feature is enabled.
 [[test]]
@@ -41,7 +45,9 @@ embedded-test = { version = "0.7", features = ["embassy-010", "external-executor
 embassy-executor = { workspace = true }
 
 esp-hal = { workspace = true }
+esp-radio = { version = "1.0.0-beta.1", features = ["wifi", "unstable"] }
 esp-rtos = { version = "0.4", features = ["embassy"] }
+getrandom = { version = "0.4" }
 
 embassy-futures = { workspace = true }
 embassy-sync = { workspace = true }

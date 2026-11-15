@@ -31,6 +31,8 @@
 //!   trait implementations, bootable binary, per-target UART pin assignments
 //! - [`ssh_stamp_esp32_boards`](https://docs.rs/ssh-stamp-esp32-boards) —
 //!   per-board pin mappings and the board catalog
+//! - [`ssh_stamp_esp32_entropy`](https://docs.rs/ssh-stamp-esp32-entropy) —
+//!   the ESP32 entropy source lifecycle and `getrandom` backend
 //! - [`ssh_stamp_ota`] — SFTP-based OTA update server (TLV header parsing,
 //!   chunked flash writes, device reset; includes the `packer` host
 //!   utility)
@@ -54,6 +56,7 @@
 //!     └── ssh-stamp-esp/            Espressif
 //!         ├── ssh-stamp-esp32/          port crate: HAL impls and firmware binary
 //!         ├── ssh-stamp-esp32-boards/   board support: `boards/*.toml` pin maps
+//!         ├── ssh-stamp-esp32-entropy/  entropy source and `getrandom` backend
 //!         └── ssh-stamp-esp32-hil/      hardware-in-the-loop tests
 //! ```
 //!

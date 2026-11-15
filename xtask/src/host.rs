@@ -54,9 +54,8 @@ impl AccessPoint {
             .context("networksetup -setairportnetwork");
         }
 
-        let ifname = interface
-            .map(|interface| vec!["ifname".to_string(), interface.to_string()])
-            .unwrap_or_default();
+        let ifname =
+            interface.map_or_default(|interface| vec!["ifname".to_string(), interface.to_string()]);
 
         let nmcli = cmd!(
             shell,

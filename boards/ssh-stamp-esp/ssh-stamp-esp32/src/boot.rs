@@ -61,18 +61,22 @@ macro_rules! start_rtos {
 }
 
 /// The ssh-stamp boot sequence, which does heap allocation, `esp_hal::init`,
-/// configures the entropy source, flash storage and the esp-rtos scheduler.
+/// starts the boot-time entropy source, and sets up flash storage and the
+/// esp-rtos scheduler.
 ///
 /// The `Peripherals` struct cannot be returned once fields have been moved
 /// out of it, so the caller names the bindings and the macro introduces
 /// them into scope, e.g:
 ///
 /// ```ignore
-/// ssh_stamp_esp32::boot!(peripherals, rng, entropy_source, sw_int1);
+/// ssh_stamp_esp32::boot!(peripherals, entropy, sw_int1);
 /// ```
+///
+/// `entropy` is the [`BootEntropy`](crate::entropy::BootEntropy), which must
+/// be kept until it is handed over to the radio.
 #[macro_export]
 macro_rules! boot {
-    ($peripherals:ident, $rng:ident, $entropy_source:ident, $sw_int1:ident) => {
+    ($peripherals:ident, $entropy:ident, $sw_int1:ident) => {
         $crate::init_heap!();
         $crate::esp_bootloader_esp_idf::esp_app_desc!();
         $crate::logger::init();
@@ -85,7 +89,7 @@ macro_rules! boot {
 
         // Enable true random number generation before the config is created, so
         // the WiFi password and SSH host key have cryptographically secure values.
-        let ($rng, $entropy_source) = $crate::init_entropy!($peripherals);
+        let $entropy = $crate::entropy::BootEntropy::start($peripherals.RNG, $peripherals.ADC1);
 
         $crate::flash_init($peripherals.FLASH);
         let $sw_int1 = $crate::start_rtos!($peripherals);

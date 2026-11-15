@@ -5,7 +5,7 @@
 
 //! List known boards and chips.
 
-use crate::board;
+use crate::board::{self, Toolchain};
 use anyhow::Result;
 use clap::Args as ClapArgs;
 use serde::Serialize;
@@ -26,7 +26,7 @@ struct BoardEntry {
     soc: &'static str,
     /// The rust target, one component of the build output path.
     triple: &'static str,
-    /// Whether the board needs the xtensa toolchain instead of stable.
+    /// Whether the board needs the xtensa toolchain instead of nightly.
     xtensa: bool,
     /// The partition table to flash with, empty when the board declares none.
     partitions: &'static str,
@@ -39,7 +39,7 @@ struct ChipEntry {
     name: &'static str,
     /// The rust target, one component of the build output path.
     triple: &'static str,
-    /// Whether the chip needs the xtensa toolchain instead of stable.
+    /// Whether the chip needs the xtensa toolchain instead of nightly.
     xtensa: bool,
 }
 
@@ -51,9 +51,6 @@ struct Targets {
     /// The chips that build the library only.
     chips: Vec<ChipEntry>,
 }
-
-/// The toolchain name that marks a target as needing the xtensa toolchain.
-const XTENSA_TOOLCHAIN: &str = "esp";
 
 impl Targets {
     /// Collect the board and chip tables.
@@ -76,7 +73,7 @@ impl Targets {
                 .map(|chip| ChipEntry {
                     name: chip.name,
                     triple: chip.target,
-                    xtensa: chip.toolchain == XTENSA_TOOLCHAIN,
+                    xtensa: chip.toolchain == Toolchain::Esp,
                 })
                 .collect(),
         }
@@ -92,7 +89,7 @@ pub fn run(args: &Args) -> Result<()> {
     println!("Boards (firmware binary):");
     for board in board::BOARDS {
         println!(
-            "    {:<38} {}  (+{})",
+            "    {:<38} {}  ({})",
             board.name, board.target, board.toolchain
         );
     }
@@ -101,7 +98,7 @@ pub fn run(args: &Args) -> Result<()> {
     println!("Chips (library-only build):");
     for chip in board::CHIPS {
         println!(
-            "    {:<38} {}  (+{})",
+            "    {:<38} {}  ({})",
             chip.name, chip.target, chip.toolchain
         );
     }
@@ -124,7 +121,7 @@ mod tests {
             assert_eq!(entry.name, board.name);
             assert_eq!(entry.soc, board.soc);
             assert_eq!(entry.triple, board.target);
-            assert_eq!(entry.xtensa, board.toolchain == XTENSA_TOOLCHAIN);
+            assert_eq!(entry.xtensa, board.toolchain == Toolchain::Esp);
             // Empty exactly when the board declares no partition table, so the
             // workflow can branch on emptiness alone.
             assert_eq!(entry.partitions.is_empty(), board.partitions.is_none());

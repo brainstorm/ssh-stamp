@@ -33,6 +33,7 @@ The API docs for each crate are published on docs.rs:
 - [ssh-stamp-hal](https://docs.rs/ssh-stamp-hal): hardware abstraction traits a port implements
 - [ssh-stamp-esp32](https://docs.rs/ssh-stamp-esp32): ESP32 port
 - [ssh-stamp-esp32-boards](https://docs.rs/ssh-stamp-esp32-boards): supported boards and their pin assignments
+- [ssh-stamp-esp32-entropy](https://docs.rs/ssh-stamp-esp32-entropy): ESP32 entropy source lifecycle and `getrandom` backend
 - [ssh-stamp-ota](https://docs.rs/ssh-stamp-ota): SFTP-based OTA updates
 
 ## Targets

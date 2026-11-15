@@ -23,7 +23,7 @@ no-default-features = true
 features = ["board-esp32c6-devkitc", "sftp-ota", "can", "ipv6"]
 default-target = "riscv32imac-unknown-none-elf"
 targets = []
-rustc-args = ["--cfg", 'getrandom_backend="custom"']
+rustc-args = ["--cfg", 'getrandom_backend="extern_impl"']
 rustdoc-args = ["--cfg", "docsrs"]
 
 # This crate is no_std, and because libtest pulls in std, it will never be valid to
@@ -70,12 +70,12 @@ embedded-storage = { workspace = true }
 embedded-storage-async = { workspace = true }
 
 ssh-stamp-esp32-boards = { workspace = true, optional = true }
+ssh-stamp-esp32-entropy = { workspace = true }
 
 once_cell = { workspace = true }
 sunset-async = { workspace = true }
 sha2 = { workspace = true }
 hmac = { workspace = true }
-getrandom = { version = "0.4" }
 log = { workspace = true }
 static_cell = { workspace = true }
 portable-atomic = { version = "1" }
@@ -107,14 +107,14 @@ board-waveshare-esp32-s3-touch-lcd-43 = ["dep:ssh-stamp-esp32-boards", "ssh-stam
 # IC features — select the chip only; activated automatically by board features.
 # Kept for all Espressif MCUs even when no board definition exists yet, so the
 # chip remains targetable for custom boards or future BSP entries.
-esp32 = ["esp-hal/esp32", "esp-radio/esp32", "esp-storage/esp32", "esp-bootloader-esp-idf/esp32", "esp-alloc/esp32", "esp-backtrace/esp32", "esp-rtos/esp32", "esp-println/esp32"]
-esp32c2 = ["esp-hal/esp32c2", "esp-radio/esp32c2", "esp-storage/esp32c2", "esp-bootloader-esp-idf/esp32c2", "esp-alloc/esp32c2", "esp-backtrace/esp32c2", "esp-rtos/esp32c2", "esp-println/esp32c2"]
-esp32c3 = ["esp-hal/esp32c3", "esp-radio/esp32c3", "esp-storage/esp32c3", "esp-bootloader-esp-idf/esp32c3", "esp-alloc/esp32c3", "esp-backtrace/esp32c3", "esp-rtos/esp32c3", "esp-println/esp32c3"]
-esp32c5 = ["esp-hal/esp32c5", "esp-radio/esp32c5", "esp-storage/esp32c5", "esp-bootloader-esp-idf/esp32c5", "esp-alloc/esp32c5", "esp-backtrace/esp32c5", "esp-rtos/esp32c5", "esp-println/esp32c5"]
-esp32c6 = ["esp-hal/esp32c6", "esp-radio/esp32c6", "esp-storage/esp32c6", "esp-bootloader-esp-idf/esp32c6", "esp-alloc/esp32c6", "esp-backtrace/esp32c6", "esp-rtos/esp32c6", "esp-println/esp32c6"]
-esp32c61 = ["esp-hal/esp32c61", "esp-radio/esp32c61", "esp-storage/esp32c61", "esp-bootloader-esp-idf/esp32c61", "esp-alloc/esp32c61", "esp-backtrace/esp32c61", "esp-rtos/esp32c61", "esp-println/esp32c61"]
-esp32s2 = ["esp-hal/esp32s2", "esp-radio/esp32s2", "esp-storage/esp32s2", "esp-bootloader-esp-idf/esp32s2", "esp-alloc/esp32s2", "esp-backtrace/esp32s2", "esp-rtos/esp32s2", "esp-println/esp32s2"]
-esp32s3 = ["esp-hal/esp32s3", "esp-radio/esp32s3", "esp-storage/esp32s3", "esp-bootloader-esp-idf/esp32s3", "esp-alloc/esp32s3", "esp-backtrace/esp32s3", "esp-rtos/esp32s3", "esp-println/esp32s3"]
+esp32 = ["esp-hal/esp32", "esp-radio/esp32", "esp-storage/esp32", "esp-bootloader-esp-idf/esp32", "esp-alloc/esp32", "esp-backtrace/esp32", "esp-rtos/esp32", "esp-println/esp32", "ssh-stamp-esp32-entropy/esp32"]
+esp32c2 = ["esp-hal/esp32c2", "esp-radio/esp32c2", "esp-storage/esp32c2", "esp-bootloader-esp-idf/esp32c2", "esp-alloc/esp32c2", "esp-backtrace/esp32c2", "esp-rtos/esp32c2", "esp-println/esp32c2", "ssh-stamp-esp32-entropy/esp32c2"]
+esp32c3 = ["esp-hal/esp32c3", "esp-radio/esp32c3", "esp-storage/esp32c3", "esp-bootloader-esp-idf/esp32c3", "esp-alloc/esp32c3", "esp-backtrace/esp32c3", "esp-rtos/esp32c3", "esp-println/esp32c3", "ssh-stamp-esp32-entropy/esp32c3"]
+esp32c5 = ["esp-hal/esp32c5", "esp-radio/esp32c5", "esp-storage/esp32c5", "esp-bootloader-esp-idf/esp32c5", "esp-alloc/esp32c5", "esp-backtrace/esp32c5", "esp-rtos/esp32c5", "esp-println/esp32c5", "ssh-stamp-esp32-entropy/esp32c5"]
+esp32c6 = ["esp-hal/esp32c6", "esp-radio/esp32c6", "esp-storage/esp32c6", "esp-bootloader-esp-idf/esp32c6", "esp-alloc/esp32c6", "esp-backtrace/esp32c6", "esp-rtos/esp32c6", "esp-println/esp32c6", "ssh-stamp-esp32-entropy/esp32c6"]
+esp32c61 = ["esp-hal/esp32c61", "esp-radio/esp32c61", "esp-storage/esp32c61", "esp-bootloader-esp-idf/esp32c61", "esp-alloc/esp32c61", "esp-backtrace/esp32c61", "esp-rtos/esp32c61", "esp-println/esp32c61", "ssh-stamp-esp32-entropy/esp32c61"]
+esp32s2 = ["esp-hal/esp32s2", "esp-radio/esp32s2", "esp-storage/esp32s2", "esp-bootloader-esp-idf/esp32s2", "esp-alloc/esp32s2", "esp-backtrace/esp32s2", "esp-rtos/esp32s2", "esp-println/esp32s2", "ssh-stamp-esp32-entropy/esp32s2"]
+esp32s3 = ["esp-hal/esp32s3", "esp-radio/esp32s3", "esp-storage/esp32s3", "esp-bootloader-esp-idf/esp32s3", "esp-alloc/esp32s3", "esp-backtrace/esp32s3", "esp-rtos/esp32s3", "esp-println/esp32s3", "ssh-stamp-esp32-entropy/esp32s3"]
 
 [lints]
 workspace = true

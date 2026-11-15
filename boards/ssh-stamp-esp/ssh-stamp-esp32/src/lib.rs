@@ -26,7 +26,6 @@ mod hash;
 pub mod logger;
 mod network;
 mod platform;
-mod rng;
 mod timer;
 mod uart;
 
@@ -37,22 +36,20 @@ pub use flash::{EspOtaWriter, FlashBuffer, get_flash_n_buffer, init as flash_ini
 pub use hash::EspHmac;
 pub use network::{EspWifi, accept_requests, dhcp_server, net_up, wifi_up};
 pub use platform::EspPlatform;
-pub use rng::{
-    EntropySource, EspRng, entropy_source_active, fill_bytes as rng_fill_bytes, init_entropy,
-    register_custom_rng,
-};
 pub use timer::EspTimer;
 pub use uart::{BufferedUart, EspUartPins, UART_BUF, UART_SIGNAL, spawn_uart, uart_task};
 
-// These re-exports are nice to have for macro expansions, including `getrandom_backend!`,
-// `init_heap!`, `start_rtos!` and `boot!, as they mean the calling crate doesn't have to
+/// The entropy source lifecycle and the `getrandom` backend.
+pub use ssh_stamp_esp32_entropy as entropy;
+
+// These re-exports are nice to have for macro expansions, including `init_heap!`,
+// `start_rtos!` and `boot!`, as they mean the calling crate doesn't have to
 // have these as direct dependencies.
 pub use esp_alloc;
 pub use esp_bootloader_esp_idf;
 pub use esp_hal;
 pub use esp_println;
 pub use esp_rtos;
-pub use getrandom;
 pub use log;
 pub use ssh_stamp;
 

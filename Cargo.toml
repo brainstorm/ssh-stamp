@@ -36,6 +36,7 @@ members = [
     "ssh-stamp-hal",
     "boards/ssh-stamp-esp/ssh-stamp-esp32",
     "boards/ssh-stamp-esp/ssh-stamp-esp32-boards",
+    "boards/ssh-stamp-esp/ssh-stamp-esp32-entropy",
     "boards/ssh-stamp-esp/ssh-stamp-esp32-hil",
     "ssh-stamp-ota",
     "xtask",
@@ -54,6 +55,9 @@ homepage = "https://github.com/brainstorm/ssh-stamp"
 keywords = ["ssh", "embedded", "esp32", "uart", "no-std"]
 categories = ["embedded", "no-std", "network-programming"]
 
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
 [workspace.lints.clippy]
 mem_forget = "warn"
 await_holding_lock = "warn"
@@ -71,6 +75,7 @@ ssh-stamp = { path = ".", version = "1.0.4", default-features = false }
 ssh-stamp-hal = { path = "ssh-stamp-hal", version = "1.0.4" }
 ssh-stamp-esp32 = { path = "boards/ssh-stamp-esp/ssh-stamp-esp32", version = "1.0.4", default-features = false }
 ssh-stamp-esp32-boards = { path = "boards/ssh-stamp-esp/ssh-stamp-esp32-boards", version = "1.0.4" }
+ssh-stamp-esp32-entropy = { path = "boards/ssh-stamp-esp/ssh-stamp-esp32-entropy", version = "1.0.4", default-features = false }
 ssh-stamp-ota = { path = "ssh-stamp-ota", version = "1.0.4" }
 
 # Async runtime

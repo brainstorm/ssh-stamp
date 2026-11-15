@@ -10,9 +10,35 @@ use crate::util::workspace_root;
 use anyhow::{Context, Result};
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use ssh_stamp::config::UartPins;
+use std::fmt;
 use std::fs;
 use std::path::PathBuf;
 use xshell::{Shell, cmd};
+
+/// The toolchain that builds a target.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum Toolchain {
+    /// The toolchain that `rust-toolchain.toml` uses.
+    Workspace,
+    /// The Xtensa toolchain that espup installs.
+    Esp,
+}
+
+impl Toolchain {
+    /// The cargo argument that selects the toolchain, if it needs one.
+    pub fn cargo_arg(self) -> Option<&'static str> {
+        match self {
+            Toolchain::Workspace => None,
+            Toolchain::Esp => Some("+esp"),
+        }
+    }
+}
+
+impl fmt::Display for Toolchain {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.cargo_arg().unwrap_or("rust-toolchain.toml"))
+    }
+}
 
 /// A board the firmware can be built and flashed for.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -26,7 +52,7 @@ pub struct Board {
     /// The rust target.
     pub target: &'static str,
     /// The toolchain that builds this target.
-    pub toolchain: &'static str,
+    pub toolchain: Toolchain,
     /// For xtensa, adds `-Z build-std=core,alloc`.
     pub build_std: bool,
     /// Set to `true` for RISC-V boards, `false` for Xtensa.
@@ -50,7 +76,7 @@ pub struct Chip {
     /// The rust target.
     pub target: &'static str,
     /// The toolchain that builds this target.
-    pub toolchain: &'static str,
+    pub toolchain: Toolchain,
     /// For xtensa, adds `-Z build-std=core,alloc`.
     pub build_std: bool,
 }
@@ -109,7 +135,7 @@ pub const BOARDS: &[Board] = &[
         feature: "board-esp32c5-devkitc",
         soc: "esp32c5",
         target: "riscv32imac-unknown-none-elf",
-        toolchain: "stable",
+        toolchain: Toolchain::Workspace,
         build_std: false,
         riscv: true,
         ram: ESP32C5_RAM,
@@ -122,7 +148,7 @@ pub const BOARDS: &[Board] = &[
         feature: "board-esp32c6-devkitc",
         soc: "esp32c6",
         target: "riscv32imac-unknown-none-elf",
-        toolchain: "stable",
+        toolchain: Toolchain::Workspace,
         build_std: false,
         riscv: true,
         ram: ESP32C6_RAM,
@@ -135,7 +161,7 @@ pub const BOARDS: &[Board] = &[
         feature: "board-esp32c61-devkitc",
         soc: "esp32c61",
         target: "riscv32imac-unknown-none-elf",
-        toolchain: "stable",
+        toolchain: Toolchain::Workspace,
         build_std: false,
         riscv: true,
         ram: ESP32C61_RAM,
@@ -148,7 +174,7 @@ pub const BOARDS: &[Board] = &[
         feature: "board-esp32-s2-saola",
         soc: "esp32s2",
         target: "xtensa-esp32s2-none-elf",
-        toolchain: "esp",
+        toolchain: Toolchain::Esp,
         build_std: true,
         riscv: false,
         ram: ESP32S2_RAM,
@@ -161,7 +187,7 @@ pub const BOARDS: &[Board] = &[
         feature: "board-waveshare-esp32-s3-touch-lcd-43",
         soc: "esp32s3",
         target: "xtensa-esp32s3-none-elf",
-        toolchain: "esp",
+        toolchain: Toolchain::Esp,
         build_std: true,
         riscv: false,
         ram: ESP32S3_RAM,
@@ -178,49 +204,49 @@ pub const CHIPS: &[Chip] = &[
     Chip {
         name: "esp32",
         target: "xtensa-esp32-none-elf",
-        toolchain: "esp",
+        toolchain: Toolchain::Esp,
         build_std: true,
     },
     Chip {
         name: "esp32c2",
         target: "riscv32imc-unknown-none-elf",
-        toolchain: "stable",
+        toolchain: Toolchain::Workspace,
         build_std: false,
     },
     Chip {
         name: "esp32c3",
         target: "riscv32imc-unknown-none-elf",
-        toolchain: "stable",
+        toolchain: Toolchain::Workspace,
         build_std: false,
     },
     Chip {
         name: "esp32c5",
         target: "riscv32imac-unknown-none-elf",
-        toolchain: "stable",
+        toolchain: Toolchain::Workspace,
         build_std: false,
     },
     Chip {
         name: "esp32c6",
         target: "riscv32imac-unknown-none-elf",
-        toolchain: "stable",
+        toolchain: Toolchain::Workspace,
         build_std: false,
     },
     Chip {
         name: "esp32c61",
         target: "riscv32imac-unknown-none-elf",
-        toolchain: "stable",
+        toolchain: Toolchain::Workspace,
         build_std: false,
     },
     Chip {
         name: "esp32s2",
         target: "xtensa-esp32s2-none-elf",
-        toolchain: "esp",
+        toolchain: Toolchain::Esp,
         build_std: true,
     },
     Chip {
         name: "esp32s3",
         target: "xtensa-esp32s3-none-elf",
-        toolchain: "esp",
+        toolchain: Toolchain::Esp,
         build_std: true,
     },
 ];
@@ -279,7 +305,7 @@ impl Target {
     }
 
     /// The toolchain that builds this target.
-    pub fn toolchain(&self) -> &'static str {
+    pub fn toolchain(&self) -> Toolchain {
         match self {
             Target::Board(board) => board.toolchain,
             Target::Chip(chip) => chip.toolchain,
@@ -474,7 +500,7 @@ impl Board {
         features: &str,
         env: &[(String, String)],
     ) -> Result<()> {
-        let toolchain = format!("+{}", self.toolchain);
+        let toolchain = self.toolchain.cargo_arg();
         let selection = self.cargo_selection(profile, features);
 
         eprintln!(
@@ -482,7 +508,7 @@ impl Board {
             self.name
         );
 
-        let mut command = cmd!(sh, "cargo {toolchain} build {selection...}");
+        let mut command = cmd!(sh, "cargo {toolchain...} build {selection...}");
         for (key, value) in env {
             command = command.env(key, value);
         }
@@ -502,13 +528,13 @@ impl Board {
         features: &str,
         top: u32,
     ) -> Option<Vec<CrateSize>> {
-        let toolchain = format!("+{}", self.toolchain);
+        let toolchain = self.toolchain.cargo_arg();
         let selection = self.cargo_selection(profile, features);
         let top = top.to_string();
 
         let output = cmd!(
             sh,
-            "cargo {toolchain} bloat {selection...} --crates --message-format json -n {top}"
+            "cargo {toolchain...} bloat {selection...} --crates --message-format json -n {top}"
         )
         .read();
 
@@ -661,7 +687,7 @@ mod tests {
 
         let chip = Target::find("esp32s3").unwrap();
         let args = chip.selection_args();
-        assert!(args.contains(&"--lib".to_string()));
+        assert!(args.iter().any(|arg| arg == "--lib"));
         assert!(args.ends_with(&["-Z".into(), "build-std=core,alloc".into()]));
         assert_eq!(Target::find("esp32c3"), Some(Target::Chip(&CHIPS[2])));
     }

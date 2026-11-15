@@ -41,8 +41,8 @@ use ssh_stamp::{
 #[cfg(feature = "can")]
 use ssh_stamp_esp32::{BufferedCan, CAN_BUF, EspCanPins, can_task};
 use ssh_stamp_esp32::{
-    EspPlatform, EspUartPins, EspWifi, bench, entropy_source_active, flash, mac_address,
-    spawn_uart, start_interrupt_executor,
+    EspPlatform, EspUartPins, EspWifi, bench, entropy, flash, mac_address, spawn_uart,
+    start_interrupt_executor,
 };
 use ssh_stamp_esp32_boards::Board;
 use ssh_stamp_hal::{HalError, WifiError};
@@ -52,7 +52,7 @@ use sunset_async::SunsetMutex;
 
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
-    ssh_stamp_esp32::boot!(peripherals, rng, entropy_source, sw_int1);
+    ssh_stamp_esp32::boot!(peripherals, boot_entropy, sw_int1);
 
     #[cfg(feature = "sftp-ota")]
     {
@@ -78,17 +78,8 @@ async fn main(spawner: Spawner) -> ! {
         tx: tx_num,
     };
 
-    // On first boot this mints the SSH host key and the WiFi PSK, so the
-    // entropy source enabled above has to still be running. Guard the
-    // invariant rather than trusting a comment: `debug-assertions` are on
-    // even in release for this workspace, so reintroducing an early drop of
-    // the `EntropySource` fails loudly on the bench instead of silently
-    // producing predictable keys.
-    debug_assert!(
-        entropy_source_active(),
-        "entropy source was disabled before host key generation"
-    );
-
+    // On first boot this mints the SSH host key and the WiFi PSK from the
+    // boot time entropy source started in `boot!`.
     debug!("Loading config");
     let flash_config = {
         let Some(flash_storage_guard) = flash::get_flash_n_buffer() else {
@@ -148,21 +139,14 @@ async fn main(spawner: Spawner) -> ! {
 
     debug!("Initialising radio");
 
-    // Last consumer of randomness before the radio: mints the WiFi PSK if the
-    // config did not already carry one.
+    // Creates the WiFi PSK if the config did not already carry one.
     let ap_config = app::prepare_ap_config(config, &platform)
         .await
         .expect("Failed to prepare AP config");
 
-    // Hand the entropy source over to the radio. The `WifiController::new`
-    // inside `bring_up()` enables the RF subsystem, which is itself an
-    // entropy source, and Espressif requires the ADC source to be off before
-    // the RF subsystem starts. Nothing is lost by dropping it here, the
-    // key-exchange material sunset draws per connection is covered by the
-    // radio from now on.
-    drop(entropy_source);
-
-    let mut wifi = EspWifi::new(spawner, peripherals.WIFI, rng, DEFAULT_IP);
+    // `bring_up()` hands the boot time entropy source over to the radio as
+    // it starts it.
+    let mut wifi = EspWifi::new(spawner, peripherals.WIFI, boot_entropy, DEFAULT_IP);
     wifi.configure_ap(ap_config)
         .expect("Failed to configure AP");
 
@@ -184,13 +168,14 @@ async fn main(spawner: Spawner) -> ! {
     mem_probe::checkpoint(Checkpoint::WifiUp);
     bench::log_heap("wifi_up");
 
-    // The radio should have picked up the entropy duty dropped above:
+    // The radio should have taken over as the entropy source in `bring_up()`:
     // esp-radio bumps esp-hal's entropy-source count once the RF subsystem is
     // running. sunset draws fresh key-exchange material from `getrandom` for
-    // every SSH connection served below, so if this does not hold the handover
-    // has a hole in it.
+    // every SSH connection served below, and would fail to without a source,
+    // so catch a broken handover here rather than on first connection.
+    // `debug-assertions` are on even in release for this workspace.
     debug_assert!(
-        entropy_source_active(),
+        entropy::is_active(),
         "no entropy source active after WiFi came up"
     );
 
@@ -201,9 +186,6 @@ async fn main(spawner: Spawner) -> ! {
     warn!("End of main, resetting");
     esp_hal::system::software_reset();
 }
-
-// The `getrandom` custom backend.
-ssh_stamp_esp32::getrandom_backend!();
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {

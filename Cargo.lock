@@ -3811,7 +3811,6 @@ dependencies = [
  "esp-radio",
  "esp-rtos",
  "esp-storage",
- "getrandom",
  "heapless 0.9.3",
  "hmac 0.12.1",
  "log",
@@ -3820,6 +3819,7 @@ dependencies = [
  "sha2 0.10.9",
  "ssh-stamp",
  "ssh-stamp-esp32-boards",
+ "ssh-stamp-esp32-entropy",
  "ssh-stamp-hal",
  "ssh-stamp-ota",
  "static_cell",
@@ -3835,6 +3835,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ssh-stamp-esp32-entropy"
+version = "1.0.4"
+dependencies = [
+ "esp-hal",
+ "getrandom",
+ "log",
+ "zeroize",
+]
+
+[[package]]
 name = "ssh-stamp-esp32-hil"
 version = "0.1.0"
 dependencies = [
@@ -3844,7 +3854,9 @@ dependencies = [
  "embedded-io-async 0.7.0",
  "embedded-test",
  "esp-hal",
+ "esp-radio",
  "esp-rtos",
+ "getrandom",
  "ssh-stamp",
  "ssh-stamp-esp32",
  "ssh-stamp-esp32-boards",
