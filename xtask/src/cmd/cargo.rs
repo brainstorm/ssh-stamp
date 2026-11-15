@@ -30,7 +30,7 @@ pub fn run(argv: &[String]) -> Result<()> {
     }
 
     let sh = shell()?;
-    let toolchain = format!("+{}", target.toolchain());
+    let toolchain = target.toolchain().cargo_arg();
 
     let hil = action == "test";
     let selection = if hil {
@@ -44,7 +44,7 @@ pub fn run(argv: &[String]) -> Result<()> {
 
     let mut command = cmd!(
         sh,
-        "cargo {toolchain} {action} {selection...} {trailing...}"
+        "cargo {toolchain...} {action} {selection...} {trailing...}"
     )
     .env("CARGO_TARGET_DIR", target.target_dir());
 

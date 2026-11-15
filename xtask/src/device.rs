@@ -36,8 +36,7 @@ pub fn flash(board: &Board, profile: &str, port: &str, config_image: &Path) -> R
 
     let partitions: Vec<String> = board
         .partitions
-        .map(|partition| vec!["--partition-table".to_string(), partition.to_string()])
-        .unwrap_or_default();
+        .map_or_default(|partition| vec!["--partition-table".to_string(), partition.to_string()]);
 
     eprintln!("=== flashing {elf} to {port} for {soc} ===");
 

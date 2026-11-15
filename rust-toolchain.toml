@@ -2,7 +2,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+# The `getrandom` backend in ssh-stamp-esp32-entropy needs the unstable
+# `extern_item_impls` feature, so the firmware builds on nightly.
 [toolchain]
-channel = "stable"
+channel = "nightly"
 components = ["rust-src"]
 targets = ["riscv32imac-unknown-none-elf"]

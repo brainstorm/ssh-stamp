@@ -18,7 +18,7 @@ cargo xtask             # usage
 Tooling is controlled by `rust-toolchain.toml`. On a fresh host you'll typically need the Rust source component and a flasher (we use `espflash` below as an example):
 
 ```
-rustup toolchain install stable --component rust-src
+rustup toolchain install
 cargo install espflash --locked
 ```
 
@@ -73,7 +73,7 @@ cargo clippy -p xtask --all-targets -- -D warnings
 cargo fmt --all -- --check
 cargo xtask esp32c6-devkitc doc --no-deps --lib --workspace --exclude xtask
 cargo test              # host-side crates, scoped by workspace default-members
-RUSTFLAGS='-C force-frame-pointers --cfg getrandom_backend="custom"' \
+RUSTFLAGS='-C force-frame-pointers --cfg getrandom_backend="extern_impl"' \
   cargo publish --workspace --dry-run --target riscv32imac-unknown-none-elf
 ```
 
@@ -136,7 +136,7 @@ therefore published by hand:
 
 ```
 cargo login
-RUSTFLAGS='-C force-frame-pointers --cfg getrandom_backend="custom"' \
+RUSTFLAGS='-C force-frame-pointers --cfg getrandom_backend="extern_impl"' \
   cargo publish --workspace --target riscv32imac-unknown-none-elf
 ```
 
