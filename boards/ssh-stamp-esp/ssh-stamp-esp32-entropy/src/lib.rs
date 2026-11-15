@@ -52,6 +52,10 @@
 
 #![no_std]
 #![forbid(unsafe_code)]
+#![allow(
+    clippy::disallowed_types,
+    reason = "this is the one crate that may read the hardware RNG, see clippy.toml"
+)]
 
 use core::mem::MaybeUninit;
 
