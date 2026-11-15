@@ -91,7 +91,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: nightly
 
       # `BOARDS` in xtask/src/board.rs is the single source of truth: adding a
       # board there is enough to release it, with no edit to this workflow.
@@ -128,7 +128,7 @@ jobs:
         uses: dtolnay/rust-toolchain@v1
         with:
           target: ${{ matrix.board.triple }}
-          toolchain: stable
+          toolchain: nightly
           components: rust-src
 
       - name: Setup Rust toolchain for Xtensa
@@ -224,7 +224,7 @@ jobs:
         uses: dtolnay/rust-toolchain@v1
         with:
           target: riscv32imac-unknown-none-elf
-          toolchain: stable
+          toolchain: nightly
 
       - name: Authenticate with crates.io
         id: auth
@@ -236,7 +236,7 @@ jobs:
       - name: Publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-          RUSTFLAGS: '-C force-frame-pointers --cfg getrandom_backend="custom"'
+          RUSTFLAGS: '-C force-frame-pointers --cfg getrandom_backend="extern_impl"'
         run: cargo publish --workspace --target riscv32imac-unknown-none-elf
 
   publish-release:
