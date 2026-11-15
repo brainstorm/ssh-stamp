@@ -7,26 +7,24 @@
 #![no_std]
 #![no_main]
 
-// Links the HIL library crate for the bootloader and getrandom initialization.
-use ssh_stamp_esp32_hil as _;
-
 #[embedded_test::tests(default_timeout = 30, executor = esp_rtos::embassy::Executor::new())]
 mod tests {
     use ssh_stamp::config::UartPins;
     use ssh_stamp::store::{create, load};
-    use ssh_stamp_esp32::{EntropySource, boot, get_flash_n_buffer};
+    use ssh_stamp_esp32::entropy::BootEntropy;
+    use ssh_stamp_esp32::{boot, get_flash_n_buffer};
 
     /// The test init state.
     pub struct Context {
-        _entropy_source: EntropySource,
+        _boot_entropy: BootEntropy,
     }
 
     #[init]
     fn init() -> Context {
-        boot!(_peripherals, _rng, entropy_source, _sw_int1);
+        boot!(_peripherals, boot_entropy, _sw_int1);
 
         Context {
-            _entropy_source: entropy_source,
+            _boot_entropy: boot_entropy,
         }
     }
 

@@ -11,9 +11,9 @@
 //! cargo xtask esp32c6-devkitc test
 //! ```
 //!
+//! The `getrandom` backend the tests need comes from `ssh-stamp-esp32-entropy`,
+//! which is linked through `ssh-stamp-esp32`.
+//!
 //! [embedded-test]: https://github.com/probe-rs/embedded-test
 
 #![no_std]
-
-// The `getrandom` custom backend.
-ssh_stamp_esp32::getrandom_backend!();

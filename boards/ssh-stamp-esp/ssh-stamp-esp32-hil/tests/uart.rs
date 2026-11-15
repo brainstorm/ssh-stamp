@@ -13,9 +13,6 @@ use core::future::{Future, ready};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::pipe::Pipe;
 
-// Links the HIL library crate for the bootloader and getrandom initialization.
-use ssh_stamp_esp32_hil as _;
-
 /// Mock the channel read required on the [`serial_bridge`], this will move the bytes
 /// through the pipe.
 struct ChanRead<'a>(&'a Pipe<CriticalSectionRawMutex, 512>);
@@ -74,7 +71,7 @@ mod tests {
 
     #[init]
     fn init() -> Context {
-        boot!(peripherals, _rng, _entropy_source, sw_int1);
+        boot!(peripherals, _boot_entropy, sw_int1);
 
         let (rx_pin, tx_pin, _rx_num, _tx_num) = take_uart_pins!(peripherals);
         let pins = EspUartPins {

@@ -28,7 +28,6 @@ use embassy_net::tcp::TcpSocket;
 use embassy_net::{IpListenEndpoint, Ipv4Cidr, Runner, Stack, StackResources, StaticConfigV4};
 use embassy_time::{Duration, Timer};
 use esp_hal::peripherals::WIFI;
-use esp_hal::rng::Rng;
 use esp_radio::wifi::{
     AuthenticationMethodConfig, BandMode as RadioBandMode, Config as RadioConfig, ControllerConfig,
     Interface, Password, Ssid, WifiController, ap::AccessPointConfig, ap::EventInfo,
@@ -37,6 +36,7 @@ use esp_radio::wifi::{
 use log::info;
 use log::{debug, error, warn};
 use ssh_stamp::settings::STATION_MODE_MAX_RETRY_SECONDS;
+use ssh_stamp_esp32_entropy::{self as entropy, BootEntropy};
 use ssh_stamp_hal::{
     BandMode, HalError, NetworkProviderHal, WifiApConfigStatic, WifiError, WifiHal,
 };
@@ -53,7 +53,7 @@ extern crate alloc;
 pub struct EspWifi {
     spawner: Spawner,
     wifi_peri: Option<WIFI<'static>>,
-    rng: Rng,
+    entropy: Option<BootEntropy>,
     ap_config: Option<WifiApConfigStatic>,
     gateway: Ipv4Addr,
 }
@@ -61,14 +61,24 @@ pub struct EspWifi {
 impl EspWifi {
     /// Create a new uninitialised ESP32 `WiFi` handle.
     ///
+    /// `entropy` is the boot-time entropy source, which
+    /// [`NetworkProviderHal::bring_up`] hands over to the radio as it starts
+    /// it. It stays on until then, so randomness can still be valid between
+    /// here and `bring_up`.
+    ///
     /// `gateway` is the static IPv4 address the device will serve as the
     /// access-point gateway (and DHCP server).
     #[must_use]
-    pub fn new(spawner: Spawner, wifi_peri: WIFI<'static>, rng: Rng, gateway: Ipv4Addr) -> Self {
+    pub fn new(
+        spawner: Spawner,
+        wifi_peri: WIFI<'static>,
+        entropy: BootEntropy,
+        gateway: Ipv4Addr,
+    ) -> Self {
         Self {
             spawner,
             wifi_peri: Some(wifi_peri),
-            rng,
+            entropy: Some(entropy),
             ap_config: None,
             gateway,
         }
@@ -95,6 +105,10 @@ impl NetworkProviderHal for EspWifi {
             .wifi_peri
             .take()
             .ok_or(HalError::Wifi(WifiError::Initialization))?;
+        let boot_entropy = self
+            .entropy
+            .take()
+            .ok_or(HalError::Wifi(WifiError::Initialization))?;
 
         // MAC must be set on eFuse before bringing up the radio.
         esp_hal::efuse::override_mac_address(esp_hal::efuse::MacAddress::new_eui48(ap_config.mac))
@@ -113,7 +127,10 @@ impl NetworkProviderHal for EspWifi {
             .with_dynamic_tx_buf_num(16)
             .with_ampdu_rx_enable(false)
             .with_ampdu_tx_enable(false);
-        let mut wifi_controller = WifiController::new(wifi_peri, controller_config)
+        // Starting the controller starts the RF subsystem, which takes over
+        // from the boot time entropy source.
+        let mut wifi_controller = boot_entropy
+            .hand_over_to_radio(|| WifiController::new(wifi_peri, controller_config))
             .map_err(|_| HalError::Wifi(WifiError::Initialization))?;
 
         // Set the WiFi band mode (AP mode only). Only the ESP32-C5 supports
@@ -122,7 +139,9 @@ impl NetworkProviderHal for EspWifi {
             set_band_mode(&mut wifi_controller, ap_config.band);
         }
 
-        let seed = u64::from(self.rng.random()) << 32 | u64::from(self.rng.random());
+        let mut seed = [0u8; 8];
+        entropy::fill(&mut seed).map_err(|_| HalError::Rng)?;
+        let seed = u64::from_le_bytes(seed);
 
         let (ap_stack, runner) = embassy_net::new(
             wifi_interface,
