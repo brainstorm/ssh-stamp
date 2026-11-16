@@ -52,3 +52,19 @@ Any board or chip target that `cargo xtask` accepts works in place of
 
 Each `tests/*.rs` file is a separate flash and run. A new file needs a
 `[[test]]` entry with `harness = false` in `Cargo.toml`.
+
+# End-to-end tests
+
+End-to-end scenarios drive a board that already runs the firmware
+(`cargo xtask <board> run`) from the host: they reset it, read the `boot`
+and `net_up` JSON objects from its console, and act on them.
+
+```sh
+cargo xtask test e2e --board esp32c6-devkitc
+```
+
+`--port` picks the serial port when there are several, and `--interface` the
+host's wireless interface that joins the device's access point. Each scenario
+is a plain function in [`xtask/src/cmd/test/e2e.rs`](../xtask/src/cmd/test/e2e.rs),
+selected with `--scenario`; `wifi-ap`, the default, joins the access point the
+device hosts and checks its SSH port is reachable.
